@@ -1,0 +1,10 @@
+name: "Joe's website"
+output.dir: "."
+navbar:
+  title: "Joe's website navbar"
+  left: 
+    - text: "Home"
+      href: index.html
+    - text: "About Me"
+      href: about.html
+      

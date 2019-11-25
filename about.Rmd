@@ -1,0 +1,7 @@
+---
+title: "Joe's Website"
+---
+
+```{r}
+plot( rnorm(10) ~ rnorm(10), pch="$", col=1:10 )
+```

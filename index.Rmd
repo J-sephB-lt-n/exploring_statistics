@@ -17,10 +17,10 @@ entries will follow this format:
 --->
 
 <article>
-<h3><a href="contrOptim.html">BLOG TITLE</a></h3>
+<h3><a href="constrOptim.html">Constrained Linear Optimisation in R</a></h3>
 <div class="summary">
-<span><i class="fa fa-calendar"></i> _2018-03-21_</span>
+<span><i class="fa fa-calendar"></i> _2019-02-08_</span>
 <p>manual text here</p>
-<a class="btn btn-outline-primary btn-sm" href="contrOptim.html" role="button">Full Post</a>
+<a class="btn btn-outline-primary btn-sm" href="constrOptim.html" role="button">Full Post</a>
 </div>
 </article>

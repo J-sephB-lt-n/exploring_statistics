@@ -1,5 +1,5 @@
 name: "Joe's website"
-output.dir: "."
+output_dir: "."
 navbar:
   title: "Joe's website navbar"
   left: 

@@ -3,3 +3,24 @@ title: "Joe's Website"
 ---
 
 $$m\alpha t\pi \space 7\epsilon S \tau$$
+
+<!---
+entries will follow this format:
+<article>
+<h3><a href=""> </a></h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> _date_</span>
+<p> ...</p>
+<a class="btn btn-outline-primary btn-sm" href="">Full Post</a>
+</div>
+</article>
+--->
+
+<article>
+<h3><a href="contrOptim.html">BLOG TITLE</a></h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> _2018-03-21_</span>
+<p>manual text here</p>
+<a class="btn btn-outline-primary btn-sm" href="contrOptim.html" role="button">Full Post</a>
+</div>
+</article>

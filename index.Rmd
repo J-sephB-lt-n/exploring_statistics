@@ -17,6 +17,15 @@ entries will follow this format:
 --->
 
 <article>
+<h3><a href="PAMS_and_SILHOUETTE_by_hand.html">Constrained Optimisation in R</a></h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> _2019-02-08_</span>
+<p>Clustering: PAM k-Medoids, CLARA & Silhouette Values</p>
+<a class="btn btn-outline-primary btn-sm" href="PAMS_and_SILHOUETTE_by_hand.html" role="button">Full Post</a>
+</div>
+</article>
+
+<article>
 <h3><a href="constrOptim.html">Constrained Optimisation in R</a></h3>
 <div class="summary">
 <span><i class="fa fa-calendar"></i> _2019-02-08_</span>

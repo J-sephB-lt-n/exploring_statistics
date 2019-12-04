@@ -1,7 +1,7 @@
-name: "Joe's website"
+name: "Joseph Bolton"
 output_dir: "."
 navbar:
-  title: "Joe's website navbar"
+  title: "Joseph Bolton"
   type: inverse
   left: 
     - text: "Home"

@@ -2,10 +2,8 @@
 title: "Joe's Website"
 ---
 
-$$m\alpha t\pi \space 7\epsilon S \tau$$
-
 <!---
-entries will follow this format:
+article entries will follow this format:
 <article>
 <h3><a href=""> </a></h3>
 <div class="summary">
@@ -15,6 +13,10 @@ entries will follow this format:
 </div>
 </article>
 --->
+
+```{r echo=FALSE}
+knitr::include_graphics("pixel_face.png", dpi=100)
+```
 
 <article>
 <h3><a href="PAMS_and_SILHOUETTE_by_hand.html">Clustering: PAM k-Medoids, CLARA & Silhouette Values</a></h3>

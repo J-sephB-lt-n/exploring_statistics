@@ -9,6 +9,10 @@ output:
 
 I am a statistician and data scientist working at Eighty20 loyalty consulting in South Africa.
 
+```{r echo=FALSE, fig.}
+knitr::include_graphics("pixel_face.png", dpi=100)
+```
+
 ## Current skills
 * Advanced R programming
     * tidyverse
@@ -31,7 +35,9 @@ I am a statistician and data scientist working at Eighty20 loyalty consulting in
     * Integer Programming
     * Multiple-objective optimisation
     
-* Uplift Modelling    
+* Uplift Modelling   
+    * Binary response (e.g. response to treatment yes/no)
+    * Continuous response (e.g. spend)
     
 * Time Series modelling
     * ARIMA
@@ -56,7 +62,7 @@ I am a statistician and data scientist working at Eighty20 loyalty consulting in
     * base R plotting tools
     * **ggplot2**
     * interactive 3-dimensional visualisation using **plotly**
-    * sankey diagrams using **network3D**
+    * sankey diagrams using **networkD3**
     * plots of hierarchical data using **data.tree** and **treemap**
     
 * Regular Expressions (REGEX)    

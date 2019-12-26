@@ -111,6 +111,9 @@ knitr::include_graphics("pixel_face.png", dpi=100)
     
 * Stochastic Processes    
 
+## Tools
+
+* Image to ASCII-art conversion courtesy of https://cloudapps.herokuapp.com/imagetoascii/ 
 
 
 

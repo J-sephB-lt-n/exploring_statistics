@@ -61,9 +61,19 @@ rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
 </article>
 
 <article>
+<h3><a href="good_arules_checkout.html">Assocation Rules</a></h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> _2019-12-01_</span>
+<p>DESCRIPTION HERE JOE</p>
+<a class="btn btn-outline-primary btn-sm" href="good_arules_checkout.html" role="button">Full Post</a>
+</div>
+</article>
+
+
+<article>
 <h3><a href="data_tree_checkout.html">Data.trees</a></h3>
 <div class="summary">
-<span><i class="fa fa-calendar"></i> _2019-12-23_</span>
+<span><i class="fa fa-calendar"></i> _2019-12-18_</span>
 <p>Plotting and analysing hierarchical data with the data.tree package in R</p>
 <a class="btn btn-outline-primary btn-sm" href="PAMS_and_SILHOUETTE_by_hand.html" role="button">Full Post</a>
 </div>

@@ -51,11 +51,6 @@ text-rendering: optimizeSpeed;
 77777777777777771122221177777777777777777777777777777777771222222221177777777777777777
 77777777777777777777777777777777777777777777777777777777777777777777777777777777777777</pre>
 
-# Joe:
-
-* need to fix dates on the articles
-
-* need to fix colour and formatting on the articles
 
 <article>
 <h3><a href="PAMS_and_SILHOUETTE_by_hand.html">Clustering: PAM k-Medoids, CLARA & Silhouette Values</a></h3>

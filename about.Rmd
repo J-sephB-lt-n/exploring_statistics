@@ -98,6 +98,12 @@ link to CV: **NEED TO DO THIS**
 * SQL
     * Window Functions
 
+* Model-explainer frameworks
+    * LIME
+    * 
+    
+* Bayesian hypothesis testing
+
 ## Areas of potential future interest
 
 * CSS and HTML

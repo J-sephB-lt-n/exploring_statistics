@@ -72,3 +72,5 @@ The following articles are currently under construction (each will be posted on 
 8. Experimenting with heuristic algorithms for optimal object-allocation
 
 9. Interactive visualisations of PCA
+
+10. Overview of SQL window functions

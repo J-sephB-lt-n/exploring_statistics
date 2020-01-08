@@ -74,3 +74,5 @@ The following articles are currently under construction (each will be posted on 
 9. Interactive visualisations of PCA
 
 10. Overview of SQL window functions
+
+11. Association Rule mining in R

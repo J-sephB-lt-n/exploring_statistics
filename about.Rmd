@@ -13,7 +13,7 @@ I am a statistician and data scientist working at Eighty20 loyalty consulting in
 knitr::include_graphics("pixel_face_cropped.png", dpi=150)
 ```
 
-link to CV: **NEED TO DO THIS**
+CV: <a href="Joseph_Bolton_CV_2019.pdf" download>Joseph Bolton CV</a>
 
 ## Current skills
 * Advanced R programming

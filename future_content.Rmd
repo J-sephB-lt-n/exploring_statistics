@@ -53,7 +53,7 @@ text-rendering: optimizeSpeed;
 ....................................................................................................................................................................................
 ....................................................................................................................................................................................</pre>
 
-The following articles are currently under construction (each will be posted on this website when it is completed):
+The following articles are currently under construction (each will be posted on this website when completed):
 
 1. Building a recommendation engine based on raw text information using *content-based filtering* (implementation in R and python)
 

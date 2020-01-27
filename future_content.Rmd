@@ -76,3 +76,5 @@ The following articles are currently under construction (each will be posted on 
 10. Overview of SQL window functions
 
 11. Association Rule mining in R
+
+12. Simultaneous Multinomial Confidence Intervals

@@ -37,9 +37,9 @@ CV: <a href="Joseph_Bolton_CV_2019.pdf" download>Joseph Bolton CV</a>
     * Integer Programming
     * Multiple-objective optimisation
     
-* Uplift Modelling   
-    * Binary response (e.g. response to treatment yes/no)
-    * Continuous response (e.g. spend)
+* Uplift Modelling (estimation of heterogeneous treatment effects) 
+    * Binary response (e.g. response to treatment yes/no) [conversion uplift]
+    * Continuous response (e.g. revenue)
     
 * Time Series modelling
     * ARIMA
@@ -79,7 +79,7 @@ CV: <a href="Joseph_Bolton_CV_2019.pdf" download>Joseph Bolton CV</a>
     * Data ingestion {csv, excel, SQL} -> {R, python}
     * Data quality testing
     * Data cleaning
-    * Feature Imputation
+    * Feature Engineering
     * (Feature Selection)
     * Model Fitting
     * Model Comparison
@@ -124,6 +124,7 @@ CV: <a href="Joseph_Bolton_CV_2019.pdf" download>Joseph Bolton CV</a>
     * Generalised Additional Models
     * Naive Bayes
     * Partial Least Squares
+    * Quantile Regression
     
 * Bayesian hypothesis testing
 
@@ -140,7 +141,10 @@ CV: <a href="Joseph_Bolton_CV_2019.pdf" download>Joseph Bolton CV</a>
     * Linear regression with autocorrelated errors
     * Vector autoregression (VAR models)
     * Prophet
+    * Cross-Validation for Time-Series Models
 
+* Optimisation 
+    * genetic algorithms
 
 ## Tools
 

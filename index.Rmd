@@ -90,6 +90,15 @@ Dates shown are dates of latest edit.
 </article>
 
 <article>
+<h3><a href="intuition_for_CRVTW_uplift_model.html">CRVTW Revenue Uplift Model</a></h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> _2020-02-05_</span>
+<p>A brief and intuitive introduction</p>
+<a class="btn btn-outline-primary btn-sm" href="intuition_for_CRVTW_uplift_model.html" role="button">Full Post</a>
+</div>
+</article>
+
+<article>
 <h3><a href="data_tree_checkout.html">Data.trees</a></h3>
 <div class="summary">
 <span><i class="fa fa-calendar"></i> _2019-12-18_</span>

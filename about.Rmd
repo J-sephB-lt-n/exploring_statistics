@@ -25,6 +25,9 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
 * H2o Machine-Learning Framework (within R)
 
 * SQL
+    * Vertica, PostgreSQL
+    * window functions: rank, dense_rank, first_value, row_number, median, ntile, 
+    * writing txt, csv -> SQL
 
 * Excel 
 
@@ -47,7 +50,7 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
     * Time Series Decomposition (trend, seasonality, error)
 
 * Regression Modelling
-    * Linear model, GLM, splines, elastic net, KNN, regression tree, GBM, bagging & random forest, feed-forward neural network
+    * Linear model, GLM (Poisson regression), splines, elastic net, KNN, regression tree, GBM, bagging & random forest, feed-forward neural network
 
 * Classification Modelling
     * GLM (logistic, multinomial), splines, elastic net, KNN, classification tree, bagging & random forest, GBM, LDA & QDA, feed-forward neural network
@@ -74,6 +77,7 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
     * Principal Components Analysis (PCA) 
     * Multi-Dimensional Scaling (MDS)
     * Locally Linear Embedding (LLE)
+    * Factor Analysis
     
 * Process Workflow and Automation of Modelling Projects
     * Data ingestion {csv, excel, SQL} -> {R, python}
@@ -88,7 +92,7 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
     * Process Monitoring
 
 ## Current development areas
-* Deep learning
+* Deep learning (neural networks)
 
 * Advanced Python
 
@@ -96,13 +100,13 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
     * $2^k$ designs
     * understanding of the optimality of orthogonal designs
 
-* SQL
-    * Window Functions
-
 * Model-explainer frameworks
     * LIME
     * DALEX
-
+    
+* Optimisation
+    * Evolutionary Algorithms
+ 
 ## Areas of potential future interest
 * CSS and HTML
 
@@ -129,6 +133,7 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
     * Naive Bayes
     * Partial Least Squares
     * Quantile Regression
+    * Regression with time-series data
     
 * Bayesian hypothesis testing
 
@@ -146,9 +151,11 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
     * Vector autoregression (VAR models)
     * Prophet
     * Cross-Validation for Time-Series Models
+    * Neural-Network-based methods
 
 * Optimisation 
-    * genetic algorithms
+    * TABU search
+    * Simulated Annealing
 
 ## Tools
 

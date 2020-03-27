@@ -55,7 +55,11 @@ text-rendering: optimizeSpeed;
 
 The following articles are currently under construction (each will be posted on this website when completed):
 
-1. Building a recommendation engine based on raw text information using *content-based filtering* (implementation in R and python)
+1. Recommender algorithms: 
+    * Vector representations of customers and items
+    * Content-based filtering
+    * Collaborative filtering
+    * Latent Matrix-Factorisation 
 
 2. Explaining the predictions of 'black-box' machine learning models using **LIME** (**L**ocal **I**nterpretable **M**odel-agnostic **E**xplanations)
 
@@ -69,12 +73,14 @@ The following articles are currently under construction (each will be posted on 
 
 7. Theory and practical uses of Multiple Correspondence Analysis (MCA) for dimension reduction of categorical data
 
-8. Experimenting with heuristic algorithms for optimal object-allocation
+8. Heuristic Algorithms for Optimisation 1: Evolutionary Algorithms
 
-9. Interactive visualisations of PCA
+9. Overview of SQL window functions
 
-10. Overview of SQL window functions
+10. Association Rule mining in R
 
-11. Association Rule mining in R
+11. Simultaneous Multinomial Confidence Intervals
 
-12. Simultaneous Multinomial Confidence Intervals
+12. Factor analysis
+
+13. Logistic Regression from scratch in R. 

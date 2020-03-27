@@ -84,3 +84,5 @@ The following articles are currently under construction (each will be posted on 
 12. Factor analysis
 
 13. Logistic Regression from scratch in R. 
+
+14. Likelihood Ratio Tests: Developing Intuition via Simulation 

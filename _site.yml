@@ -10,5 +10,11 @@ navbar:
       href: about.html
     - text: "Future Content"
       href: future_content.html
+    - text: "posts"
+      menu: 
+        - text: "Beautiful Lesser-Known Visualisations in R"
+          href: nice_R_visualisations.html
 output: html_document
   
+  
+# good reference: https://garrettgman.github.io/rmarkdown/rmarkdown_websites.html#common_elements  

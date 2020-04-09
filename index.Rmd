@@ -54,11 +54,11 @@ text-rendering: optimizeSpeed;
 Dates shown are dates of latest edit.
 
 <article>
-<h3><a href="PAMS_and_SILHOUETTE_by_hand.html">Clustering: PAM k-Medoids, CLARA & Silhouette Values</a></h3>
+<h3><a href="nice_R_visualisations.html">Beautiful Lesser-Known Visualisations in R</a></h3>
 <div class="summary">
-<span><i class="fa fa-calendar"></i> _2019-12-01_</span>
-<p>PAMS clustering from first principles in R</p>
-<a class="btn btn-outline-primary btn-sm" href="PAMS_and_SILHOUETTE_by_hand.html" role="button">Full Post</a>
+<span><i class="fa fa-calendar"></i> _2020-04-09_</span>
+<p>Colour Palettes, Sankey Diagrams, Scatterplots with Marginal Density Plots, Gaussian Graphical Models, Ridge-line plots, Raincloud Plots, Scatterplot Matrices, Caterpillar Plots, Time Series Decomposition Plots, Heatmaps</p>
+<a class="btn btn-outline-primary btn-sm" href="nice_R_visualisations.html" role="button">Full Post</a>
 </div>
 </article>
 
@@ -86,6 +86,15 @@ Dates shown are dates of latest edit.
 <span><i class="fa fa-calendar"></i> _2019-12-01_</span>
 <p>Building a feed-forward neural network from first principles in R</p>
 <a class="btn btn-outline-primary btn-sm" href="neural_net_from_scratch.html" role="button">Full Post</a>
+</div>
+</article>
+
+<article>
+<h3><a href="PAMS_and_SILHOUETTE_by_hand.html">Clustering: PAM k-Medoids, CLARA & Silhouette Values</a></h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> _2019-12-01_</span>
+<p>PAMS clustering from first principles in R</p>
+<a class="btn btn-outline-primary btn-sm" href="PAMS_and_SILHOUETTE_by_hand.html" role="button">Full Post</a>
 </div>
 </article>
 

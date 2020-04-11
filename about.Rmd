@@ -7,7 +7,7 @@ output:
     highlight: espresso
 ---
 
-I am a statistician and data scientist working at Eighty20 consulting in South Africa.
+I am a statistician and data scientist working at  consulting in South Africa.
 
 ```{r echo=FALSE}
 knitr::include_graphics("pixel_face_cropped.png", dpi=150)
@@ -26,14 +26,16 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
 
 * SQL
     * Vertica, PostgreSQL
-    * window functions: rank, dense_rank, first_value, row_number, median, ntile, 
-    * writing txt, csv -> SQL
+    * writing data to SQL, table manipulation, window functions
 
 * Excel 
 
-* Content-based filtering (recommender engine algorithm)
+* Recommender Engines
+    * Content-based Filtering
+    * Collaborative Filtering
+    * Latent Factor Matrix Factorisation
     * TF-IDF
-    * implementation in both R and python
+    * Implementations in R and python
 
 * Linear optimisation
     * Linear programming
@@ -48,17 +50,18 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
     * ARIMA
     * Exponential Smoothing (state space models)
     * Time Series Decomposition (trend, seasonality, error)
+    * Time-Series Regression
 
 * Regression Modelling
-    * Linear model, GLM (Poisson regression), splines, elastic net, KNN, regression tree, GBM, bagging & random forest, feed-forward neural network
+    * Linear model (OLS,GLS), GLM (Poisson regression), splines, ridge/lasso/elastic net, KNN, regression tree, GBM, bagging & random forest, feed-forward neural network
 
 * Classification Modelling
-    * GLM (logistic, multinomial), splines, elastic net, KNN, classification tree, bagging & random forest, GBM, LDA & QDA, feed-forward neural network
+    * GLM (logistic, multinomial), splines, ridge/lasso/elastic net, KNN, classification tree, bagging & random forest, GBM, LDA & QDA, feed-forward neural network
 
 * Clustering
     * Hierarchical
     * k-means 
-    * PAMS (k-medoids) & CLARA
+    * PAMS (k-medoids) & CLARA ([blog post](./PAMS_and_SILHOUETTE_by_hand.html))
     * Silhouette values
     * Gower distance for mixed data types
     
@@ -67,6 +70,7 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
 * Advanced Data visualisation
     * base R plotting tools
     * **ggplot2**
+    * Blog Post: [Beautiful Lesser-Known Visualisations in R](./nice_R_visualisations.html)
     * interactive 3-dimensional visualisation using **plotly**
     * sankey diagrams using **networkD3**
     * plots of hierarchical data using **data.tree** and **treemap**

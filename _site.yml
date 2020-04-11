@@ -4,17 +4,43 @@ navbar:
   title: "Joseph Bolton"
   type: inverse
   left: 
-    - text: "Home"
+    - text: " Home"
       href: index.html
-    - text: "About Me"
+    - text: " About Me"
       href: about.html
-    - text: "Future Content"
+    - text: " Future Content"
       href: future_content.html
-    - text: "posts"
-      menu: 
+    - text: " Posts"  
+      menu:
+        - text: "Posts"
+        - text: "Recommenders Part I: Representing Customers & Items as Vectors"
+          href: recommenders_part1_vectors.html
         - text: "Beautiful Lesser-Known Visualisations in R"
           href: nice_R_visualisations.html
+        - text: "Building a GBM from Scratch"
+          href: gbm_from_scratch_8020.html
+        - text: "My Favourite Books, Papers and other Resources"
+          href: good_books_and_papers.html
+        - text: "Deep-Learning from Scratch"
+          href: neural_net_from_scratch.html
+        - text: "Clustering: PAM k-Medoids, CLARA & Silhouette Values"
+          href: PAMS_and_SILHOUETTE_by_hand.html
+        - text: "CRVTW Revenue Uplift Model"
+          href: intuition_for_CRVTW_uplift_model.html
+        - text: "Data.trees"
+          href: data_tree_checkout.html
+        - text: "Constrained Optimisation in R"
+          href: constrOptim.html
+        - text: "Least Squares Linear Model Theory"
+          href: OLS_theory.html 
+
+  right:
+    - icon: fa-envelope
+      href: mailto:joseph.jazz.bolton@gmail.com
+    - icon: fa-linkedin
+      href: https://www.linkedin.com/in/joseph-bolton-a02653171/
 output: html_document
   
   
-# good reference: https://garrettgman.github.io/rmarkdown/rmarkdown_websites.html#common_elements  
+# good reference: https://robertmitchellv.com/blog-building-site-with-rmarkdown.html
+#                 https://github.com/robertmitchellv/robertmitchellv.github.io/blob/master/_navbar.html

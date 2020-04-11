@@ -51,7 +51,16 @@ text-rendering: optimizeSpeed;
 77777777777777771122221177777777777777777777777777777777771222222221177777777777777777
 77777777777777777777777777777777777777777777777777777777777777777777777777777777777777</pre>
 
-Dates shown are dates of latest edit.
+Dates shown are date of latest edit.
+
+<article>
+<h3><a href="recommenders_part1_vectors.html">Recommenders Part I</a></h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> _2020-04-10_</span>
+<p>Representing Customers & Items as Vectors</p>
+<a class="btn btn-outline-primary btn-sm" href="recommenders_part1_vectors.html" role="button">Full Post</a>
+</div>
+</article>
 
 <article>
 <h3><a href="nice_R_visualisations.html">Beautiful Lesser-Known Visualisations in R</a></h3>
@@ -112,10 +121,9 @@ Dates shown are dates of latest edit.
 <div class="summary">
 <span><i class="fa fa-calendar"></i> _2019-12-18_</span>
 <p>Plotting and analysing hierarchical data with the data.tree package in R</p>
-<a class="btn btn-outline-primary btn-sm" href="PAMS_and_SILHOUETTE_by_hand.html" role="button">Full Post</a>
+<a class="btn btn-outline-primary btn-sm" href="data_tree_checkout.html" role="button">Full Post</a>
 </div>
 </article>
-
 
 <article>
 <h3><a href="constrOptim.html">Constrained Optimisation in R</a></h3>
@@ -123,5 +131,14 @@ Dates shown are dates of latest edit.
 <span><i class="fa fa-calendar"></i> _2019-02-08_</span>
 <p>Optimisation in R with linear constraints using the constrOptim() function</p>
 <a class="btn btn-outline-primary btn-sm" href="constrOptim.html" role="button">Full Post</a>
+</div>
+</article>
+
+<article>
+<h3><a href="OLS_theory.html">Linear Model Theory</a></h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> _2019-02-08_</span>
+<p>A reference for traditional parameter estimation of linear model by least squares</p>
+<a class="btn btn-outline-primary btn-sm" href="OLS_theory.html" role="button">Full Post</a>
 </div>
 </article>

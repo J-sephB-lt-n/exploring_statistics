@@ -7,7 +7,7 @@ output:
     highlight: espresso
 ---
 
-I am a data scientist working for Takealot Group South Africa.
+I am a statistician and data scientist working for Takealot Group South Africa.
 
 ```{r echo=FALSE}
 knitr::include_graphics("pixel_face_cropped.png", dpi=150)
@@ -168,3 +168,13 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
 * Website hosted by GitHub
 
 * Image to ASCII-art conversion using https://cloudapps.herokuapp.com/imagetoascii/ 
+
+## Non-Statistical Interests
+
+* Jazz
+
+* Origami 
+
+* Callisthenics
+
+* Football

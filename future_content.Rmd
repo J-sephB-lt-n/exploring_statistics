@@ -55,34 +55,30 @@ text-rendering: optimizeSpeed;
 
 The following articles are currently under construction (each will be posted on this website when completed):
 
-1. Recommender algorithms: 
-    * Vector representations of customers and items
-    * Content-based filtering
+* Recommender algorithms: 
     * Collaborative filtering
     * Latent Matrix-Factorisation 
 
-2. Explaining the predictions of 'black-box' machine learning models using **LIME** (**L**ocal **I**nterpretable **M**odel-agnostic **E**xplanations)
+* Explaining the predictions of 'black-box' machine learning models using **LIME** (**L**ocal **I**nterpretable **M**odel-agnostic **E**xplanations)
 
-3. Spline regression from scratch in R
+* The *Gower* distance metric for mixed data types
 
-4. The *Gower* distance metric for mixed data types
+* Constructing an SVD biplot from first principles
 
-5. Constructing an SVD biplot from first principles
+* Distribution of a sample proportion - by theory and by simulation
 
-6. Distribution of a sample proportion - by theory and by simulation
+* Theory and practical uses of Multiple Correspondence Analysis (MCA) for dimension reduction of categorical data
 
-7. Theory and practical uses of Multiple Correspondence Analysis (MCA) for dimension reduction of categorical data
+* Heuristic Algorithms for Optimisation 1: Evolutionary Algorithms
 
-8. Heuristic Algorithms for Optimisation 1: Evolutionary Algorithms
+* Overview of SQL window functions
 
-9. Overview of SQL window functions
+* Association Rule mining in R
 
-10. Association Rule mining in R
+* Simultaneous Multinomial Confidence Intervals
 
-11. Simultaneous Multinomial Confidence Intervals
+* An overview of factor analysis
 
-12. Factor analysis
+* Logistic Regression from scratch in R. 
 
-13. Logistic Regression from scratch in R. 
-
-14. Likelihood Ratio Tests: Developing Intuition via Simulation 
+* Likelihood Ratio Tests: Developing Intuition via Simulation 

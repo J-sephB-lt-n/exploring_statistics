@@ -56,11 +56,17 @@ for( file_i in c("index.html", "about.html", "future_content.html") ){
 ###############################################################
 ## code to add navbar and google analytics tag to blog posts ##
 ###############################################################
-# get the navbar code from index.html:
-readin_index.html <- readr::read_lines("index.html")
+
+# <<<<<<<<< WARNING >>>>>>>>>>
+# <<<<<<<<< THE BACKUPS WITHOUT NAVBAR CODE ARE NOT OVERWRITTEN! 
+# <<<<<<<<< MAKE SURE THAT THESE ARE UP TO DATE BEFORE RUNNING THIS PROCESS!
+
+# get the navbar code from index.html and paste it here:
 
 navbar_padding_code <- 
-'<style type="text/css">
+'
+
+<style type="text/css">
 /* padding for bootstrap navbar */
 body {
   padding-top: 60px;
@@ -128,109 +134,111 @@ body {
   margin-left: 10px;
   border-radius: 6px 0 6px 6px;
 }
-</style>'
+</style>
 
-navbar_creation_code <- 
 '
 
-
-
-<div class="navbar navbar-inverse  navbar-fixed-top" role="navigation">
+navbar_creation_code <- 
+'  
+  
+  
+  
+  <div class="navbar navbar-inverse  navbar-fixed-top" role="navigation">
   <div class="container">
-    <div class="navbar-header">
-      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-      </button>
-      <a class="navbar-brand" href="index.html">Joseph Bolton</a>
-    </div>
-    <div id="navbar" class="navbar-collapse collapse">
-      <ul class="nav navbar-nav">
-        <li>
+  <div class="navbar-header">
+  <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
+  <span class="icon-bar"></span>
+  <span class="icon-bar"></span>
+  <span class="icon-bar"></span>
+  </button>
+  <a class="navbar-brand" href="index.html">Joseph Bolton</a>
+  </div>
+  <div id="navbar" class="navbar-collapse collapse">
+  <ul class="nav navbar-nav">
+  <li>
   <a href="index.html"> Home</a>
-</li>
-<li>
+  </li>
+  <li>
   <a href="about.html"> About Me</a>
-</li>
-<li>
+  </li>
+  <li>
   <a href="future_content.html"> Future Content</a>
-</li>
-<li class="dropdown">
+  </li>
+  <li class="dropdown">
   <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false">
-     Posts
-     
-    <span class="caret"></span>
+  Posts
+
+<span class="caret"></span>
   </a>
   <ul class="dropdown-menu" role="menu">
-    <li class="dropdown-header">Posts</li>
-    <li>
-      <a href="recommenders_part1_vectors.html">Recommenders Part I: Representing Customers &amp; Items as Vectors</a>
-    </li>
-    <li>
-      <a href="nice_R_visualisations.html">Beautiful Lesser-Known Visualisations in R</a>
-    </li>
-    <li>
-      <a href="gbm_from_scratch_8020.html">Building a GBM from Scratch</a>
-    </li>
-    <li>
-      <a href="good_books_and_papers.html">My Favourite Books, Papers and other Resources</a>
-    </li>
-    <li>
-      <a href="neural_net_from_scratch.html">Deep-Learning from Scratch</a>
-    </li>
-    <li>
-      <a href="PAMS_and_SILHOUETTE_by_hand.html">Clustering: PAM k-Medoids, CLARA &amp; Silhouette Values</a>
-    </li>
-    <li>
-      <a href="intuition_for_CRVTW_uplift_model.html">CRVTW Revenue Uplift Model</a>
-    </li>
-    <li>
-      <a href="data_tree_checkout.html">Data.trees</a>
-    </li>
-    <li>
-      <a href="constrOptim.html">Constrained Optimisation in R</a>
-    </li>
-    <li>
-      <a href="OLS_theory.html">Least Squares Linear Model Theory</a>
-    </li>
+  <li class="dropdown-header">Posts</li>
+  <li>
+  <a href="recommenders_part1_vectors.html">Recommenders Part I: Representing Customers &amp; Items as Vectors</a>
+  </li>
+  <li>
+  <a href="nice_R_visualisations.html">Beautiful Lesser-Known Visualisations in R</a>
+  </li>
+  <li>
+  <a href="gbm_from_scratch_8020.html">Building a GBM from Scratch</a>
+  </li>
+  <li>
+  <a href="good_books_and_papers.html">My Favourite Books, Papers and other Resources</a>
+  </li>
+  <li>
+  <a href="neural_net_from_scratch.html">Deep-Learning from Scratch</a>
+  </li>
+  <li>
+  <a href="PAMS_and_SILHOUETTE_by_hand.html">Clustering: PAM k-Medoids, CLARA &amp; Silhouette Values</a>
+  </li>
+  <li>
+  <a href="intuition_for_CRVTW_uplift_model.html">CRVTW Revenue Uplift Model</a>
+  </li>
+  <li>
+  <a href="data_tree_checkout.html">Data.trees</a>
+  </li>
+  <li>
+  <a href="constrOptim.html">Constrained Optimisation in R</a>
+  </li>
+  <li>
+  <a href="OLS_theory.html">Least Squares Linear Model Theory</a>
+  </li>
   </ul>
-</li>
-      </ul>
-      <ul class="nav navbar-nav navbar-right">
-        <li>
+  </li>
+  </ul>
+  <ul class="nav navbar-nav navbar-right">
+  <li>
   <a href="mailto:joseph.jazz.bolton@gmail.com">
-    <span class="fa fa-envelope"></span>
-     
+  <span class="fa fa-envelope"></span>
+  
   </a>
-</li>
-<li>
+  </li>
+  <li>
   <a href="https://www.linkedin.com/in/joseph-bolton-a02653171/">
-    <span class="fa fa-linkedin"></span>
-     
+  <span class="fa fa-linkedin"></span>
+  
   </a>
-</li>
-      </ul>
-    </div><!--/.nav-collapse -->
+  </li>
+  </ul>
+  </div><!--/.nav-collapse -->
   </div><!--/.container -->
-</div><!--/.navbar -->
-
+  </div><!--/.navbar -->
+  
 '
  
 # specify name(s) of posts to insert navbar into (as a character vector): 
-post_names_to_insert_navbar <- "nice_R_visualisations.html"
-  # c( "constrOptim.html", 
-  #    "data_tree_checkout.html", 
-  #    "gbm_from_scratch_8020.html", 
-  #    "good_books_and_papers.html", 
-  #    "intuition_for_CRVTW_uplift_model.html", 
-  #    "neural_net_from_scratch.html", 
-  #    "nice_R_visualisations.html", 
-  #    "OLS_test.html", 
-  #    "OLS_theory.html", 
-  #    "PAMS_and_SILHOUETTE_by_hand.html", 
-  #    "recommenders_part1_vectors.html"
-  #  )
+post_names_to_insert_navbar <-  
+   c( "constrOptim.html", 
+      "data_tree_checkout.html", 
+      "gbm_from_scratch_8020.html", 
+      "good_books_and_papers.html", 
+      "intuition_for_CRVTW_uplift_model.html", 
+      "neural_net_from_scratch.html", 
+      "nice_R_visualisations.html", 
+      "OLS_test.html", 
+      "OLS_theory.html", 
+      "PAMS_and_SILHOUETTE_by_hand.html", 
+      "recommenders_part1_vectors.html"
+    )
 
 for( post_i in post_names_to_insert_navbar ){
   
@@ -239,13 +247,15 @@ for( post_i in post_names_to_insert_navbar ){
   # back up post before inserting navbar code, if this has not already been done:
   if( !file.exists( paste0("./post_backup_without_navbar/", post_i) ) ){
     file.copy(      from = post_i,
-                      to = paste0("./post_backup_without_navbar/", post_i),
-               overwrite = FALSE
+                      to = paste0("./post_backup_without_navbar/", post_i)
              )
   }
   
   readin_html_text <- readr::read_lines(post_i)
-
+  
+  line_to_insert_google_analytics_global_site_tag_code <-
+    min( grep('<head>', readin_html_text) ) +1
+  
   line_to_put_navbar_padding_code <-
     min( grep('<!-- tabsets -->', readin_html_text) ) -2
 
@@ -254,8 +264,16 @@ for( post_i in post_names_to_insert_navbar ){
 
   complete_html <-
     paste0(
-      # html before navbar code:
-      paste( readin_html_text[1:(line_to_put_navbar_padding_code-1)],
+      # html before google analytics tag code:
+      paste( readin_html_text[1:(line_to_insert_google_analytics_global_site_tag_code-1)],
+             collapse="\n"
+      ),
+      
+      # google analytics tag code:
+      google_analytics_global_site_tag,
+      
+      # html between google analytics tag and code and before navbar code:
+      paste( readin_html_text[line_to_insert_google_analytics_global_site_tag_code:(line_to_put_navbar_padding_code-1)],
              collapse="\n"
            )
       ,

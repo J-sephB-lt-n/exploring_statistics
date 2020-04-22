@@ -37,10 +37,13 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
     * TF-IDF
     * Implementations in R and python
 
-* Linear optimisation
-    * Linear programming
-    * Integer Programming
-    * Multiple-objective optimisation
+* Optimisation
+    - Linear Optimisation
+        * Linear programming
+        * Integer Programming
+    - Meta-Heuristic Optimisation Algorithms
+        * Genetic/Evolutionary Optimisation
+    - Multiple-objective optimisation
     
 * Uplift Modelling (estimation of heterogeneous treatment effects) 
     * Binary response (e.g. response to treatment yes/no) [conversion uplift]
@@ -110,9 +113,13 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
     
 * Optimisation
     * Evolutionary Algorithms
+    
+* Survival Analysis    
+    
+* Google Analytics    
  
 ## Areas of potential future interest
-* CSS and HTML
+* CSS, HTML, JavaScript
 
 * Reinforcement learning
 
@@ -171,6 +178,8 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
 
 ## Non-Statistical Interests
 
+* Piano
+
 * Jazz
 
 * Origami 
@@ -179,4 +188,11 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
 
 * Football
 
-* Other hobbies that I come to terms with only having time for again only after I retire: juggling, making computer games, drawing, unicycling, writing
+* Other hobbies, which I accepted that I will only have time for again after I retire:
+    - juggling
+    - drawing
+    - unicycling
+    - writing
+    - making computer games
+    - music composition
+    

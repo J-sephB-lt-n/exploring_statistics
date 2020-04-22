@@ -1,13 +1,62 @@
+library(tidyverse)
+
 setwd("~/exploring_statistics/exploring_statistics/")
 
 rmarkdown::render_site()
 
 
-######################################
-## code to add navbar to blog posts ##
-######################################
+####################################################
+## code to add google analytics tag to main pages ##
+####################################################
+
+google_analytics_global_site_tag <- 
+"
+
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src=\"https://www.googletagmanager.com/gtag/js?id=UA-163824605-1\"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-163824605-1');
+</script>
+"
+
+for( file_i in c("index.html", "about.html", "future_content.html") ){
+  
+  cat("processing [[", file_i, "]]...\n" )  
+  
+  readin_html_text <- readr::read_lines(file_i)
+  
+  line_to_insert_google_analytics_global_site_tag_code <-
+    min( grep('<head>', readin_html_text) ) +1
+  
+  complete_html <-
+    paste0(
+      # html before google analytics global site tag code:
+      paste( readin_html_text[1:(line_to_insert_google_analytics_global_site_tag_code-1)],
+             collapse="\n"
+      )
+      ,
+      # google analytics global site tag code:
+      google_analytics_global_site_tag
+      ,
+      # html after google analytics global site tag code:
+      paste( readin_html_text[line_to_insert_google_analytics_global_site_tag_code:length(readin_html_text)],
+             collapse="\n"
+      )
+    )
+  
+  readr::write_lines(    x = complete_html,
+                         path = file_i
+  )
+}
+
+###############################################################
+## code to add navbar and google analytics tag to blog posts ##
+###############################################################
 # get the navbar code from index.html:
-library(tidyverse)
 readin_index.html <- readr::read_lines("index.html")
 
 navbar_padding_code <- 

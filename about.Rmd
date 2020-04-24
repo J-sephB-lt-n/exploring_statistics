@@ -56,7 +56,7 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
     * Time-Series Regression
 
 * Regression Modelling
-    * Linear model (OLS,GLS), GLM (Poisson regression), splines, ridge/lasso/elastic net, KNN, regression tree, GBM, bagging & random forest, feed-forward neural network
+    * Linear model (OLS,GLS), GLM (Poisson regression), [splines](./visual_intro_to_splines.html), ridge/lasso/elastic net, KNN, regression tree, GBM, bagging & random forest, [feed-forward neural network](./neural_net_from_scratch.html)
 
 * Classification Modelling
     * GLM (logistic, multinomial), splines, ridge/lasso/elastic net, KNN, classification tree, bagging & random forest, GBM, LDA & QDA, feed-forward neural network
@@ -74,9 +74,9 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
     * base R plotting tools
     * **ggplot2**
     * Blog Post: [Beautiful Lesser-Known Visualisations in R](./nice_R_visualisations.html)
-    * interactive 3-dimensional visualisation using **plotly**
+    * interactive 3-dimensional visualisation using **plotly** ([example](./recommenders_part1_vectors.html))
     * sankey diagrams using **networkD3**
-    * plots of hierarchical data using **data.tree** and **treemap**
+    * plots of hierarchical data using **data.tree** and **treemap** ([example](./data_tree_checkout.html))
     
 * Regular Expressions (REGEX)    
     
@@ -188,7 +188,7 @@ CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
 
 * Football
 
-* Other hobbies, which I accepted that I will only have time for again after I retire:
+* Other hobbies, which I have accepted that I will only have time for again after I retire:
     - juggling
     - drawing
     - unicycling

@@ -23,6 +23,8 @@ navbar:
           href: good_books_and_papers.html
         - text: "Deep-Learning from Scratch"
           href: neural_net_from_scratch.html
+        - text: "Regression Splines"
+          href: visual_intro_to_splines.html 
         - text: "Clustering: PAM k-Medoids, CLARA & Silhouette Values"
           href: PAMS_and_SILHOUETTE_by_hand.html
         - text: "CRVTW Revenue Uplift Model"

@@ -226,19 +226,19 @@ navbar_creation_code <-
 '
  
 # specify name(s) of posts to insert navbar into (as a character vector): 
-post_names_to_insert_navbar <-  
-   c( "constrOptim.html", 
-      "data_tree_checkout.html", 
-      "gbm_from_scratch_8020.html", 
-      "good_books_and_papers.html", 
-      "intuition_for_CRVTW_uplift_model.html", 
-      "neural_net_from_scratch.html", 
-      "nice_R_visualisations.html", 
-      "OLS_test.html", 
-      "OLS_theory.html", 
-      "PAMS_and_SILHOUETTE_by_hand.html", 
-      "recommenders_part1_vectors.html"
-    )
+post_names_to_insert_navbar <- ""  
+   # c( "constrOptim.html", 
+   #    "data_tree_checkout.html", 
+   #    "gbm_from_scratch_8020.html", 
+   #    "good_books_and_papers.html", 
+   #    "intuition_for_CRVTW_uplift_model.html", 
+   #    "neural_net_from_scratch.html", 
+   #    "nice_R_visualisations.html", 
+   #    "OLS_test.html", 
+   #    "OLS_theory.html", 
+   #    "PAMS_and_SILHOUETTE_by_hand.html", 
+   #    "recommenders_part1_vectors.html"
+   #  )
 
 for( post_i in post_names_to_insert_navbar ){
   

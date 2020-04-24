@@ -99,6 +99,15 @@ Dates shown are date of latest edit.
 </article>
 
 <article>
+<h3><a href="visual_intro_to_splines.html">Regression Splines</a></h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> _2020_04_24_</span>
+<p> A visual introduction </p>
+<a class="btn btn-outline-primary btn-sm" href="visual_intro_to_splines.html">Full Post</a>
+</div>
+</article>
+
+<article>
 <h3><a href="PAMS_and_SILHOUETTE_by_hand.html">Clustering: PAM k-Medoids, CLARA & Silhouette Values</a></h3>
 <div class="summary">
 <span><i class="fa fa-calendar"></i> _2019-12-01_</span>

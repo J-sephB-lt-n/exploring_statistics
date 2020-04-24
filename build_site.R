@@ -2,8 +2,18 @@ library(tidyverse)
 
 setwd("~/exploring_statistics/exploring_statistics/")
 
+# process for adding a post:
+# 
+# 1. copy rmd into main directory and [post_backup_without_navbar] folder 
+# 2. add html name to index
+# 3. add html name to navbar dropdown using _site.yml
+# 4. render site
+# 5. add google analytics tag to main sites
+# 6. replace all posts (htmls) in main folder with their non-navbar versions (from [post_backup_without_navbar] folder)
+# 7. add google analytics tag & navbar to all using the code in this script
+
 rmarkdown::render_site()
-# NOTE:  When a new post is added, you need to add it to the navbar dropdown in the website _site.yml
+
 
 
 ####################################################
@@ -230,7 +240,7 @@ navbar_creation_code <-
 '
  
 # specify name(s) of posts to insert navbar into (as a character vector): 
-post_names_to_insert_navbar <- ""  
+post_names_to_insert_navbar <- 
    c( "visual_intro_to_splines.html",
       "constrOptim.html",
       "data_tree_checkout.html",

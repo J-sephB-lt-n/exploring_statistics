@@ -54,6 +54,15 @@ text-rendering: optimizeSpeed;
 Dates shown are date of latest edit.
 
 <article>
+<h3><a href="cuped_cupac_and_other_variance_reduction_techniques.html">CUPED, CUPAC, and Other Ways to Reduce Variance in an Experiment</a></h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> _2021-03-12_</span>
+<p>Looking for ways to make experiments more efficient</p>
+<a class="btn btn-outline-primary btn-sm" href="cuped_cupac_and_other_variance_reduction_techniques.html" role="button">Full Post</a>
+</div>
+</article>
+
+<article>
 <h3><a href="recommenders_part1_vectors.html">Recommenders Part I</a></h3>
 <div class="summary">
 <span><i class="fa fa-calendar"></i> _2020-04-22_</span>

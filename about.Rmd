@@ -7,7 +7,7 @@ output:
     highlight: espresso
 ---
 
-I am a statistician and data scientist working for Takealot Group South Africa.
+I am a statistician and data scientist working for Home Choice International. 
 
 ```{r echo=FALSE}
 knitr::include_graphics("pixel_face_cropped.png", dpi=150)

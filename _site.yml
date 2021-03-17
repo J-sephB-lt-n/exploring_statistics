@@ -13,6 +13,8 @@ navbar:
     - text: " Posts"  
       menu:
         - text: "Posts"
+        - text: "CUPED, CUPAC, and Other Ways to Reduce Variance in an Experiment"
+          href: cuped_cupac_and_other_variance_reduction_techniques.html        
         - text: "Recommenders Part I: Representing Customers & Items as Vectors"
           href: recommenders_part1_vectors.html
         - text: "Beautiful Lesser-Known Visualisations in R"

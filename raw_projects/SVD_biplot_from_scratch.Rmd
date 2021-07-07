@@ -1,0 +1,677 @@
+---
+title: "MVA_biplots"
+author: "Joe Bolton"
+date: "17 March 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+```
+
+Information from: *Biplots in Practice* by *Michael Greenacre* (available for free in it's entirety online)
+
+# Biplots
+
+A biplot is like a scatterplot, but for visualising a dataset with more than 2 dimensions.
+
+Biplots have as many axes as there are variables. 
+
+Like a scatterplot, points are still projected perpendicularly onto an axis in order to read off their value on that particular axis.
+
+A biplot is necessarily a reduced-dimensional approximation to the original data - data in many dimensions is reduced to 2 dimensions.
+
+For example, suppose that we have the following data, with 5 observations (5 rows) of 4 variables (4 columns):
+
+```{r littleY, echo=FALSE}
+Y <- matrix( c(  8,  2,  2,  -6,
+                 5,  0,  3,  -4,
+                -2, -3,  3,   1,
+                 2,  3, -3,  -1,
+                 4,  6, -6,  -2
+              ),
+             byrow=TRUE,
+             ncol=4 )
+Y
+```
+
+This table of data can be visualised in the following symmetric biplot:
+
+(get the value of an observation/row on a variable/column by projecting it perpendicularly onto that variable/column vector)
+
+(e.g. row 4 takes on the value 3 on column 2, the value -3 on column 3 and value 2 on column 1)
+
+```{r get_hat_Y, fig.width=10, fig.height=10, echo=FALSE}
+u <- svd(Y)$u
+d <- svd(Y)$d
+v <- svd(Y)$v
+
+# u %*% diag( c(d[1:2],0,0) ) %*% t(v)
+
+
+left_matrix <- u[,1:2]%*%diag(sqrt(d[1:2]))
+right_matrix <- diag(sqrt(d[1:2]))%*%t(v[,1:2])
+
+par( pty = "s" )
+# draw the biplot:
+plot( x = c(-3,3 ),
+      y = c(-3,3), 
+      type = "n",
+      xlab = "",
+      ylab = "",
+      axes = FALSE
+    )
+abline( v=0, h=0)
+
+# draw in observations (points):
+points( x = left_matrix[,1],
+        y = left_matrix[,2],
+        pch = 16,
+        col = 3
+      )
+
+# draw in point labels:
+text( x = left_matrix[,1],
+      y = left_matrix[,2],
+      labels = paste("row", 1:nrow(left_matrix), sep=""),
+      pos = 4,
+      col = 3
+    )
+
+# draw in axes:
+arrows( x0 = rep(0, ncol(right_matrix) ),
+        y0 = rep(0, ncol(right_matrix) ),
+        x1 = right_matrix[1,],
+        y1 = right_matrix[2,],
+        length = 0.1,
+        col = 2
+      )
+# draw in vector labels:
+text( x = right_matrix[1,],
+      y = right_matrix[2,],
+      labels = paste("col", 1:ncol(right_matrix), sep=""),
+      pos = 3,
+      col = 2
+      )
+
+# draw in tickmarks on the right_matrix vectors:
+for( col_j in 1:ncol(right_matrix) ){
+  
+  vec <- right_matrix[,col_j]
+  length_of_vec <- sqrt(sum(vec^2))
+  unit_vec <- vec / length_of_vec
+  x_tick_coords <- -8:8 * (unit_vec/length_of_vec)[1]   
+  y_tick_coords <- -8:8 * (unit_vec/length_of_vec)[2]   
+  points( x = x_tick_coords,
+          y = y_tick_coords,
+          pch = "|",
+          cex = 0.5
+        )
+  text( x = x_tick_coords,
+        y = y_tick_coords,
+        labels = -8:8,
+        pos = 1
+      )
+}
+
+```
+
+Notice also that the directions of the vectors (representing columns/variables) indicate the correlation relationships between these variables/columns:
+
+```{r showthecorridge}
+cor(Y)
+```
+
+# Geometry of the biplot
+Biplots are defined as the decomposition of a target matrix $\mathbf{S}$ into the product of a *left matrix* and a *right matrix*:
+
+$$\mathbf{S} \quad = \quad \mathbf{X}\mathbf{Y}^T$$
+
+The target matrix $\mathbf{S}$ is the data matrix which we would like to represent in the biplot. 
+
+e.g.
+
+$$\begin{array}{lcl}
+\underset{\text{target matrix}}{
+\begin{bmatrix}
+8  & 2 & 2 & -6 \\
+5  & 0 & 3 & -4   \\
+-2 &-3 & 3 &  1   \\
+ 2 & 3 &-3 & -1  \\
+4  & 6 &-6 & -2 \\
+\end{bmatrix} 
+}
+&=&
+\underset{\text{left matrix}}{
+\begin{bmatrix}
+2 & 2\\
+1 & 2\\
+-1 & 1\\
+1 & -1\\
+2 & -2 \\
+\end{bmatrix}
+}
+\underset{\text{right matrix}}{
+\begin{bmatrix}
+3 & 2 & -1 & -2\\
+1 & -1 & 2 & -1 \\
+\end{bmatrix}
+} \\
+\underset{\text{target matrix}}{
+\begin{bmatrix}
+\mathbf{x}_1^T\mathbf{y}_1&\mathbf{x}_1^T\mathbf{y}_2&\mathbf{x}_1^T\mathbf{y}_3&\mathbf{x}_1^T\mathbf{y}_4\\
+\mathbf{x}_2^T\mathbf{y}_1&\mathbf{x}_2^T\mathbf{y}_2&\mathbf{x}_2^T\mathbf{y}_3&\mathbf{x}_2^T\mathbf{y}_4\\
+\mathbf{x}_3^T\mathbf{y}_1&\mathbf{x}_3^T\mathbf{y}_2&\mathbf{x}_3^T\mathbf{y}_3&\mathbf{x}_1^T\mathbf{y}_4\\
+\mathbf{x}_4^T\mathbf{y}_1&\mathbf{x}_4^T\mathbf{y}_2&\mathbf{x}_4^T\mathbf{y}_3&\mathbf{x}_4^T\mathbf{y}_4\\
+\mathbf{x}_5^T\mathbf{y}_1&\mathbf{x}_5^T\mathbf{y}_2&\mathbf{x}_5^T\mathbf{y}_3&\mathbf{x}_5^T\mathbf{y}_4\\
+\end{bmatrix}}
+&=&
+\underset{\text{left matrix}}{
+\begin{bmatrix}
+\mathbf{x}_1^T \\
+\mathbf{x}_2^T \\
+\mathbf{x}_3^T \\
+\mathbf{x}_4^T \\
+\mathbf{x}_5^T \\
+\end{bmatrix}}
+\underset{\text{right matrix}}{
+\begin{bmatrix}
+\mathbf{y}_1 & \mathbf{y}_2 & \mathbf{y}_3 & \mathbf{y}_4 
+\end{bmatrix}}
+\end{array}$$
+
+We can plot this data, with the rows of the *left matrix* as points in the cartesian plane, and the columns of the *right matrix* as vectors in the same plane:
+
+```{r do_it_bitch, fig.width=10, fig.height=5}
+par( pty="s" )
+
+left_matrix <- 
+        matrix( c( 2,  2,
+                   1,  2,
+                  -1,  1,
+                   1, -1,
+                   2, -2
+                  ),
+                byrow=TRUE,
+                ncol=2) 
+right_matrix <- 
+         matrix( c(3,  2, -1, -2,
+                   1, -1,  2, -1
+                   ),
+                 byrow=TRUE,
+                 nrow=2
+               )
+left_matrix%*%right_matrix
+
+# make a blank plot:
+plot( x = c(-3, 4, 0, 0), 
+      y = c( 0, 0, -3, 3),
+      type = "n",
+      axes = FALSE,
+      xlab = "", ylab=""
+    )
+abline( h=0, v=0, lty=2 )
+points( x=0, y=0, cex=2 )
+
+for( row_i in 1:nrow(left_matrix) ){
+  
+  points( x = left_matrix[row_i, 1],
+          y = left_matrix[row_i, 2],
+          pch = 16
+        )
+  text( x = left_matrix[row_i, 1],
+        y = left_matrix[row_i, 2],
+        labels = paste0("x",row_i),
+        col = 2,
+        pos = 4
+      )
+}
+
+for( col_j in 1:ncol(right_matrix) ){
+  
+  arrows( x0 = 0, y0 = 0,
+          x1 = right_matrix[1, col_j],
+          y1 = right_matrix[2, col_j],
+          length = 0.1      # arrowhead length
+        )
+  points( x = right_matrix[1, col_j],
+          y = right_matrix[2, col_j],
+          pch=16
+        )
+  text( x = right_matrix[1, col_j],
+        y = right_matrix[2, col_j],
+        labels = paste0("y", col_j),
+        pos = 3
+      )
+  
+}
+
+axis( side = 1, at = -5:5 )
+axis( side = 2, at = -5:5 )
+
+left_matrix
+right_matrix
+
+```
+
+We wish to project vector $\mathbf{x}_1$ onto vector $\mathbf{y}_1$. 
+
+The length of $\mathbf{x}_1$ is
+
+$$||\mathbf{x}_1|| \quad = \quad \sqrt{(2-0)^2+(2-0)^2} \quad = \quad \sqrt{8}$$
+
+Using the result $cos\theta = \frac{\mathbf{u} \cdot \mathbf{v}}{||\mathbf{u}||\space\space||\mathbf{v}||}$, the angle formed by $\mathbf{x}_1$ and $\mathbf{y}_1$ is
+
+$$cos^{-1}\Bigg[\frac{\mathbf{x}_1 \cdot \mathbf{y}_1}{||\mathbf{x}_1||\space\space||\mathbf{y}_1||}\Bigg]\quad = \quad 0.4636476 \text{ radians}$$
+```{r showquicks}
+x1 <- left_matrix[1,]
+y1 <- right_matrix[,1]
+acos( c(t(x1)%*%y1) / (sqrt(sum(x1^2))*sqrt(sum(y1^2)) ) )
+```
+
+This means that the projection of $\mathbf{x}_1$ onto $\mathbf{y}_1$ has length 
+
+$$||\mathbf{x}_1||\space \Bigg(\frac{\mathbf{x}_1^T\mathbf{y}_1}{||\mathbf{x}_1||\space||\mathbf{y}_1||}\Bigg) \quad = \quad ||\mathbf{x}_1||\space cos\Big(\theta\Big) \quad = \quad \sqrt{8}\space cos\Big(0.4636476\Big) \quad = \quad 2.529822 $$
+
+and lies along the vector $\mathbf{y}_1$
+
+So, the co-ordinate of the point at which the projection from $\mathbf{x}_1$ hits the vector $\mathbf{y}_1$  is $||\mathbf{x}_1||\space cos\Big(\theta\Big)$ times unit-length $\mathbf{y}_1$:
+
+$$\sqrt{8}\space cos\Big(0.4636476\Big) \space \frac{\mathbf{y}_1}{||\mathbf{y}_1||} \quad = \quad 2.529822 \begin{bmatrix}\frac{3}{\sqrt{3^2+1^2}}\\ \frac{1}{\sqrt{3^2+1^2}} \end{bmatrix} \quad = \quad \begin{bmatrix}2.4 \\ 0.8\end{bmatrix}$$
+
+```{r dotheshitshow, echo=FALSE}
+the_proj <- c(2.4, 0.8)
+  
+par( pty="s" )
+# make a blank plot:
+plot( x = c(-3, 4, 0, 0), 
+      y = c( 0, 0, -3, 3),
+      type = "n",
+      axes = FALSE,
+      xlab = "", ylab=""
+    )
+abline( h=0, v=0, lty=2 )
+points( x=0, y=0, cex=2 )
+
+for( row_i in 1:nrow(left_matrix) ){
+  
+  points( x = left_matrix[row_i, 1],
+          y = left_matrix[row_i, 2],
+          pch = 16
+        )
+  text( x = left_matrix[row_i, 1],
+        y = left_matrix[row_i, 2],
+        labels = paste0("x",row_i),
+        col = 2,
+        pos = 4
+      )
+}
+
+for( col_j in 1:ncol(right_matrix) ){
+  
+  arrows( x0 = 0, y0 = 0,
+          x1 = right_matrix[1, col_j],
+          y1 = right_matrix[2, col_j],
+          length = 0.1      # arrowhead length
+        )
+  points( x = right_matrix[1, col_j],
+          y = right_matrix[2, col_j],
+          pch=16
+        )
+  text( x = right_matrix[1, col_j],
+        y = right_matrix[2, col_j],
+        labels = paste0("y", col_j),
+        pos = 3
+      )
+  
+}
+
+axis( side = 1, at = -5:5 )
+axis( side = 2, at = -5:5 )
+
+segments( x0 = 0, y0 = 0,
+          x1 = the_proj[1],
+          y1 = the_proj[2],
+          lwd=2,
+          col=3
+        )
+
+segments( x0 = x1[1], y0 = x1[2],
+          x1 = the_proj[1],
+          y1 = the_proj[2],
+          lty=3
+        )
+
+segments( x0 = 0, y0 = 0,
+          x1 = x1[1], y1 = x1[2],
+          lty = 3
+          )
+
+text( x=1, y=0.6,
+      labels = expression(theta)
+      )
+
+points( x=the_proj[1], y=the_proj[2], pch=16 )
+text( x=the_proj[1], y=the_proj[2], labels="(2.4, 0.8)", pos=1, cex=0.7)
+```
+
+So, the co-ordinate of the point (2.4, 0.8) at which the projection from $\mathbf{x}_1$ hits $\mathbf{y}_1$ we found using:
+
+$$\begin{array}{lcl} \text{point co-ordinate} &=& \underset{||\mathbf{x}_1||cos(\theta)}{(\text{length of projection on } \mathbf{y}_1)} \times \underset{\frac{\mathbf{y_1}}{||\mathbf{y}_1||}}{(\text{unit vector in direction of } \mathbf{y}_1)} \\
+&=& ||\mathbf{x}_1||\space \Bigg(\frac{\mathbf{x}_1^T\mathbf{y}_1}{||\mathbf{x}_1||\space||\mathbf{y}_1||}\Bigg) \frac{\mathbf{y}_1}{||\mathbf{y}_1||}\\
+&=& \begin{bmatrix}2.4\\0.8\end{bmatrix}\end{array}$$
+
+If we take the length of our projection vector (the vector joining $(0,0)$ to $(2.4,0.8)$ ) and multiply it by the length of $\mathbf{y}_1$, then we will get to the value $\mathbf{x}_1^T\mathbf{y}_1$ in the target matrix:
+
+$$\text{length of projection} \times \text{length of }\mathbf{y}_1 \quad = \quad \sqrt{8}\space cos\Big(0.4636476\Big) \times \sqrt{10} \quad = \quad \sqrt{2.4^2+0.8^2} \times \sqrt{10}\quad = \quad 8$$
+
+This is the standard dot product result:
+
+$$\mathbf{x}^T\mathbf{y} \quad = \quad ||\mathbf{x}|| \space cos\Big(\theta\Big) \space ||\mathbf{y}|| $$
+
+This means that if simply make the tickmarks on the $\mathbf{y}_1$ vector $\frac{1}{||\mathbf{y}_1||}$ units apart rather 1 unit apart, then projections of $\mathbf{x}_i$ onto $\mathbf{y}_1$ will give values from the **target matrix**. 
+
+So, if the tickmarks along $\mathbf{y}_1$ are of length $\frac{1}{\sqrt{10}}=0.3162278$, then the length of the projection of $\mathbf{x}_1$ onto $\mathbf{y}_1$ being 2.529822 is in fact  $2.529822\times\frac{1}{1/\sqrt{10}}=8$ tickmarks/units along $\mathbf{y}_1$ (which corresponds to the value of row 1 and column 1 in the original target matrix).
+
+Here are all of the $\mathbf{X}$ projections onto $\mathbf{y}_1$ - the vector algebra stays exactly the same: all that is changed is the spacing of the tickmarks on $\mathbf{y}_1$. 
+
+```{r plot_more}
+par( pty="s" )
+# make a blank plot:
+plot( x = c(-3, 4, 0, 0), 
+      y = c( 0, 0, -3, 3),
+      type = "n",
+      axes = FALSE,
+      xlab = "", ylab=""
+    )
+abline( h=0, v=0, lty=2 )
+points( x=0, y=0, cex=2 )
+
+for( row_i in 1:nrow(left_matrix) ){
+  
+  points( x = left_matrix[row_i, 1],
+          y = left_matrix[row_i, 2],
+          pch = 16
+        )
+  text( x = left_matrix[row_i, 1],
+        y = left_matrix[row_i, 2],
+        labels = paste0("x",row_i),
+        col = 2,
+        pos = 4
+      )
+}
+
+arrows( x0 = 0, y0 = 0,
+          x1 = right_matrix[1,1], y1=right_matrix[2,1] 
+        )
+
+arrows( x0 = 0, y0 = 0,
+        x1 = -right_matrix[1,1], y1=-right_matrix[2,1],
+        length = 0.1     # arrowhead length
+      )
+
+text( x = right_matrix[1,1],
+      y = right_matrix[2,1],
+      pos = 3,
+      labels = "y1"
+    )
+ 
+axis( side = 1, at = -5:5 )
+axis( side = 2, at = -5:5 )
+
+points( x = -8:8 * 3/sqrt(10)*(1/1/sqrt(10)),
+        y = -8:8 * 1/sqrt(10)*(1/1/sqrt(10)),
+        pch = "|",
+        cex = 0.5
+        )
+
+text( x = -8:8 * 3/sqrt(10)*(1/1/sqrt(10)),
+      y = -8:8 * 1/sqrt(10)*(1/1/sqrt(10)),
+      labels = -8:8,
+      pos = 1,
+      cex = 0.5
+     )
+
+# draw all of the projection lines:
+for( row_i in 1:nrow(left_matrix)){
+
+  x_i <- left_matrix[row_i,]
+  
+  projection_point <- c( t(x_i)%*%y1 ) * y1 / sum(y1^2) 
+  
+  segments( x0 = left_matrix[row_i,1],
+            y0 = left_matrix[row_i,2],
+            x1 = projection_point[1],
+            y1 = projection_point[2],
+            col = 2,
+            lty = 2
+          )
+}
+
+```
+
+Here is the original target matrix for reference:
+
+```{r theoriginaltarget, echo=FALSE}
+rownames(Y) <- paste("x", 1:5, sep="" )
+colnames(Y) <- paste("y", 1:4, sep="" )
+Y
+```
+
+In this example, both the *left matrix* (providing points to plot) and the *right matrix* (providing vectors to plot) were 2-dimensional. This allowed us to make the biplot on the 2-dimensional plane. 
+
+In practice, we will not be able to find a decomposition of the *target matrix* into two 2-dimensional matrices like this - the number of dimensions needed in the *left matrix* and the *right matrix* is in fact the *rank* of the *target matrix*. In order to produce a 2-dimensional biplot, we will need to reduce the dimensionality of the target matrix. 
+
+# Reduced Dimension/Reduced Rank biplots using SVD
+Suppose that we have a data matrix $\mathbf{Y}$ with $n$ observations on $p$ variables that we wish to visualise in a biplot. 
+
+For example, suppose that we want to make a biplot for the following dataset $\mathbf{Y}$:
+
+```{r Yme}
+set.seed(13)
+tempmat <- matrix( runif( 16, -5,5 ), ncol=4 )
+Y <- MASS::mvrnorm( n = 20, 
+                    mu = sample( -20:20, size=4 ),
+                    Sigma = t(tempmat)%*%tempmat
+                  ) %>% 
+  scale()
+Y
+
+car::scatterplotMatrix(Y, col=1, regLine=list(col=4, lwd=1), smooth=FALSE)
+```
+
+Notice that I have standardised the data (to have mean 0 and variance 1). 
+
+This matrix has rank 
+
+```{r ranklieutentnat}
+qr(Y)$rank
+```
+
+Meaning that we must find a 2-rank approximation of it in order to construct a biplot of it. 
+
+Suppose that our $n\times p$ matrix has rank $r$ (in our case $20\times4$ and r=`r qr(Y)$rank`). 
+
+In order to make a 2-dimensional biplot, we need to find a matrix $\hat{\mathbf{Y}}$ with the same dimension ($n\times p$=$20\times 4$) as $\mathbf{Y}$, but of rank $r=2$.
+
+The best approximation $\hat{\mathbf{Y}}$, where 'best' is measured using the sum of squared element-wise differences between $\hat{\mathbf{Y}}$ and $\mathbf{Y}$, is achieved by using the Singular Value Decomposition (SVD) of $\mathbf{Y}$. The SVD of $Y$ is:
+
+$$\begin{array}{lcl} \mathbf{Y} &=& \mathbf{U}\mathbf{\Lambda}\mathbf{V}^T\\ \end{array}$$
+```{r svd_in_R}
+u <- svd(Y)$u
+d <- svd(Y)$d
+v <- svd(Y)$v
+
+Y
+
+# which is the same as:
+u %*% diag(d) %*% t(v)
+```
+
+For the rank 2 approximation, we replace $\Lambda$:
+
+```{r lambstewda}
+diag(d)
+```
+
+with 
+
+```{r hmm}
+diag(d)[1:2,1:2]
+```
+
+and we also only use the first 2 columns of $\mathbf{U}$ and the first 2 columns of $\mathbf{V}$. 
+
+So, where the SVD of our data matrix $\mathbf{Y}$ was 
+
+$$\mathbf{Y} \quad = \quad
+\underset{\mathbf{U}}{\begin{bmatrix}*&*&.&.\\*&*&.&.\\*&*&.&.\\*&*&.&.\\*&*&.&.\\*&*&.&.\\*&*&.&.\\*&*&.&.\\\end{bmatrix}}\underset{\Lambda}{\begin{bmatrix}\lambda_1&0&0&0\\
+                                    0&\lambda_2&0&0\\
+                                    0&0&\lambda_3&0\\
+                                    0&0&0&\lambda_4\\
+                                    \end{bmatrix}}
+\underset{\mathbf{V}^T}{\begin{bmatrix}*&*&*&*\\*&*&*&*\\.&.&.&.\\.&.&.&.\end{bmatrix}}$$
+
+the rank-2 approximation of $\mathbf{Y}$ is then:
+
+$$\mathbf{\hat{Y}} \quad = \quad \begin{bmatrix}*&*\\*&*\\*&*\\*&*\\*&*\\*&*\\*&*\\*&*\\\end{bmatrix}
+\begin{bmatrix}\lambda_1&0\\
+                0&\lambda_2
+                \end{bmatrix}
+\begin{bmatrix}*&*&*&*\\*&*&*&*\end{bmatrix}$$
+
+which is the same as 
+
+$$\mathbf{\hat{Y}} \quad = \quad
+\begin{bmatrix}*&*&.&.\\*&*&.&.\\*&*&.&.\\*&*&.&.\\*&*&.&.\\*&*&.&.\\*&*&.&.\\*&*&.&.\\\end{bmatrix}\begin{bmatrix}\lambda_1&0&0&0\\
+                                    0&\lambda_2&0&0\\
+                                    0&0&0&0\\
+                                    0&0&0&0\\
+                                    \end{bmatrix}
+\begin{bmatrix}*&*&*&*\\*&*&*&*\\.&.&.&.\\.&.&.&.\end{bmatrix}$$
+
+```{r quickcheck}
+u %*% diag( c(d[1:2],0,0) ) %*% t(v)
+u[,1:2] %*% diag( d[1:2] ) %*% t(v[,1:2])
+```
+
+However, the first form can be written like this:
+
+$$\mathbf{\hat{Y}} \quad = \quad \begin{bmatrix}*&*\\*&*\\*&*\\*&*\\*&*\\*&*\\*&*\\*&*\\\end{bmatrix}
+\begin{bmatrix}\sqrt{\lambda_1}&0\\
+                0&\sqrt{\lambda_2}
+                \end{bmatrix}
+\begin{bmatrix}\sqrt{\lambda_1}&0\\
+                0&\sqrt{\lambda_2}
+                \end{bmatrix}
+\begin{bmatrix}*&*&*&*\\*&*&*&*\end{bmatrix}$$
+
+which gives us the *left matrix* and *right matrix* for our biplot:
+
+$$\mathbf{\hat{Y}} \quad = \quad \underset{\text{left matrix}}{\Bigg( \begin{bmatrix}*&*\\*&*\\*&*\\*&*\\*&*\\*&*\\*&*\\*&*\\\end{bmatrix}
+\begin{bmatrix}\sqrt{\lambda_1}&0\\
+                0&\sqrt{\lambda_2}
+                \end{bmatrix}\Bigg)}
+                \quad \quad \quad  
+                \underset{\text{right matrix}}{
+                \Bigg(
+\begin{bmatrix}\sqrt{\lambda_1}&0\\
+                0&\sqrt{\lambda_2}
+                \end{bmatrix}
+\begin{bmatrix}*&*&*&*\\*&*&*&*\end{bmatrix}
+\Bigg)}$$
+
+This is called a *symmetric biplot*, since the matrix of singular values is spread equally between the *left matrix* and the *right matrix*
+
+Here is this biplot plotted manually in R: 
+
+```{r do_the_whole_bipot, fig.width=10, fig.height=10}
+
+left_matrix <- u[,1:2]%*%diag(sqrt(d[1:2]))
+right_matrix <- diag(sqrt(d[1:2]))%*%t(v[,1:2])
+
+par( pty = "s" )
+# draw the biplot:
+plot( x = c(-2,2 ),
+      y = c(-2,2), 
+      type = "n",
+      xlab = "",
+      ylab = "",
+      axes = FALSE
+    )
+
+# draw in observations/points (left matrix) as text:
+text( x = left_matrix[,1],
+      y = left_matrix[,2],
+      labels = 1:nrow(left_matrix),
+      #pos = 4,
+      col = 2
+    )
+
+# draw in vectors (right matrix):
+arrows( x0 = rep(0, ncol(right_matrix) ),
+        y0 = rep(0, ncol(right_matrix) ),
+        x1 = right_matrix[1,],
+        y1 = right_matrix[2,],
+        length = 0.1,
+        col = 3:6
+      )
+# draw in vector labels:
+text( x = right_matrix[1,],
+      y = right_matrix[2,],
+      labels = paste("column ", 1:ncol(right_matrix), sep=""),
+      pos = 3,
+      col = 3:6
+      )
+
+# draw in tickmarks on the right_matrix vectors:
+for( col_j in 1:ncol(right_matrix) ){
+  
+  vec <- right_matrix[,col_j]
+  length_of_vec <- sqrt(sum(vec^2))
+  unit_vec <- vec / length_of_vec
+  x_tick_coords <- seq(-5,5,0.5) * (unit_vec/length_of_vec)[1]   
+  y_tick_coords <- seq(-5,5,0.5) * (unit_vec/length_of_vec)[2]   
+  points( x = x_tick_coords,
+          y = y_tick_coords,
+          pch = "|",
+          cex = 0.5,
+          col = 2+col_j
+        )
+  text( x = x_tick_coords,
+        y = y_tick_coords,
+        labels = seq(-5,5,0.5),
+        pos = 1,
+        cex = 0.5,
+        col = 2+col_j
+      )
+}
+
+```
+
+Here is the original dataset (target matrix) again, for reference:
+
+```{r lasttimeonemoretimecelebrate}
+Y
+```
+
+and here is the same plot using the base R function biplot():
+
+```{r andinR, fig.width=8, fig.height=8}
+biplot( prcomp( Y ) )
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

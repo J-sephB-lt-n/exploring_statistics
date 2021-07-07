@@ -1,0 +1,21 @@
+
+
+Pearson Chi-Squared Test for logistic regression:
+	https://data.princeton.edu/wws509/notes/c3.pdf
+
+Pearson Residuals and Standardised Pearson Residuals:
+	https://r-forge.r-project.org/scm/viewvc.php/*checkout*/pkg/BinomTools/inst/ResidualsGLM.pdf?revision=6&root=binomtools&pathrev=6
+		(or google "residualsGLM.pdf")
+        https://data.princeton.edu/wws509/notes/c3s8
+		
+Residual Deviance for logistic regression:
+	https://data.princeton.edu/wws509/notes/c3.pdf
+
+Deviance residuals for logistic regression:
+	Deviance Residuals Clearly Explained: https://www.youtube.com/watch?v=JC56jS2gVUE
+	https://data.princeton.edu/wws509/notes/c3s8	
+	https://r-forge.r-project.org/scm/viewvc.php/*checkout*/pkg/BinomTools/inst/ResidualsGLM.pdf?revision=6&root=binomtools&pathrev=6
+		(or google "residualsGLM.pdf")
+
+
+	

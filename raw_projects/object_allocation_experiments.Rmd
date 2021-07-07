@@ -1,0 +1,564 @@
+---
+title: "object_allocation_experiments"
+output: html_notebook
+---
+
+
+```{r setup}
+library(tidyverse)
+library(Rglpk)
+```
+
+My idea:
+
+1. Split the data into small subsets and solve the problem with integer linear programming in each subset
+(2.) [optional] do step 1 lots of times and choose the best solution
+3. Combine all of the subset optimal solutions to create an approximate global solution
+4. Perform iterative swapping/random voucher assignment on the global solution, accepting each random action 
+    when it keeps the solution feasible and increases the objective function. 
+
+Here is a quick example of how the linear integer programming function Rglpk_solve_LP() function works in R:
+(it is from their help function in R)
+
+```{r}
+## Simple mixed integer linear program.
+## maximize:    3 x_1 + 1 x_2 + 3 x_3
+## subject to: -1 x_1 + 2 x_2 +   x_3 <= 4
+##                      4 x_2 - 3 x_3 <= 2
+##                x_1 - 3 x_2 + 2 x_3 <= 3
+##                x_1, x_3 are non-negative integers
+##                x_2 is a non-negative real number
+
+obj <- c(3, 1, 3)
+mat <- matrix(c(-1, 0, 1, 2, 4, -3, 1, -3, 2), nrow = 3)
+dir <- c("<=", "<=", "<=")
+rhs <- c(4, 2, 3)
+types <- c("I", "C", "I")
+max <- TRUE
+
+Rglpk_solve_LP(obj, mat, dir, rhs, types = types, max = max)
+```
+   
+So, suppose that our profit matrix looks like this:   
+
+```{r}
+n_ppl <- 8
+n_objects <- 4
+
+lower_bounds <- c(2,2,2,2)
+upper_bounds <- c(4,4,4,4)
+
+sim_data <- matrix( round(runif(n_ppl*n_objects,0,100)), ncol=n_objects ) 
+colnames(sim_data) <- paste( "obj", 1:n_objects )
+rownames(sim_data) <- paste( "person", 1:n_ppl )
+
+sim_data 
+```
+
+Each cell shows the profit obtained if that object is assigned to that person. 
+
+The constraints specified mean that no object can be assigned less than 2 times, or more than 4 times. 
+
+Solve this problem using Rglpk_solve_LP():
+
+```{r}
+obj <- c( t(sim_data) )
+lhs_matrix <- matrix( rep( rep(0,length(sim_data)), nrow(sim_data) ), ncol=length(sim_data) )
+
+for( i in 1:nrow(sim_data) ){      # iterate through all of the people
+   lhs_matrix[i, (1:ncol(sim_data))+ncol(sim_data)*(i-1)] <- 1
+ }
+
+dir <- rep( "==", nrow(lhs_matrix) )
+rhs <- rep( 1, nrow(lhs_matrix) )
+
+# add lower bound and upper bound constraints:
+lower_bound_lhs_mat <- matrix( rep(0, ncol(sim_data)*length(obj)), ncol=length(obj) ) 
+for( obj_i in 1:nrow(lower_bound_lhs_mat) ){
+  lower_bound_lhs_mat[obj_i, seq(obj_i, nrow(sim_data)*ncol(sim_data),ncol(sim_data))] <- 1
+}
+upper_bound_lhs_mat <- lower_bound_lhs_mat
+
+lhs_matrix <- rbind( lhs_matrix, lower_bound_lhs_mat, upper_bound_lhs_mat )
+
+dir <- c( dir, rep(">=", nrow(lower_bound_lhs_mat)) )   # add lower bound
+dir <- c( dir, rep("<=", nrow(upper_bound_lhs_mat)) )   # add upper bound
+
+rhs <- c( rhs, lower_bounds )   # add lower bounds
+rhs <- c( rhs, upper_bounds )   # add upper bounds
+
+types <- rep( "B", length(obj) )
+
+solve_problem <- Rglpk_solve_LP( obj, 
+                                 lhs_matrix, 
+                                 dir, 
+                                 rhs, 
+                                 types = types, 
+                                 max = TRUE
+                               )
+solve_problem$status
+```
+
+
+clean up the Rglpk_solve_LP() solution and have a look at it:
+
+```{r}
+clean_solution <- matrix( solve_problem$solution, byrow=TRUE, ncol=ncol(sim_data) )
+colnames(clean_solution) <- colnames(sim_data)
+rownames(clean_solution) <- rownames(sim_data)
+
+clean_solution
+
+paste0( "objective value at optimal solution:  ", solve_problem$optimum )
+```
+
+let's check by brute force that this actually is the optimal solution:
+```{r}
+brute_force_solution <-
+  expand.grid( person1=1:ncol(sim_data),
+               person2=1:ncol(sim_data),
+               person3=1:ncol(sim_data),
+               person4=1:ncol(sim_data),
+               person5=1:ncol(sim_data),
+               person6=1:ncol(sim_data),
+               person7=1:ncol(sim_data),
+               person8=1:ncol(sim_data) #,
+               #person9=1:ncol(sim_data),
+               #person10=1:ncol(sim_data),
+               #person11=1:ncol(sim_data)
+            )
+
+store_objective_values <- rep( 0, nrow(brute_force_solution) )
+
+brute_force_solution %>% head
+
+for( i in 1:nrow(brute_force_solution) ){
+ 
+  extract_solution <- unlist( brute_force_solution[i,] )
+  extract_solution_coef <- rep(-99, length(extract_solution))
+   
+  for( j in 1:length(extract_solution) ){
+    extract_solution_coef[j] <- sim_data[j, extract_solution[j] ]
+  }
+ 
+  # check for feasibility:
+  count_objects <- lower_bounds*0
+  for( k in 1:ncol(sim_data) ){
+    count_objects[k] <- sum(extract_solution==k)
+  }
+  if( ( sum(count_objects >= lower_bounds) == ncol(sim_data) ) &
+      ( sum(count_objects <= upper_bounds) == ncol(sim_data) )
+    ){ store_objective_values[i] <- sum(extract_solution_coef) } else{  
+       store_objective_values[i] <- 0
+  }
+}
+
+# show the brute force solution:
+brute_force_solution <- unlist( brute_force_solution[ which.max(store_objective_values), ] )
+obj_vals <- rep( 0, nrow(sim_data) )
+for( i in 1:nrow(sim_data) ){
+  obj_vals[i] <- sim_data[ i, brute_force_solution[i] ]
+}
+
+brute_force_solution
+
+# objective value (total profit) obtained under brute force solution:
+sum( obj_vals )
+```
+
+and, to confirm, the LP solution was:
+```{r}
+solve_problem$optimum
+sum( clean_solution * sim_data )
+clean_solution
+colSums(clean_solution)
+```
+
+# Let's see how big we can go with a pool of 20 offers
+```{r}
+n_ppl <- 5000
+n_objects <- 20
+
+lower_bounds <- rep( round(n_ppl*0.05), n_objects )
+upper_bounds <- rep( round(n_ppl*0.25), n_objects )
+
+sim_data <- matrix( round(runif(n_ppl*n_objects,0,100)), ncol=n_objects ) 
+colnames(sim_data) <- paste( "obj", 1:n_objects )
+rownames(sim_data) <- paste( "person", 1:n_ppl )
+
+sim_data %>% head()
+```
+
+solve using linear integer programming:
+```{r}
+obj <- c( t(sim_data) )
+lhs_matrix <- matrix( rep( rep(0,length(sim_data)), nrow(sim_data) ), ncol=length(sim_data) )
+
+for( i in 1:nrow(sim_data) ){      # iterate through all of the people
+   lhs_matrix[i, (1:ncol(sim_data))+ncol(sim_data)*(i-1)] <- 1
+ }
+
+dir <- rep( "==", nrow(lhs_matrix) )
+rhs <- rep( 1, nrow(lhs_matrix) )
+
+# add lower bound and upper bound constraints:
+lower_bound_lhs_mat <- matrix( rep(0, ncol(sim_data)*length(obj)), ncol=length(obj) ) 
+for( obj_i in 1:nrow(lower_bound_lhs_mat) ){
+  lower_bound_lhs_mat[obj_i, seq(obj_i, nrow(sim_data)*ncol(sim_data),ncol(sim_data))] <- 1
+}
+upper_bound_lhs_mat <- lower_bound_lhs_mat
+
+lhs_matrix <- rbind( lhs_matrix, lower_bound_lhs_mat, upper_bound_lhs_mat )
+
+dir <- c( dir, rep(">=", nrow(lower_bound_lhs_mat)) )   # add lower bound
+dir <- c( dir, rep("<=", nrow(upper_bound_lhs_mat)) )   # add upper bound
+
+rhs <- c( rhs, lower_bounds )   # add lower bounds
+rhs <- c( rhs, upper_bounds )   # add upper bounds
+
+types <- rep( "B", length(obj) )
+
+system.time( 
+  solve_problem <- Rglpk_solve_LP( obj, 
+                                   lhs_matrix, 
+                                   dir, 
+                                   rhs, 
+                                   types = types, 
+                                   max = TRUE,
+                                   control = list(verbose=TRUE)
+                                 )
+)
+
+solve_problem$status
+```
+
+clean up the solution and have a look:
+```{r}
+clean_solution <- matrix( solve_problem$solution, byrow=TRUE, ncol=ncol(sim_data) )
+colnames(clean_solution) <- colnames(sim_data)
+rownames(clean_solution) <- rownames(sim_data)
+
+head( clean_solution )
+
+paste0( "objective value at optimal solution:  ", solve_problem$optimum )
+
+print( "Number of each object allocated:" )
+colSums(clean_solution)
+```
+
+# Define my algorithm:
+
+define LP solving function for my problem:
+
+```{r}
+
+# profit_matrix <- sim_data[1:1000,]  
+# lower_object_bounds <- rep( round(nrow(profit_matrix)*0.01), n_objects )
+# upper_object_bounds <- rep( round(nrow(profit_matrix)*0.2), n_objects )
+
+LP_solver_ftn <- function( profit_matrix,
+                           lower_object_bounds,    # min number of each object type that can be assigned
+                           upper_object_bounds     # max number of each object type that can be assigned
+                        ){
+
+  # set up objective function   
+  obj <- c( t(profit_matrix) )
+
+  # set up constraint matrix (LHS)
+  lhs_matrix <- matrix( rep( rep(0,length(profit_matrix)), nrow(profit_matrix) ), ncol=length(profit_matrix) )
+
+  for( i in 1:nrow(profit_matrix) ){      # iterate through all of the people
+     lhs_matrix[i, (1:ncol(profit_matrix))+ncol(profit_matrix)*(i-1)] <- 1
+  }
+
+  dir <- rep( "==", nrow(lhs_matrix) )
+  rhs <- rep( 1, nrow(lhs_matrix) )
+
+  # add lower bound and upper bound constraints to constraint matrix (LHS):
+  lower_bound_lhs_mat <- matrix( rep(0, ncol(profit_matrix)*length(obj)), ncol=length(obj) ) 
+  for( obj_i in 1:nrow(lower_bound_lhs_mat) ){
+    lower_bound_lhs_mat[obj_i, seq(obj_i, nrow(profit_matrix)*ncol(profit_matrix),ncol(profit_matrix))] <- 1
+  }
+  upper_bound_lhs_mat <- lower_bound_lhs_mat
+
+  lhs_matrix <- rbind( lhs_matrix, lower_bound_lhs_mat, upper_bound_lhs_mat )
+
+  dir <- c( dir, rep(">=", nrow(lower_bound_lhs_mat)) )   # add lower bound
+  dir <- c( dir, rep("<=", nrow(upper_bound_lhs_mat)) )   # add upper bound
+
+  rhs <- c( rhs, lower_object_bounds )   # add lower bounds
+  rhs <- c( rhs, upper_object_bounds )   # add upper bounds
+
+  # set decision variable to binary type 
+  types <- rep( "B", length(obj) )
+
+  # run LP:
+  solve_problem <- Rglpk_solve_LP( obj, 
+                                   lhs_matrix, 
+                                   dir, 
+                                   rhs, 
+                                   types = types, 
+                                   max = TRUE
+                                 )
+  
+  # solution with nice formatting:
+  clean_solution <- matrix( solve_problem$solution, byrow=TRUE, ncol=ncol(profit_matrix) )
+  colnames(clean_solution) <- colnames(profit_matrix)
+  rownames(clean_solution) <- rownames(profit_matrix)
+
+  
+  return( 
+          list( model_object = solve_problem,
+                clean_solution = clean_solution,
+                total_profit_this_group = sum( clean_solution * profit_matrix ),
+                object_allocation_summary = colSums(clean_solution)
+              )  
+  )
+}
+```
+
+make a proper huge dataset:
+```{r}
+
+n_ppl <- 123456
+n_objects <- 20
+
+sim_data <- matrix( round(runif(n_ppl*n_objects,0,100)), ncol=n_objects ) 
+colnames(sim_data) <- paste( "obj", 1:n_objects )
+rownames(sim_data) <- paste( "person", 1:n_ppl )
+
+sim_data %>% head()
+dim( sim_data )
+```
+
+define iterative LP algorithm:
+```{r}
+
+run_iterative_LP <- 
+  function( profit_matrix,              # matrix of profit of each object for each person
+            max_groupsize = 200,         # max size of each subgroup on which LP is performed   (approximate)
+            lower_object_bounds_percent,         # min number of each object type that can be assigned
+            upper_object_bounds_percent          # max number of each object type that can be assigned
+          ){
+ 
+    # assign people to groups:
+    num_groups <- ceiling(  nrow(profit_matrix) / max_groupsize  )
+    group_IDs <- sample( 1:num_groups, size=nrow(profit_matrix), replace = TRUE )
+    
+    run_LPs_inner <- list() 
+      
+    for( group_i in 1:num_groups ){
+      print( paste0( "run group ", group_i ) )
+      run_LPs_inner[[group_i]]  <- LP_solver_ftn( profit_matrix[ which(group_IDs==group_i), ],    # select only individuals from group_i
+                                                lower_object_bounds = 
+                                                  round( lower_object_bounds_percent * sum(group_IDs==group_i) ),
+                                                upper_object_bounds = 
+                                                  round( upper_object_bounds_percent * sum(group_IDs==group_i) )
+                                              )
+    }
+     
+    # join best LP result into 1 big table:
+    join_LPs <- 
+      lapply( run_LPs_inner,
+              function(x){ x$clean_solution }
+            ) %>% 
+      do.call( rbind, . )
+      
+    return( join_LPs )
+}  
+
+```
+
+try out my iterative LP function:
+```{r}
+
+test <- 
+  run_iterative_LP( profit_matrix = sim_data,
+                    max_groupsize = 100,         
+                    lower_object_bounds_percent = rep(0.01, ncol(sim_data) ),         
+                    upper_object_bounds_percent = rep(0.2, ncol(sim_data) )
+                  )
+
+# look at the mix of object assignments: 
+colSums( test ) / nrow(test)
+
+# total profit for this assignment:
+sum( test * sim_data )
+
+```
+
+define swapping algorithm:
+```{r}
+# current_best_solution <- test 
+# 
+#
+
+run_swapping_alg <- 
+  function( profit_matrix,
+            current_best_solution,
+            lower_object_bounds_percent,         # min number of each object type that can be assigned
+            upper_object_bounds_percent,          # max number of each object type that can be assigned
+            n_iterations = 1000                        # number of swaps to perform
+          ){
+ 
+    # print current profit:
+    current_profit <- sum(profit_matrix*current_best_solution)
+    print( paste0( "total profit: ", current_profit ) )
+    
+    for( iteration_i in 1:n_iterations ){
+      
+      #####################################
+      ## randomly change someones object ##  
+      #####################################
+      
+      random_row <- sample( c(1, rep(0,ncol(profit_matrix)-1)) ) 
+      proposed_new_solution <- current_best_solution
+      proposed_new_solution[ sample(1:nrow(profit_matrix), size=1), ] <- random_row
+      profit_under_proposed <- sum( profit_matrix*proposed_new_solution )
+      if( profit_under_proposed > current_profit ){
+        
+        if( 
+            # lower bound constraint satisfied:
+            sum(   
+                  ( colSums(proposed_new_solution)/nrow(proposed_new_solution) >= 
+                    lower_object_bounds_percent 
+                  ) == FALSE
+            ) == 0 &
+            # upper bound constraint satisfied:
+            sum(   
+                  ( colSums(proposed_new_solution)/nrow(proposed_new_solution) <= 
+                    upper_object_bounds_percent 
+                  ) == FALSE
+            ) == 0 
+        ){
+          current_best_solution <- proposed_new_solution
+          current_profit <- profit_under_proposed
+          print( paste0( "total profit: ", current_profit ) )
+        }
+        
+      }  
+      
+      
+      #####################################
+      ## swap 2 people's objects         ##  
+      #####################################
+      person1_id <- sample( 1:nrow(current_best_solution), size=1 )
+      person2_id <- sample( 1:nrow(current_best_solution), size=1 )
+      
+      person1_row <- current_best_solution[ person1_id, ]
+      person2_row <- current_best_solution[ person2_id, ]
+        
+      if( person1_id==person2_id ){ person1_id <- 1
+                                    person2_id <- 2  
+                                  }
+      
+      proposed_new_solution <- current_best_solution
+      proposed_new_solution[ person1_id,  ] <- person2_row
+      proposed_new_solution[ person2_id,  ] <- person1_row
+      profit_under_proposed <- sum( profit_matrix*proposed_new_solution )
+      if( profit_under_proposed > current_profit ){
+        
+        if( 
+            # lower bound constraint satisfied:
+            sum(   
+                  ( colSums(proposed_new_solution)/nrow(proposed_new_solution) >= 
+                    lower_object_bounds_percent 
+                  ) == FALSE
+            ) == 0 &
+            # upper bound constraint satisfied:
+            sum(   
+                  ( colSums(proposed_new_solution)/nrow(proposed_new_solution) <= 
+                    upper_object_bounds_percent 
+                  ) == FALSE
+            ) == 0 
+        ){
+          current_best_solution <- proposed_new_solution
+          current_profit <- profit_under_proposed
+          print( paste0( "total profit: ", current_profit ) )
+        }
+        
+      }  
+      
+    }
+   
+    return( current_best_solution )
+     
+  }
+
+```
+
+```{r}
+test2 <- run_swapping_alg( profit_matrix = sim_data,
+                           current_best_solution = test,
+                           lower_object_bounds_percent = rep(0.01, ncol(sim_data) ),
+                           upper_object_bounds_percent = rep(0.2, ncol(sim_data) ),
+                           n_iterations = 100
+                        )
+
+# check mix after swapping alg:
+colSums( test2 ) / nrow(test2) 
+
+# profit improvement from swapping:
+sum( test2 * sim_data ) -
+sum( test * sim_data )
+```
+
+
+
+# Let's try it out:
+```{r}
+tfg_profit_matrix <- 
+  readRDS( "C:/Users/Joe/Desktop/local_object_allocation_dev/profit_matrix.rds" )
+
+dim( tfg_profit_matrix )
+
+head(tfg_profit_matrix)
+
+#clean_tfg_profit_matrix <- round(tfg_profit_matrix, 2)
+```
+
+```{r}
+tfg_run_lp_step <-  
+  run_iterative_LP( profit_matrix = tfg_profit_matrix, # matrix of profit of each object for each person
+            max_groupsize = 1000,         # max size of each subgroup on which LP is performed   (approximate)
+            lower_object_bounds_percent = rep(0.01, ncol(tfg_profit_matrix)),
+            upper_object_bounds_percent = rep(0.25, ncol(tfg_profit_matrix))
+          )
+
+colSums(tfg_run_lp_step) / nrow(tfg_run_lp_step)
+
+saveRDS( tfg_run_lp_step,
+          "C:/Users/Joe/Desktop/local_object_allocation_dev/run_lp_step_interim_solution.rds"
+       )
+```
+
+```{r}
+
+test <- tfg_run_lp_step
+
+test <- 
+  run_swapping_alg( profit_matrix = tfg_profit_matrix,
+                    current_best_solution = test,
+                    lower_object_bounds_percent = rep(0.01, ncol(tfg_profit_matrix)),
+                    upper_object_bounds_percent = rep(0.25, ncol(tfg_profit_matrix)),
+                    n_iterations = 1e5L                 
+                )
+
+colSums(test) / nrow(test)
+
+# total profit at previous step: 
+sum( tfg_run_lp_step * tfg_profit_matrix )
+
+# total profit now:
+sum( test * tfg_profit_matrix )
+```
+
+
+
+
+
+
+
+
+
+

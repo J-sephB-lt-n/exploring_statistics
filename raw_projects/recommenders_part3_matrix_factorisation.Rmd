@@ -1,0 +1,537 @@
+---
+title: "Recommenders Part III: Collaborative Filtering using Latent Factor Matrix Decomposition"
+subtitle: ""
+author: "Joseph Bolton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    df_print: paged
+    theme: darkly
+    highlight: espresso
+---
+
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 7px;
+text-align: center;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+<pre style="font-size: 11px; font-family: &quot;Ubuntu Mono&quot;; background-color: rgb(0, 0, 0); color: rgb(255, 255, 255); line-height: 11px;">774688888888888888888888888888888888647777139888888888888888888888893111112398888888888888888888748888882.6888888888888883.79888888888888888
+8888888888888888888888888888888527777159888888888888888888889521111146888888888888888888889536886.8888888778888888888888882.7888888888888888
+8888888888888888888888888627777139888888888888888888893211112398888888888888888896322222224557888728888889.28888888888888884.188888888888888
+88888888888888888886477771398888888888888888895411111259888888888888888634222222439888888888876889.58888886.58888888888888881.28888888888888
+888888888888864177774688888888888888889521111146888888888888895422222223688888888888888888968578882788888884.68888888888888887.1888888888888
+8888888888477713988888888888888954111112598888888888954222222236988888888888895344444444444758758887388888887788888888888888897.488888888888
+88888888885.5888888888888521111146888888889542222222459888888896534444444444456988888888888218478886.88888889.188888888888888897.58888888888
+888888888883.988888888886.588888885222222245988896534444444444356988888889965533334333333319788798887288888886.588888888888888897.3888888888
+88888888888877888888888884788888887688889144442224433333333333333334333335569988888888888878798318888.588888884.98888888888888889..588888888
+8888888888888.488888888888.9888888418888878885733212224333333333333333333333333333333333311944887888817888888887788888888888888885..68888888
+88888888888885.3888888888837888888879888878889788248315721777711122433555555555555555555374397881488887388888889.188888888888888886.79888888
+888888888888881.988888888887388888817888815888788228448282825777777112222435555555555698276187889788889.888888885.588888888888888885.7988888
+8888888888888887788888888886.9888889788886788878842825829293554532777772244223555555556171978258875888811888888883.988888888888888883.798888
+8888888888888888.488888888887788888814888878881683181653434923533333477771244223555533577187867885788888.98888888877888888888888888882.78888
+88888888888888886.38888888889.6888888788887388338318192829425444444443657772243423555377119798788875888827888888888.7888888888888888884.1888
+888888888888888882.98888888885788888875888378891851818294434222221239888847712443345517211973873884788888.4888888885.3888888888888888881.788
+8888888888888888881788888888887388888678888788878518182452222177268888888884722434547.74129218378887988885.8888888883.9888888888888888887.18
+9888888888888888888.28888888886.9888887588876887861819422217774888888888888852244337.71522657887888418888872888888888778888888888888888887.3
+79888888888888888886.68888888887788888378885188786182352177748888888888888888854347712242269788768887888888.9888888888.48888888888888888887.
+..9888888888888888884.9888888889.688888798887881991922217.13438888888888888888867.7124223458788518881488888478888888885.38888888888888888897
+3.78888888888888888887.8888888885788888578887984391532177454422688888888888885177722264153587988788897888888.48888888882.9888888888888888889
+85.7988888888888888888718888888887388888788844861913477745344227298888888894777122452461933825887988872888885.888888888817888888888888888888
+882.7888888888888888886.5888888886.88888228897897812277534534421773888886411222444236281853852884488857888888118888888888.288888888888888888
+8881.1888888888888888884.6888888887288888788879878121.35554434222777563444444434253282818548978897888875888888.98888888886.48888888888888888
+88882.2888888888888888887.888888889.588887588128781172355555424342177714333435436282628186288788878888678888884788888888882.9888888888888888
+888881.488888888888888888778888888827888867886787911166555555532224227777725546433494381862887888158888798888887588888888881.888888888888888
+8888887.488888888888888889.5888888887388887388782571655555555555342222221777771628282992892887888518888318888885788888888888.288888888888888
+88888897.388888888888888883.988888886.888837882352135555555555555555334221111777777419548918826888788888788888887188888888889.58888888888888
+888888867.5888888888888888877888888887188887689791133333333333333333333333333333344422243426514888738888148888889.988888888884.6888888888888
+888888889..58888888888888888.788888888.5888578878788888888888889665533333333433433433333334222444413888897888888847888888888887.888888888888
+8888888885..68888888888888885.388888882788887887974333333333333333556988888896534444444444356988954222222288888888.6888888888897188888888888
+88888888883.798888888888888883.9888888873888228328888888888888953444444444443598888888953222222245988888888641111129888888888889.58888888888
+888888888885.798888888888888887798888889.888879875344444444444369888888888888634222222456888888888895211111459888888888888889417718888888888
+8888888888883.79888888888888888.788888881188871866988888888888888889542222222368888888888888932111123688888888888888889417777468888888888888
+88888888888882.78888888888888885.38888889.98867888888888889542222222369888888888888888521111145988888888888888888647777146888888888888888888
+888888888888881.18888888888888883.9888888278887395422222224598888888888888888893211111398888888888888888888931777746888888888888888888888888
+8888888888888881.2888888888888888178888888.4889245988888888888888888888641111125988888888888888888888951777745888888888888888888888888888888
+88888888888888887.1888888888888888.18888883.888888888888888888895211111458888888888888888888888852777725888888888888888888888888888888889517</pre>
+
+```{r echo=FALSE}
+# change formatting of code output:
+knitr::opts_chunk$set(
+  class.output  = "bg-primary",
+  class.message = "bg-info text-info",
+  class.warning = "bg-warning text-warning",
+  class.error   = "bg-danger text-danger"
+)
+```
+
+<!-- set style back to normal so code prints nicely-->
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 14px;
+text-align: left;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+
+**Collaborative Filtering**
+
+```{r setup, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(Matrix)
+library(patchwork)
+```
+
+# Theory
+Suppose that we have rating matrix $Y_{M\times N}$, which shows the ratings (ratings on 1-5 scale) that $M$ customers have given to a pool of $N$ items. For example, each item could be a movie and the matrix $Y_{M\times N}$ could show the ratings that various customers have given to various movies.  
+
+The rating matrix $Y_{M\times N}$ is a sparse matrix (i.e. many entries in the matrix are missing). Entry $Y_{ij}$ of this matrix is the rating given to item $j$ by customer $i$. Here is an example of a rating matrix $Y_{10\times 6}$:
+
+```{r echo=FALSE}
+n_items <- 6
+n_customers <- 10
+percent_sparse <- 0.5
+
+# assign some random 1-5 ratings for various customer/item combinations:
+rating_matrix <- matrix( sample(1:5, size=n_items*n_customers, replace=TRUE),
+                         ncol = n_items,
+                         nrow = n_customers
+                       )
+rating_matrix <- 
+  rating_matrix * 
+  sample( 0:1, size=prod(dim(rating_matrix)), replace=TRUE, prob=c(percent_sparse,1-percent_sparse) )
+
+colnames(rating_matrix) <- paste0("item", 1:ncol(rating_matrix), sep="" )
+rownames(rating_matrix) <- paste0("customer", 1:nrow(rating_matrix), sep="" )
+
+# make sure that each customer has rated at least 1 item:
+for( row_i in 1:nrow(rating_matrix) ){
+  if( sum(rating_matrix[row_i,])==0 ){ 
+      rating_matrix[row_i,sample(1:ncol(rating_matrix),size=1)] <- 
+        sample( 1:5, size=1)
+    }
+}
+
+# make sure that each item has been rated at least once:
+for( col_j in 1:ncol(rating_matrix) ){
+  if( sum(rating_matrix[,col_j])==0 ){ 
+      rating_matrix[sample(1:nrow(rating_matrix),size=1),col_j] <- 
+        sample( 1:5, size=1)
+    }
+}
+
+rating_matrix <- Matrix( rating_matrix, sparse=TRUE )
+
+rating_matrix
+```
+
+We want to find matrices $U_{M\times L}$ and $V_{N\times L}$ where $UV^T$ provides a low-rank decomposition (approximation) of $Y$:
+
+$$\hat Y \quad=\quad UV^T$$
+
+$$i.e.\quad \hat y_{ij} \quad=\quad \mathbf{u}_i' \mathbf{v}_j$$
+
+$\mathbf{u}_i'$ is the $i^{th}$ row of $U_{M\times L}$.
+
+$\mathbf{v}_j'$ is the $j^{th}$ row of $V_{N\times L}$. 
+
+$\mathbf{u}_i$ is a vector of length $L$.
+
+$\mathbf{v}_j$ is a vector of length $L$.
+
+We choose the dimensionality $L$ to be a much smaller number than either $M$ or $N$.  
+
+$\mathcal{I}_j$ is the set of users who rated item $j$. 
+
+$\mathcal{J}_i$ is the set of items that were rated by user $i$. 
+
+What we are doing here is representing each customer (row $i$ of rating matrix $Y$) as an $L$-dimensional vector $u_i$, and each product (column $j$ of rating matrix $Y$) as an $L$-dimensional vector $v_j$. Then, the predicted rating for a particular customer/product combination $\{u_i,v_j\}$ is calculated as the dot product between those two vectors $\hat y_{ij}=u'\cdot v$.     
+
+We can choose these vectors $u_1,u_2,...,u_M, v_1,v_2,...,v_N$ by minimising the sum of squared errors (squared differences between observed ratings $y_{ij}$ and predicted ratings $\hat y_{ij}=u'\cdot v$) over the observed ratings. This makes the objective function:
+
+$$dothisjoe$$
+
+Since 
+
+To explore this concept, let's first create a rating matrix $Y$ filled with random information:
+
+```{r}
+n_items <- 6
+n_customers <- 10
+percent_sparse <- 0.5
+
+# assign some random 1-5 ratings for various customer/item combinations:
+rating_matrix <- matrix( sample(1:5, size=n_items*n_customers, replace=TRUE),
+                         ncol = n_items,
+                         nrow = n_customers
+                       )
+rating_matrix <- 
+  rating_matrix * 
+  sample( 0:1, size=prod(dim(rating_matrix)), replace=TRUE, prob=c(percent_sparse,1-percent_sparse) )
+
+colnames(rating_matrix) <- paste0("item", 1:ncol(rating_matrix), sep="" )
+rownames(rating_matrix) <- paste0("customer", 1:nrow(rating_matrix), sep="" )
+
+# make sure that each customer has rated at least 1 item:
+for( row_i in 1:nrow(rating_matrix) ){
+  if( sum(rating_matrix[row_i,])==0 ){ 
+      rating_matrix[row_i,sample(1:ncol(rating_matrix),size=1)] <- 
+        sample( 1:5, size=1)
+    }
+}
+
+# make sure that each item has been rated at least once:
+for( col_j in 1:ncol(rating_matrix) ){
+  if( sum(rating_matrix[,col_j])==0 ){ 
+      rating_matrix[sample(1:nrow(rating_matrix),size=1),col_j] <- 
+        sample( 1:5, size=1)
+    }
+}
+
+rating_matrix <- Matrix( rating_matrix, sparse=TRUE )
+
+rating_matrix
+```
+
+# Estimate latent factor matrices by alternating least squares
+
+Create starting matrices $U$ and $V$ of *latent factor* vectors $\mathbf{u}_i$ and $\mathbf{v}_j$ (fill them with random values):
+
+```{r}
+# define dimension 
+dim_L <- 3
+dim_M <- nrow(rating_matrix)
+dim_N <- ncol(rating_matrix)
+
+U_matrix <- matrix( data = rnorm( n=dim_M * dim_L),
+                    nrow = dim_M,
+                    ncol = dim_L
+                  )
+colnames(U_matrix) <- paste("u", 1:ncol(U_matrix), sep="")
+
+V_matrix <- matrix( data = rnorm( n=dim_N * dim_L),
+                    nrow = dim_N,
+                    ncol = dim_L
+                  )
+colnames(V_matrix) <- paste("v", 1:ncol(V_matrix), sep="")
+
+U_matrix
+V_matrix
+
+U_matrix %*% t(V_matrix)
+```
+
+Estimate *U* and *V* by regularised alternating least squares:
+(regularisation parameters $\lambda_1$ and $\lambda_2$ need to be chosen)
+
+```{r}
+lambda1 <- 0.1
+lambda2 <- 0.1
+
+lambda2_I <- diag( rep(lambda2, dim_L) )
+lambda1_I <- diag( rep(lambda1, dim_L) )
+
+for( iteration_i in 0:1000 ){
+
+  # print iteration number and sum of squared errors every 50 iterations:
+  if( iteration_i%%50 == 0 ){ 
+        paste0( "iteration ", iteration_i ) %>% print()   
+    
+        # print the sum of square errors:
+        # (over non-zero entries of Y)
+        # sum(   [ y_{ij} - t(u_i)*v_j ]^2  )
+        cat("new U: Sum of Squared Errors:")
+      
+        (
+          sum(
+               (
+                 rating_matrix -
+                 (  ( U_matrix %*% t(V_matrix) ) * (as.matrix(rating_matrix>0)*1)  )
+               )^2
+             ) +
+          lambda1 * sum(U_matrix^2) +
+          lambda2 * sum(V_matrix^2) 
+        ) %>%
+        print()
+  }
+  # keep [u_i]s constant and solve for each [v_j]:
+  for( j in 1:dim_N ){   # for every row of V:
+    V_matrix[j,] <-
+      solve(
+             lambda2_I +
+
+              (
+              lapply( which(rating_matrix[,j]!=0),   # all users who rated item [j]
+                      function(row_i){ U_matrix[row_i,] %*% t(U_matrix[row_i,]) }
+                    ) %>%
+              Reduce( "+", . )
+              )
+      ) %*%
+
+      (
+        lapply( which(rating_matrix[,j]!=0),         # all users who rated item [j]
+                function(row_i){ U_matrix[row_i, ] * rating_matrix[row_i, j] }
+              ) %>%
+        Reduce( "+", . )
+      )
+  }
+
+  # keep [v_j]s constant and solve for each [u_i]:
+  for( i in 1:dim_M ){   # for every row of U:
+
+      U_matrix[i,] <-    # u_i
+      solve(
+             lambda1_I +
+
+              (
+              lapply( which(rating_matrix[i,]!=0),   # all items rated by user [i]
+                      function(row_j){ V_matrix[row_j,] %*% t(V_matrix[row_j,]) }
+                    ) %>%
+              Reduce( "+", . )
+              )
+      ) %*%
+
+      (
+        lapply( which(rating_matrix[i,]!=0),   # all items rated by user [i]
+                function(row_j){ V_matrix[row_j, ] * rating_matrix[i,row_j] }
+              ) %>%
+        Reduce( "+", . )
+      )
+  }
+
+}
+```
+
+
+```{r fig.width=8, fig.height=6}
+latent_decomp_matrix <- U_matrix %*% t(V_matrix)
+rownames(latent_decomp_matrix) <- rownames(rating_matrix)
+colnames(latent_decomp_matrix) <- colnames(rating_matrix)
+
+rating_matrix
+latent_decomp_matrix
+
+rating_matrix_for_ggplot_heatmap <- 
+  rating_matrix %>%
+    as.matrix() %>% 
+    as.data.frame() %>% 
+    rownames_to_column( var="customer_id" ) %>%
+    mutate( customer_id = as.numeric( gsub("customer", "", customer_id) ) ) %>% 
+    pivot_longer(      cols = starts_with("item"),
+                   names_to = "item_id",
+                  values_to = "customer_rating"
+                ) %>% 
+    mutate( item_id = as.numeric( gsub("item", "", item_id) ) ) %>% 
+    mutate( customer_rating = if_else(customer_rating==0, as.numeric(NA), customer_rating) ) %>% 
+    mutate( customer_rating_text = if_else(customer_rating==0, " ", as.character(customer_rating))  )
+
+lat_decomp_mat_for_ggplot_heatmap <- 
+  latent_decomp_matrix %>%
+    as.matrix() %>% 
+    as.data.frame() %>% 
+    rownames_to_column( var="customer_id" ) %>%
+    mutate( customer_id = as.numeric( gsub("customer", "", customer_id) ) ) %>% 
+    pivot_longer(      cols = starts_with("item"),
+                   names_to = "item_id",
+                  values_to = "predicted_customer_rating"
+                ) %>% 
+    mutate( item_id = as.numeric( gsub("item", "", item_id) ) )
+  
+bind_rows( 
+           rating_matrix_for_ggplot_heatmap %>% mutate( source = "original rating matrix" )
+           ,
+           lat_decomp_mat_for_ggplot_heatmap %>% 
+             mutate( source = "latent factor decomposition" ) %>%
+             rename( customer_rating = predicted_customer_rating) %>% 
+             mutate( customer_rating_text = as.character( round(customer_rating, digits=1) ) )
+         ) %>% 
+  ggplot( data = .,
+          aes(     x = item_id,
+                   y = customer_id,
+                fill = customer_rating,
+               label = customer_rating_text
+             )
+        ) +
+  geom_tile() +
+  geom_text() + 
+  facet_wrap( ~source ) +
+  scale_x_continuous( breaks = 1:n_items ) +
+  scale_y_continuous( breaks = 1:n_customers ) +
+  scale_fill_gradient2()
+
+```
+
+# Estimate latent factor matrices by stochastic gradient descent
+
+```{r sgd}
+lambda1 <- 0.1
+lambda2 <- 0.1
+
+calc_gradient_ij_ftn <- function( Umat, Vmat, Ymat, lamb1, lamb2, i, j ){
+
+  list( 
+        u_grad_row_i = 
+            2 * (Ymat[i,j] - t(Umat[i,])%*%Vmat[j,]) %*% Vmat[j,] + ( (2*lamb1)/ sum(Ymat[i,]>0) )*Umat[i,],
+        
+        v_grad_row_j = 
+            2 * (Ymat[i,j] - t(Umat[i,])%*%Vmat[j,]) %*% Umat[i,] + ( (2*lamb2)/ sum(Ymat[,j]>0) )*Vmat[j,]
+      ) %>% 
+    return(.)
+  
+} 
+
+calc_SSE <- function( Umat, Vmat, Ymat, lamb1, lamb2 ){
+          sum(
+               (
+                 Ymat -
+                 (  ( Umat %*% t(Vmat) ) * (as.matrix(Ymat>0)*1)  )
+               )^2
+             ) +
+          lamb1 * sum(Umat^2) +
+          lamb2 * sum(Vmat^2) 
+}
+
+```
+
+Set starting values for $U$ matrix and $V$ matrix:
+```{r}
+# define dimension 
+dim_L <- 5
+dim_M <- nrow(rating_matrix)
+dim_N <- ncol(rating_matrix)
+
+U_matrix <- matrix( data = rnorm( n=dim_M * dim_L),
+                    nrow = dim_M,
+                    ncol = dim_L
+                  )
+colnames(U_matrix) <- paste("u", 1:ncol(U_matrix), sep="")
+
+V_matrix <- matrix( data = rnorm( n=dim_N * dim_L),
+                    nrow = dim_N,
+                    ncol = dim_L
+                  )
+colnames(V_matrix) <- paste("v", 1:ncol(V_matrix), sep="")
+
+U_matrix
+V_matrix
+```
+
+```{r}
+learnrate_alpha <- 0.001
+  
+for( iteration_i in 0:1000 ){
+  
+  # print out SSE every 50 iterations:
+  if( iteration_i%%50 == 0 ){ 
+        paste0( "iteration ", iteration_i ) %>% print()   
+  
+  # print out the objective function value:
+  cat("Sum of Squared Errors:  ")
+  calc_SSE( Umat = U_matrix,
+            Vmat = V_matrix,
+            Ymat = rating_matrix,
+            lamb1 = lambda1,
+            lamb2 = lambda2
+          ) %>% 
+    cat()
+  }
+  
+  # choose a random non-zero value from the rating matrix:
+  rand_i <- sample( which(rowSums(rating_matrix)>0), size=1 )     # choose a random row which has one or more non-zero ratings
+  rand_j <- sample( which(rating_matrix[rand_i,]>0), size=1 )
+
+  # calculate gradient for U_i and V_j:
+  calc_grads <- calc_gradient_ij_ftn( Umat = U_matrix,
+                                      Vmat = V_matrix,
+                                      Ymat = rating_matrix,
+                                      lamb1 = lambda1,
+                                      lamb2 = lambda2,
+                                      i = rand_i,
+                                      j = rand_j
+                                    )
+  
+  # update u_i:
+  U_matrix[rand_i,] <- U_matrix[rand_i,] + learnrate_alpha * calc_grads$u_grad_row_i
+    
+  # update v_i:
+  V_matrix[rand_j,] <- V_matrix[rand_j,] + learnrate_alpha * calc_grads$v_grad_row_j
+    
+}
+
+
+```
+
+```{r}
+latent_decomp_matrix <- U_matrix %*% t(V_matrix)
+rownames(latent_decomp_matrix) <- rownames(rating_matrix)
+colnames(latent_decomp_matrix) <- colnames(rating_matrix)
+
+rating_matrix
+latent_decomp_matrix
+
+rating_matrix_for_ggplot_heatmap <- 
+  rating_matrix %>%
+    as.matrix() %>% 
+    as.data.frame() %>% 
+    rownames_to_column( var="customer_id" ) %>%
+    mutate( customer_id = as.numeric( gsub("customer", "", customer_id) ) ) %>% 
+    pivot_longer(      cols = starts_with("item"),
+                   names_to = "item_id",
+                  values_to = "customer_rating"
+                ) %>% 
+    mutate( item_id = as.numeric( gsub("item", "", item_id) ) ) %>% 
+    mutate( customer_rating = if_else(customer_rating==0, as.numeric(NA), customer_rating) ) %>% 
+    mutate( customer_rating_text = if_else(customer_rating==0, " ", as.character(customer_rating))  )
+
+lat_decomp_mat_for_ggplot_heatmap <- 
+  latent_decomp_matrix %>%
+    as.matrix() %>% 
+    as.data.frame() %>% 
+    rownames_to_column( var="customer_id" ) %>%
+    mutate( customer_id = as.numeric( gsub("customer", "", customer_id) ) ) %>% 
+    pivot_longer(      cols = starts_with("item"),
+                   names_to = "item_id",
+                  values_to = "predicted_customer_rating"
+                ) %>% 
+    mutate( item_id = as.numeric( gsub("item", "", item_id) ) )
+  
+bind_rows( 
+           rating_matrix_for_ggplot_heatmap %>% mutate( source = "original rating matrix" )
+           ,
+           lat_decomp_mat_for_ggplot_heatmap %>% 
+             mutate( source = "latent factor decomposition" ) %>%
+             rename( customer_rating = predicted_customer_rating) %>% 
+             mutate( customer_rating_text = as.character( round(customer_rating, digits=1) ) )
+         ) %>% 
+  ggplot( data = .,
+          aes(     x = item_id,
+                   y = customer_id,
+                fill = customer_rating,
+               label = customer_rating_text
+             )
+        ) +
+  geom_tile() +
+  geom_text() + 
+  facet_wrap( ~source ) +
+  scale_x_continuous( breaks = 1:n_items ) +
+  scale_y_continuous( breaks = 1:n_customers ) +
+  scale_fill_gradient2()
+
+```
+
+# Resources
+
+1. For recommender theory: that awesome textbook that Dino gave me
+
+2. Really nice high-level video on the theory: Lecture 55 — Latent Factor Recommender System | Stanford University: available at https://www.youtube.com/watch?v=E8aMcwmqsTg  
+
+3. For plotting heatmaps in *ggplot2*: heatmapshttps://www.r-graph-gallery.com/79-levelplot-with-ggplot2.html
+
+

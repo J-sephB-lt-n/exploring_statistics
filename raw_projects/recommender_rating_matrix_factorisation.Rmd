@@ -1,0 +1,460 @@
+---
+title: "Latent Factor Matrix Decomposition Recommender"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup}
+library(tidyverse)
+library(Matrix)
+library(patchwork)
+```
+
+# Resources
+
+1. For recommender theory: that awesome textbook that Dino gave me
+
+2. Really nice high-level video on the theory: Lecture 55 — Latent Factor Recommender System | Stanford University: available at https://www.youtube.com/watch?v=E8aMcwmqsTg  
+
+3. For plotting heatmaps in *ggplot2*: heatmapshttps://www.r-graph-gallery.com/79-levelplot-with-ggplot2.html
+
+# Theory
+Suppose that we have rating matrix $Y_{M\times N}$, which shows the ratings (ratings on 1-5 scale) that $M$ customers have given to a pool of $N$ items. For example, each item could be a movie and the matrix $Y_{M\times N}$ could show the ratings that various customers have given to various movies.  
+
+The rating matrix $Y_{M\times N}$ is a sparse matrix (i.e. many entries in the matrix are missing). Entry $Y_{ij}$ of this matrix is the rating given to item $j$ by customer $i$. Here is an example of a rating matrix $Y_{10\times 6}$:
+
+```{r echo=FALSE}
+n_items <- 6
+n_customers <- 10
+percent_sparse <- 0.5
+
+# assign some random 1-5 ratings for various customer/item combinations:
+rating_matrix <- matrix( sample(1:5, size=n_items*n_customers, replace=TRUE),
+                         ncol = n_items,
+                         nrow = n_customers
+                       )
+rating_matrix <- 
+  rating_matrix * 
+  sample( 0:1, size=prod(dim(rating_matrix)), replace=TRUE, prob=c(percent_sparse,1-percent_sparse) )
+
+colnames(rating_matrix) <- paste0("item", 1:ncol(rating_matrix), sep="" )
+rownames(rating_matrix) <- paste0("customer", 1:nrow(rating_matrix), sep="" )
+
+# make sure that each customer has rated at least 1 item:
+for( row_i in 1:nrow(rating_matrix) ){
+  if( sum(rating_matrix[row_i,])==0 ){ 
+      rating_matrix[row_i,sample(1:ncol(rating_matrix),size=1)] <- 
+        sample( 1:5, size=1)
+    }
+}
+
+# make sure that each item has been rated at least once:
+for( col_j in 1:ncol(rating_matrix) ){
+  if( sum(rating_matrix[,col_j])==0 ){ 
+      rating_matrix[sample(1:nrow(rating_matrix),size=1),col_j] <- 
+        sample( 1:5, size=1)
+    }
+}
+
+rating_matrix <- Matrix( rating_matrix, sparse=TRUE )
+
+rating_matrix
+```
+
+We want to find matrices $U_{M\times L}$ and $V_{N\times L}$ where $UV^T$ provides a low-rank decomposition (approximation) of $Y$:
+
+$$\hat Y \quad=\quad UV^T$$
+
+$$i.e.\quad \hat y_{ij} \quad=\quad \mathbf{u}_i' \mathbf{v}_j$$
+
+$\mathbf{u}_i'$ is the $i^{th}$ row of $U_{M\times L}$.
+
+$\mathbf{v}_j'$ is the $j^{th}$ row of $V_{N\times L}$. 
+
+$\mathbf{u}_i$ is a vector of length $L$.
+
+$\mathbf{v}_j$ is a vector of length $L$.
+
+We choose the dimensionality $L$ to be a much smaller number than either $M$ or $N$.  
+
+$\mathcal{I}_j$ is the set of users who rated item $j$. 
+
+$\mathcal{J}_i$ is the set of items that were rated by user $i$. 
+
+What we are doing here is representing each customer (row $i$ of rating matrix $Y$) as an $L$-dimensional vector $u_i$, and each product (column $j$ of rating matrix $Y$) as an $L$-dimensional vector $v_j$. Then, the predicted rating for a particular customer/product combination $\{u_i,v_j\}$ is calculated as the dot product between those two vectors $\hat y_{ij}=u'\cdot v$.     
+
+We can choose these vectors $u_1,u_2,...,u_M, v_1,v_2,...,v_N$ by minimising the sum of squared errors (squared differences between observed ratings $y_{ij}$ and predicted ratings $\hat y_{ij}=u'\cdot v$) over the observed ratings. This makes the objective function:
+
+$$dothisjoe$$
+
+Since 
+
+To explore this concept, let's first create a rating matrix $Y$ filled with random information:
+
+```{r}
+n_items <- 6
+n_customers <- 10
+percent_sparse <- 0.5
+
+# assign some random 1-5 ratings for various customer/item combinations:
+rating_matrix <- matrix( sample(1:5, size=n_items*n_customers, replace=TRUE),
+                         ncol = n_items,
+                         nrow = n_customers
+                       )
+rating_matrix <- 
+  rating_matrix * 
+  sample( 0:1, size=prod(dim(rating_matrix)), replace=TRUE, prob=c(percent_sparse,1-percent_sparse) )
+
+colnames(rating_matrix) <- paste0("item", 1:ncol(rating_matrix), sep="" )
+rownames(rating_matrix) <- paste0("customer", 1:nrow(rating_matrix), sep="" )
+
+# make sure that each customer has rated at least 1 item:
+for( row_i in 1:nrow(rating_matrix) ){
+  if( sum(rating_matrix[row_i,])==0 ){ 
+      rating_matrix[row_i,sample(1:ncol(rating_matrix),size=1)] <- 
+        sample( 1:5, size=1)
+    }
+}
+
+# make sure that each item has been rated at least once:
+for( col_j in 1:ncol(rating_matrix) ){
+  if( sum(rating_matrix[,col_j])==0 ){ 
+      rating_matrix[sample(1:nrow(rating_matrix),size=1),col_j] <- 
+        sample( 1:5, size=1)
+    }
+}
+
+rating_matrix <- Matrix( rating_matrix, sparse=TRUE )
+
+rating_matrix
+```
+
+# Estimate latent factor matrices by alternating least squares
+
+Create starting matrices $U$ and $V$ of *latent factor* vectors $\mathbf{u}_i$ and $\mathbf{v}_j$ (fill them with random values):
+
+```{r}
+# define dimension 
+dim_L <- 3
+dim_M <- nrow(rating_matrix)
+dim_N <- ncol(rating_matrix)
+
+U_matrix <- matrix( data = rnorm( n=dim_M * dim_L),
+                    nrow = dim_M,
+                    ncol = dim_L
+                  )
+colnames(U_matrix) <- paste("u", 1:ncol(U_matrix), sep="")
+
+V_matrix <- matrix( data = rnorm( n=dim_N * dim_L),
+                    nrow = dim_N,
+                    ncol = dim_L
+                  )
+colnames(V_matrix) <- paste("v", 1:ncol(V_matrix), sep="")
+
+U_matrix
+V_matrix
+
+U_matrix %*% t(V_matrix)
+```
+
+Estimate *U* and *V* by regularised alternating least squares:
+(regularisation parameters $\lambda_1$ and $\lambda_2$ need to be chosen)
+
+```{r}
+lambda1 <- 0.1
+lambda2 <- 0.1
+
+lambda2_I <- diag( rep(lambda2, dim_L) )
+lambda1_I <- diag( rep(lambda1, dim_L) )
+
+for( iteration_i in 0:1000 ){
+
+  # print iteration number and sum of squared errors every 50 iterations:
+  if( iteration_i%%50 == 0 ){ 
+        paste0( "iteration ", iteration_i ) %>% print()   
+    
+        # print the sum of square errors:
+        # (over non-zero entries of Y)
+        # sum(   [ y_{ij} - t(u_i)*v_j ]^2  )
+        cat("new U: Sum of Squared Errors:")
+      
+        (
+          sum(
+               (
+                 rating_matrix -
+                 (  ( U_matrix %*% t(V_matrix) ) * (as.matrix(rating_matrix>0)*1)  )
+               )^2
+             ) +
+          lambda1 * sum(U_matrix^2) +
+          lambda2 * sum(V_matrix^2) 
+        ) %>%
+        print()
+  }
+  # keep [u_i]s constant and solve for each [v_j]:
+  for( j in 1:dim_N ){   # for every row of V:
+    V_matrix[j,] <-
+      solve(
+             lambda2_I +
+
+              (
+              lapply( which(rating_matrix[,j]!=0),   # all users who rated item [j]
+                      function(row_i){ U_matrix[row_i,] %*% t(U_matrix[row_i,]) }
+                    ) %>%
+              Reduce( "+", . )
+              )
+      ) %*%
+
+      (
+        lapply( which(rating_matrix[,j]!=0),         # all users who rated item [j]
+                function(row_i){ U_matrix[row_i, ] * rating_matrix[row_i, j] }
+              ) %>%
+        Reduce( "+", . )
+      )
+  }
+
+  # keep [v_j]s constant and solve for each [u_i]:
+  for( i in 1:dim_M ){   # for every row of U:
+
+      U_matrix[i,] <-    # u_i
+      solve(
+             lambda1_I +
+
+              (
+              lapply( which(rating_matrix[i,]!=0),   # all items rated by user [i]
+                      function(row_j){ V_matrix[row_j,] %*% t(V_matrix[row_j,]) }
+                    ) %>%
+              Reduce( "+", . )
+              )
+      ) %*%
+
+      (
+        lapply( which(rating_matrix[i,]!=0),   # all items rated by user [i]
+                function(row_j){ V_matrix[row_j, ] * rating_matrix[i,row_j] }
+              ) %>%
+        Reduce( "+", . )
+      )
+  }
+
+}
+```
+
+
+```{r fig.width=8, fig.height=6}
+latent_decomp_matrix <- U_matrix %*% t(V_matrix)
+rownames(latent_decomp_matrix) <- rownames(rating_matrix)
+colnames(latent_decomp_matrix) <- colnames(rating_matrix)
+
+rating_matrix
+latent_decomp_matrix
+
+rating_matrix_for_ggplot_heatmap <- 
+  rating_matrix %>%
+    as.matrix() %>% 
+    as.data.frame() %>% 
+    rownames_to_column( var="customer_id" ) %>%
+    mutate( customer_id = as.numeric( gsub("customer", "", customer_id) ) ) %>% 
+    pivot_longer(      cols = starts_with("item"),
+                   names_to = "item_id",
+                  values_to = "customer_rating"
+                ) %>% 
+    mutate( item_id = as.numeric( gsub("item", "", item_id) ) ) %>% 
+    mutate( customer_rating = if_else(customer_rating==0, as.numeric(NA), customer_rating) ) %>% 
+    mutate( customer_rating_text = if_else(customer_rating==0, " ", as.character(customer_rating))  )
+
+lat_decomp_mat_for_ggplot_heatmap <- 
+  latent_decomp_matrix %>%
+    as.matrix() %>% 
+    as.data.frame() %>% 
+    rownames_to_column( var="customer_id" ) %>%
+    mutate( customer_id = as.numeric( gsub("customer", "", customer_id) ) ) %>% 
+    pivot_longer(      cols = starts_with("item"),
+                   names_to = "item_id",
+                  values_to = "predicted_customer_rating"
+                ) %>% 
+    mutate( item_id = as.numeric( gsub("item", "", item_id) ) )
+  
+bind_rows( 
+           rating_matrix_for_ggplot_heatmap %>% mutate( source = "original rating matrix" )
+           ,
+           lat_decomp_mat_for_ggplot_heatmap %>% 
+             mutate( source = "latent factor decomposition" ) %>%
+             rename( customer_rating = predicted_customer_rating) %>% 
+             mutate( customer_rating_text = as.character( round(customer_rating, digits=1) ) )
+         ) %>% 
+  ggplot( data = .,
+          aes(     x = item_id,
+                   y = customer_id,
+                fill = customer_rating,
+               label = customer_rating_text
+             )
+        ) +
+  geom_tile() +
+  geom_text() + 
+  facet_wrap( ~source ) +
+  scale_x_continuous( breaks = 1:n_items ) +
+  scale_y_continuous( breaks = 1:n_customers ) +
+  scale_fill_gradient2()
+
+```
+
+# Estimate latent factor matrices by stochastic gradient descent
+
+```{r sgd}
+lambda1 <- 0.1
+lambda2 <- 0.1
+
+calc_gradient_ij_ftn <- function( Umat, Vmat, Ymat, lamb1, lamb2, i, j ){
+
+  list( 
+        u_grad_row_i = 
+            2 * (Ymat[i,j] - t(Umat[i,])%*%Vmat[j,]) %*% Vmat[j,] + ( (2*lamb1)/ sum(Ymat[i,]>0) )*Umat[i,],
+        
+        v_grad_row_j = 
+            2 * (Ymat[i,j] - t(Umat[i,])%*%Vmat[j,]) %*% Umat[i,] + ( (2*lamb2)/ sum(Ymat[,j]>0) )*Vmat[j,]
+      ) %>% 
+    return(.)
+  
+} 
+
+calc_SSE <- function( Umat, Vmat, Ymat, lamb1, lamb2 ){
+          sum(
+               (
+                 Ymat -
+                 (  ( Umat %*% t(Vmat) ) * (as.matrix(Ymat>0)*1)  )
+               )^2
+             ) +
+          lamb1 * sum(Umat^2) +
+          lamb2 * sum(Vmat^2) 
+}
+
+```
+
+Set starting values for $U$ matrix and $V$ matrix:
+```{r}
+# define dimension 
+dim_L <- 5
+dim_M <- nrow(rating_matrix)
+dim_N <- ncol(rating_matrix)
+
+U_matrix <- matrix( data = rnorm( n=dim_M * dim_L),
+                    nrow = dim_M,
+                    ncol = dim_L
+                  )
+colnames(U_matrix) <- paste("u", 1:ncol(U_matrix), sep="")
+
+V_matrix <- matrix( data = rnorm( n=dim_N * dim_L),
+                    nrow = dim_N,
+                    ncol = dim_L
+                  )
+colnames(V_matrix) <- paste("v", 1:ncol(V_matrix), sep="")
+
+U_matrix
+V_matrix
+```
+
+```{r}
+learnrate_alpha <- 0.001
+  
+for( iteration_i in 0:1000 ){
+  
+  # print out SSE every 50 iterations:
+  if( iteration_i%%50 == 0 ){ 
+        paste0( "iteration ", iteration_i ) %>% print()   
+  
+  # print out the objective function value:
+  cat("Sum of Squared Errors:  ")
+  calc_SSE( Umat = U_matrix,
+            Vmat = V_matrix,
+            Ymat = rating_matrix,
+            lamb1 = lambda1,
+            lamb2 = lambda2
+          ) %>% 
+    cat()
+  }
+  
+  # choose a random non-zero value from the rating matrix:
+  rand_i <- sample( which(rowSums(rating_matrix)>0), size=1 )     # choose a random row which has one or more non-zero ratings
+  rand_j <- sample( which(rating_matrix[rand_i,]>0), size=1 )
+
+  # calculate gradient for U_i and V_j:
+  calc_grads <- calc_gradient_ij_ftn( Umat = U_matrix,
+                                      Vmat = V_matrix,
+                                      Ymat = rating_matrix,
+                                      lamb1 = lambda1,
+                                      lamb2 = lambda2,
+                                      i = rand_i,
+                                      j = rand_j
+                                    )
+  
+  # update u_i:
+  U_matrix[rand_i,] <- U_matrix[rand_i,] + learnrate_alpha * calc_grads$u_grad_row_i
+    
+  # update v_i:
+  V_matrix[rand_j,] <- V_matrix[rand_j,] + learnrate_alpha * calc_grads$v_grad_row_j
+    
+}
+
+
+```
+
+```{r}
+latent_decomp_matrix <- U_matrix %*% t(V_matrix)
+rownames(latent_decomp_matrix) <- rownames(rating_matrix)
+colnames(latent_decomp_matrix) <- colnames(rating_matrix)
+
+rating_matrix
+latent_decomp_matrix
+
+rating_matrix_for_ggplot_heatmap <- 
+  rating_matrix %>%
+    as.matrix() %>% 
+    as.data.frame() %>% 
+    rownames_to_column( var="customer_id" ) %>%
+    mutate( customer_id = as.numeric( gsub("customer", "", customer_id) ) ) %>% 
+    pivot_longer(      cols = starts_with("item"),
+                   names_to = "item_id",
+                  values_to = "customer_rating"
+                ) %>% 
+    mutate( item_id = as.numeric( gsub("item", "", item_id) ) ) %>% 
+    mutate( customer_rating = if_else(customer_rating==0, as.numeric(NA), customer_rating) ) %>% 
+    mutate( customer_rating_text = if_else(customer_rating==0, " ", as.character(customer_rating))  )
+
+lat_decomp_mat_for_ggplot_heatmap <- 
+  latent_decomp_matrix %>%
+    as.matrix() %>% 
+    as.data.frame() %>% 
+    rownames_to_column( var="customer_id" ) %>%
+    mutate( customer_id = as.numeric( gsub("customer", "", customer_id) ) ) %>% 
+    pivot_longer(      cols = starts_with("item"),
+                   names_to = "item_id",
+                  values_to = "predicted_customer_rating"
+                ) %>% 
+    mutate( item_id = as.numeric( gsub("item", "", item_id) ) )
+  
+bind_rows( 
+           rating_matrix_for_ggplot_heatmap %>% mutate( source = "original rating matrix" )
+           ,
+           lat_decomp_mat_for_ggplot_heatmap %>% 
+             mutate( source = "latent factor decomposition" ) %>%
+             rename( customer_rating = predicted_customer_rating) %>% 
+             mutate( customer_rating_text = as.character( round(customer_rating, digits=1) ) )
+         ) %>% 
+  ggplot( data = .,
+          aes(     x = item_id,
+                   y = customer_id,
+                fill = customer_rating,
+               label = customer_rating_text
+             )
+        ) +
+  geom_tile() +
+  geom_text() + 
+  facet_wrap( ~source ) +
+  scale_x_continuous( breaks = 1:n_items ) +
+  scale_y_continuous( breaks = 1:n_customers ) +
+  scale_fill_gradient2()
+
+```
+
+
+

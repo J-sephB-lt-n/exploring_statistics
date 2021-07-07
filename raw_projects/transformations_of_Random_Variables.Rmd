@@ -1,0 +1,91 @@
+---
+title: "Monotonic transformations of a Random Variable"
+author: "Joseph Bolton"
+output:
+  html_document:
+    df_print: paged
+  html_notebook:
+    code: hide
+---
+
+Some really good notes on this can be found at: 
+
+http://www2.econ.iastate.edu/classes/econ671/hallam/documents/Transformations.pdf
+
+# A simple example of the *Method of Transformations/Change of Variable Method*
+
+Suppose that we have a continuous univariate random variable $X$ with an exponential distribution:
+
+$$p_X(x) \quad=\quad \lambda e^{-\lambda x} \hspace{10mm} x \geq 0 \quad , \quad \lambda > 0 $$
+
+```{r}
+x_seq <- seq(0,100,0.01)
+plot( x = x_seq,
+      y = dexp( x_seq, rate = 0.1 ),
+      type = "l",
+      ylab = "f(x)",
+      xlab = "x",
+      main = bquote("exponential distribution function of X, with "*lambda*"=0.1"),
+      lwd = 3,
+      col = "blue"
+    )
+lines( x = x_seq,
+       y = 0.1 * exp(-0.1*x_seq),
+       col = "red"
+     )
+```
+
+Suppose that we want to find the distribution of the random variable $Y$: a differentiable and monotonic (either increasing or decreasing) function of $X$, such as:
+
+$$Y \quad=\quad \displaystyle\frac{1}{\sqrt{X}}$$
+
+```{r}
+x_seq <- seq(0,5,0.01)
+y <- 1 / sqrt(x_seq)
+plot( y ~ x_seq, 
+      type = "l",
+      xlab = "x",
+      main = "Y=g(X)"
+    )
+
+```
+
+The *change of variable* technique says that the distribution of $Y=g(X)$ is:
+
+$$\begin{array}{lcl}
+f_Y(y) &=& f_X\Big(g^{-1}(y)\Big) \quad\cdot\quad \Biggl| \displaystyle\frac{\partial \space \big[ g^{-1}(y) \big]}{\partial \space y}\Biggr| \\
+&=& f_X\Big(\frac{1}{y^2}\Big) \quad \cdot \quad \Biggl| \displaystyle\frac{\partial \space \big[ \frac{1}{y^2} \space \big]}{\partial \space y} \Biggr| \\
+&=& \lambda e^{-\lambda \Big(\frac{1}{y^2} \Big)} \quad \cdot \quad \Biggl| \displaystyle\frac{-2}{y^3} \Biggr| \\
+&=& \displaystyle\frac{2\lambda e^{-\lambda \Big(\frac{1}{y^2} \Big)}}{y^3} \\ 
+\end{array}$$
+
+Where $g^{-1}(y)$ was calculated like this: 
+
+$$\begin{array}{lcl}
+Y &=& \displaystyle\frac{1}{\sqrt{X}} \\
+\therefore \sqrt{X} &=& \displaystyle\frac{1}{Y} \\
+\therefore X &=& \displaystyle\frac{1}{Y^2} \\
+\therefore g^{-1}(y) &=& \displaystyle\frac{1}{y^2} \\
+\end{array}$$
+
+We can see that this calculation was correct by doing a quick simulation: 
+
+```{r}
+# simulate 100,000 values from X with parameter lambda=10: 
+lambda <- 10
+x <- rexp( 1e5L, rate = lambda)
+
+# transform each simulated X into Y = 1/sqrt(X):
+y <- 1 / sqrt(x)
+
+# plot the expirical distribution of the simulated Y values using a histogram:
+hist( y, breaks=1000, freq=FALSE, xlim = c(0,50) )
+
+# draw the theoretical distribution curve on top of the empirical distribution:
+y_seq <- seq(0, 100, 0.01)
+lines( x = y_seq,
+       y = (2*lambda*exp(-lambda/y_seq^2))/y_seq^3,
+       col = 2
+     )
+```
+

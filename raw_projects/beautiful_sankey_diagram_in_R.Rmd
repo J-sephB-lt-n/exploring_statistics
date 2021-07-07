@@ -1,0 +1,60 @@
+---
+title: "Simple Sankey Diagram in R using networkD3()"
+author: "Joe Bolton"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(networkD3)
+```
+
+simulate data:
+```{r}
+links_data <- expand_grid( source = 0:3,
+                           target = 4:7
+                         ) %>% 
+              # filter( source != target ) %>% 
+              mutate( quantity = sample((0:40)/40, size=n(), replace=TRUE) ) %>% 
+              
+              # make quantity sum to 100% in each source group: 
+              group_by( source ) %>% 
+              mutate( source_total = sum(quantity) ) %>% 
+              ungroup() %>% 
+              mutate( quantity = quantity / source_total ) %>% 
+              select( -source_total ) %>% 
+              arrange( desc(source) )
+  
+nodes_data <- tibble( node = c( 0:7 ),
+                      name = c( paste("tier", 1:4, sep=""),
+                                paste("tier", 1:4, sep="")
+                               )
+                    ) 
+
+links_data
+
+nodes_data
+```
+
+make Sankey:
+```{r}
+
+
+ networkD3::sankeyNetworkE( Links = links_data, 
+                           Nodes = nodes_data, 
+                          Source = 'source', 
+                          Target = 'target', 
+                           Value = 'quantity', 
+                          NodeID = 'name',
+                           #units = 'n_ppl',
+                        fontSize = 20,
+                        colourScale = JS(
+                          'd3.scaleOrdinal()
+          .domain(["tier_1","tier_2","tier_3","tier_4"])
+          .range(["#8B0000","#FF0000","#FF4500","#FFD700"])' 
+                        )
+)
+
+
+```
+

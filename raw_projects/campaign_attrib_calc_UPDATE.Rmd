@@ -1,0 +1,185 @@
+---
+title: "campaign_attrib_calc_UPDATE2"
+author: "Joseph Bolton"
+date: "03/09/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+```
+
+```{r echo=FALSE}
+n <- 1e4L
+run_experiment <- 
+  tibble(  order_id = 1:n,
+          base_prob = runif(   n = n, 
+                             min = 0,
+                             max = 0.5
+                           ) %>% round(2),
+          c1_effect = -0.03,
+          c2_effect = 0.1,
+          c3_effect = 0.15,
+          had_c1 = sample(0:1, size=n, replace=TRUE),
+          had_c2 = sample(0:1, size=n, replace=TRUE),
+          had_c3 = sample(0:1, size=n, replace=TRUE)
+        ) %>% 
+  mutate( rand01 = runif(n())) %>%
+  mutate( final_prob = base_prob * 
+                       ( 1 +  c1_effect*had_c1 ) *
+                       ( 1 +  c2_effect*had_c2 ) *
+                       ( 1 +  c3_effect*had_c3 )
+        ) %>% 
+  mutate( ordered = if_else(final_prob > rand01, 1, 0) ) %>% 
+  mutate( prob_without_camp1 = base_prob * 
+                                   #( 1 +  c1_effect*had_c1 ) *
+                                   ( 1 +  c2_effect*had_c2 ) *
+                                   ( 1 +  c3_effect*had_c3 )
+          ,
+          prob_without_camp2 = base_prob * 
+            ( 1 +  c1_effect*had_c1 ) *
+            #( 1 +  c2_effect*had_c2 ) *
+            ( 1 +  c3_effect*had_c3 )
+          ,
+          prob_without_camp3 = base_prob * 
+            ( 1 +  c1_effect*had_c1 ) *
+            ( 1 +  c2_effect*had_c2 ) #*
+            # ( 1 +  c3_effect*had_c3 )
+  ) %>% 
+  mutate( attrib_organic = base_prob,
+          attrib_camp1 = final_prob - prob_without_camp1,
+          attrib_camp2 = final_prob - prob_without_camp2,
+          attrib_camp3 = final_prob - prob_without_camp3
+        ) %>% 
+  mutate( final_attrib_denominator = attrib_organic + attrib_camp1 + attrib_camp2 + attrib_camp3,
+          final_attrib_organic = ordered * ( attrib_organic / final_attrib_denominator ),
+        final_attrib_campaign1 = ordered * ( attrib_camp1 / final_attrib_denominator ),
+        final_attrib_campaign2 = ordered * ( attrib_camp2 / final_attrib_denominator ),
+        final_attrib_campaign3 = ordered * ( attrib_camp3 / final_attrib_denominator )
+        ) %>% 
+  mutate_all( function(x){ ifelse( is.nan(x), 0, x ) } )
+  
+run_experiment
+
+# see if GLM can get a similar attribution result:
+fit_glm <- glm( ordered ~ had_c1 + had_c2 + had_c3,
+                family = binomial(link="logit"),
+                data = run_experiment
+              )
+
+est_base_prob <- predict(  object = fit_glm,
+                          newdata = tibble(had_c1=0, had_c2=0, had_c3=0),
+                             type = "response"
+                       )
+
+glm_calc <- 
+  run_experiment %>% 
+    # only keep successful orders:
+    filter( ordered == 1 ) %>% 
+    select( order_id,
+            had_c1,
+            had_c2,
+            had_c3
+          ) %>% 
+    mutate( est_base_prob = est_base_prob, 
+            est_c1_effect = exp(coef(fit_glm))[["had_c1"]],
+            est_c2_effect = exp(coef(fit_glm))[["had_c2"]], 
+            est_c3_effect = exp(coef(fit_glm))[["had_c3"]] 
+          ) %>% 
+    mutate( final_prob = est_base_prob * 
+                         if_else( had_c1==1, est_c1_effect, 1) *
+                         if_else( had_c2==1, est_c2_effect, 1) *
+                         if_else( had_c3==1, est_c3_effect, 1)
+          ) %>% 
+    mutate( final_prob_without_c1 = 
+              est_base_prob * 
+              #if_else( had_c1==1, est_c1_effect, 1) *
+              if_else( had_c2==1, est_c2_effect, 1) *
+              if_else( had_c3==1, est_c3_effect, 1),
+            final_prob_without_c2 = 
+              est_base_prob * 
+              if_else( had_c1==1, est_c1_effect, 1) *
+              #if_else( had_c2==1, est_c2_effect, 1) *
+              if_else( had_c3==1, est_c3_effect, 1),
+            final_prob_without_c3 = 
+            est_base_prob * 
+              if_else( had_c1==1, est_c1_effect, 1) *
+              if_else( had_c2==1, est_c2_effect, 1)
+              #if_else( had_c3==1, est_c3_effect, 1)
+          ) %>% 
+  mutate( attrib_organic = est_base_prob,
+          attrib_camp1 = final_prob - final_prob_without_c1,
+          attrib_camp2 = final_prob - final_prob_without_c2,
+          attrib_camp3 = final_prob - final_prob_without_c3
+  ) %>% 
+  mutate( final_attrib_denominator = attrib_organic + attrib_camp1 + attrib_camp2 + attrib_camp3,
+          final_attrib_organic = attrib_organic / final_attrib_denominator,
+          final_attrib_campaign1 = attrib_camp1 / final_attrib_denominator,
+          final_attrib_campaign2 = attrib_camp2 / final_attrib_denominator,
+          final_attrib_campaign3 = attrib_camp3 / final_attrib_denominator
+  ) #%>% 
+  #mutate_all( function(x){ ifelse( is.nan(x), 0, x ) } )
+  
+
+# summarise results:
+paste0("\n Total Orders: ", sum(run_experiment$ordered), "\n") %>% cat()
+paste0( "\n Median organic probability of ordering = ", median(run_experiment$base_prob), "\n" ) %>% cat()
+paste0( "\n Model estimated base probability of ordering = ", round(est_base_prob,3), "\n" ) %>% cat()
+paste0( "\n Total Orders attributable to Organic sales: ", 
+        round(sum(run_experiment$final_attrib_organic)),
+        "   (", 
+        round( 100 * round(sum(run_experiment$final_attrib_organic)) / sum(run_experiment$ordered), digits=1 ), 
+        "%) \n"
+) %>% cat()
+paste0( "\n MODEL ESTIMATE: Total Orders attributable to Organic sales: ", 
+        round(sum(glm_calc$final_attrib_organic)),
+        "   (", 
+        round( 100 * round(sum(glm_calc$final_attrib_organic)) / sum(run_experiment$ordered), digits=1 ), 
+        "%) \n"
+) %>% cat()
+paste0( "\n Total Orders attributable to campaign 1: ", 
+        round(sum(run_experiment$final_attrib_campaign1)),
+        "   (", 
+        round( 100 * round(sum(run_experiment$final_attrib_campaign1)) / sum(run_experiment$ordered), digits=1 ), 
+        "%) \n"
+      ) %>% cat()
+paste0( "\n MODEL ESTIMATE: Total Orders attributable to campaign 1: ", 
+        round(sum(glm_calc$final_attrib_campaign1)),
+        "   (", 
+        round( 100 * round(sum(glm_calc$final_attrib_campaign1)) / sum(run_experiment$ordered), digits=1 ), 
+        "%) \n"
+) %>% cat()
+paste0( "\n Total Orders attributable to campaign 2: ", 
+        round(sum(run_experiment$final_attrib_campaign2)),
+        "   (", 
+        round( 100 * round(sum(run_experiment$final_attrib_campaign2)) / sum(run_experiment$ordered), digits=1 ), 
+        "%) \n"
+) %>% cat()
+paste0( "\n MODEL ESTIMATE: Total Orders attributable to campaign 2: ", 
+        round(sum(glm_calc$final_attrib_campaign2)),
+        "   (", 
+        round( 100 * round(sum(glm_calc$final_attrib_campaign2)) / sum(run_experiment$ordered), digits=1 ), 
+        "%) \n"
+) %>% cat()
+paste0( "\n Total Orders attributable to campaign 3: ", 
+        round(sum(run_experiment$final_attrib_campaign3)),
+        "   (", 
+        round( 100 * round(sum(run_experiment$final_attrib_campaign3)) / sum(run_experiment$ordered), digits=1 ), 
+        "%) \n"
+) %>% cat()
+paste0( "\n MODEL ESTIMATE: Total Orders attributable to campaign 3: ", 
+        round(sum(glm_calc$final_attrib_campaign3)),
+        "   (", 
+        round( 100 * round(sum(glm_calc$final_attrib_campaign3)) / sum(run_experiment$ordered), digits=1 ), 
+        "%) \n"
+) %>% cat()
+```
+
+problem with no control group:
+```{r echo=FALSE}
+expand_grid( base_prob = 0.13,
+             camp1 = 0:1,
+             camp2 = 0:1
+           ) %>% 
+  mutate( order_prob = base_prob * if_else(camp1==1, 1.05, 1) * if_else(camp2==1, 1.08, 1) )
+```

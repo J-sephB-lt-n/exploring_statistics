@@ -1,0 +1,903 @@
+---
+title: "MVA_factor_analysis"
+author: "Joe"
+date: "18 March 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(knitr)
+```
+
+WHAT IS FACTOR ANALYSIS AND WHY IS IT USEFUL
+
+The theory in this post is from the book ** by .
+
+# Factor Analysis
+
+Factor Analyis assumes that the correlations between the variables in our dataset are occur due to somme common unobserved variable/factor - a variable which affects all of them. 
+
+# The Factor Model
+Suppose we have $p$ correlated (dependent) random variables $X_1, X_2, ..., X_p$ 
+
+These $p$ random variables will have some $p$-variate multivariate distribution with mean vector 
+
+$$\mathbf{\mu} \quad = \quad \begin{bmatrix}\mu_1\\\mu_2\\.\\.\\\mu_p\end{bmatrix}$$
+
+and covariance matrix
+
+$$\Sigma \quad = \quad \begin{bmatrix} 
+\sigma_{11} & \sigma_{12} & ... & \sigma_{1p} \\
+\sigma_{21} & \sigma_{22} & ... & \sigma_{2p} \\
+. & . & ... & .  \\
+. & . & ... & .  \\
+\sigma_{p1} & \sigma_{p2} & ... & \sigma_{pp}
+\end{bmatrix}$$
+
+The factor model imposes the following structure on our variables:
+
+$$\begin{array}{lcl}
+\underset{p \times 1}{\mathbf{X} - \mu} &=& \underset{p\times m}{\mathbf{L}} \space \underset{m \times 1}{\mathbf{F}} &+& \underset{p \times 1}{\mathbf{\epsilon}}\\
+\space &\space& \space &\space& \space\\
+\begin{bmatrix}
+X_1 - \mu_1 \\
+X_2 - \mu_2 \\
+. \\
+.\\
+X_p - \mu_p 
+\end{bmatrix}
+&=& 
+\underset{\text{matrix of factor loadings}}{
+\begin{bmatrix}
+\mathcal{l}_{11} & \mathcal{l}_{12} & ... & \mathcal{l}_{1m} \\ 
+\mathcal{l}_{21} & \mathcal{l}_{22} & ... & \mathcal{l}_{2m} \\
+. & . & ... & . \\
+. & . & ... & . \\
+\mathcal{l}_{p1} & \mathcal{l}_{p2} & ... & \mathcal{l}_{pm} \\
+\end{bmatrix}}
+\begin{bmatrix}
+F_1\\
+F_2\\
+.\\
+.\\
+F_m
+\end{bmatrix} 
+&+&
+\begin{bmatrix}
+\epsilon_1\\
+\epsilon_2\\
+.\\
+.\\
+\epsilon_p
+\end{bmatrix} 
+\end{array}$$
+
+The common factors $\mathbf{F}$ are unobservable random variables.
+
+The **specific factors** $\epsilon$ (the errors) are also unobservable random variables. 
+
+# The Orthogonal Factor Model
+Because we have so many unobservable random quantities to estimate, we need to put some constraints onto this structure (we put constraints onto the distributions of $\mathbf{F}$ and $\mathbf{\epsilon}$):
+
+$$\begin{array}{lcl} E\Big[\mathbf{F}\Big] &=& \begin{bmatrix}0\\0\\.\\.\\0\end{bmatrix}_{m\times 1} \\
+Cov\Big[\mathbf{F}\Big] \quad = \quad E\Big[\mathbf{F}\mathbf{F}^T\Big] &=& \underset{m\times m}{\mathbf{I}} \hspace{15mm} \text{i.e. the common factors are uncorrelated and each has variance 1} \\
+E\Big[\epsilon\Big] &=& \begin{bmatrix}0\\0\\.\\.\\.\\0\end{bmatrix}_{p\times 1} \\
+Cov\Big[\epsilon\Big] \quad = \quad E\Big[\epsilon \epsilon^T\Big] &=& \underset{p \times p}{\Psi} \quad = \quad \begin{bmatrix}\psi_1 & 0 & 0 & ... & 0 \\
+                                      0      & \psi_2 & 0 & ... & 0 \\
+                                      0      & 0 & \psi_3 & ... & 0 \\
+                                      . & . & . & ... & . \\
+                                      . & . & . & ... & . \\
+                                      0 & 0 & 0 & ... & \psi_p \\
+                                      \end{bmatrix} \hspace{10mm} \text{i.e. specific factors are independent} \\
+Cov\Big[\epsilon, \mathbf{F}\Big] \quad = \quad E\Big[\epsilon \mathbf{F}^T\Big] &=& 
+\begin{bmatrix}
+0 & 0 & ... & 0 \\
+0 & 0 & ... & 0 \\
+. & . & ... & . \\
+. & . & ... & . \\
+. & . & ... & . \\
+0 & 0 & ... & 0 \\
+\end{bmatrix}_{p \times m} \hspace{15mm} \text{i.e. the specific factors and common factors are uncorrelated}
+\end{array}$$
+
+These assumptions imply the following covariance structure of $\mathbf{X}$:
+
+$$\begin{array}{lcl}
+\Sigma &=& Cov\Big[ \mathbf{X}\Big] \\ 
+&=& E\Big[(\mathbf{X}-\mu)(\mathbf{X}-\mu)^T\Big] \\
+&=& E\Big[ (\mathbf{LF}-\epsilon) (\mathbf{LF}-\epsilon)^T \Big]\\
+&=& E\Big[ (\mathbf{LF}-\epsilon) (\mathbf{F}^T\mathbf{L}^T-\epsilon^T) \Big]\\
+&=& E\Big[ \mathbf{LF}\mathbf{F}^T\mathbf{L}^T - \epsilon\mathbf{F}^T\mathbf{L}^T -
+\mathbf{LF} \epsilon^T + \epsilon \epsilon^T \Big] \\
+&=&  \mathbf{L}E\Big[ \mathbf{F}\mathbf{F}^T\Big] \mathbf{L}^T - E\Big[ \epsilon\mathbf{F}^T \Big] \mathbf{L}^T -
+\mathbf{L} E\Big[ \mathbf{F} \epsilon^T \Big] + E\Big[ \epsilon \epsilon^T \Big] \hspace{10mm} \text{take non-random elements out of the expectations}\\
+&=& \mathbf{L}\mathbf{L}^T + \Psi \hspace{30mm} \mathbf{F}  \text{ and } \epsilon \text{ are uncorrelated}
+\end{array} $$
+
+for example,
+
+$$\begin{array}{lcl}
+\begin{bmatrix}X_1 - \mu_1\\
+               X_2 - \mu_2\\
+               X_3 - \mu_3\\  
+\end{bmatrix}
+&=&  
+\begin{bmatrix}
+\mathcal{l}^{(X_1)}_{1}&\mathcal{l}^{(X_1)}_{2}&\mathcal{l}^{(X_1)}_{3}&\mathcal{l}^{(X_1)}_{4}\\
+\mathcal{l}^{(X_2)}_{1}&\mathcal{l}^{(X_2)}_{2}&\mathcal{l}^{(X_2)}_{3}&\mathcal{l}^{(X_2)}_{4}\\
+\mathcal{l}^{(X_3)}_{1}&\mathcal{l}^{(X_3)}_{2}&\mathcal{l}^{(X_3)}_{3}&\mathcal{l}^{(X_3)}_{4}\\
+\end{bmatrix}
+\begin{bmatrix}
+F_1\\
+F_2\\
+F_3\\
+F_4\\
+\end{bmatrix}  +
+\begin{bmatrix}
+\epsilon_1\\
+\epsilon_2\\
+\epsilon_3\\
+\end{bmatrix}
+\\
+\space &\space& \space \\
+\Sigma &=& \mathbf{L}\mathbf{L}^T + \Psi \\
+&=& 
+\begin{bmatrix}
+\mathcal{l}^{(X_1)}_{1}&\mathcal{l}^{(X_1)}_{2}&\mathcal{l}^{(X_1)}_{3}&\mathcal{l}^{(X_1)}_{4}\\
+\mathcal{l}^{(X_2)}_{1}&\mathcal{l}^{(X_2)}_{2}&\mathcal{l}^{(X_2)}_{3}&\mathcal{l}^{(X_2)}_{4}\\
+\mathcal{l}^{(X_3)}_{1}&\mathcal{l}^{(X_3)}_{2}&\mathcal{l}^{(X_3)}_{3}&\mathcal{l}^{(X_3)}_{4}\\
+\end{bmatrix}
+\begin{bmatrix}
+\mathcal{l}^{(X_1)}_{1} & \mathcal{l}^{(X_2)}_{1} & \mathcal{l}^{(X_3)}_{1} \\
+\mathcal{l}^{(X_1)}_{2} & \mathcal{l}^{(X_2)}_{2} & \mathcal{l}^{(X_3)}_{2} \\
+\mathcal{l}^{(X_1)}_{3} & \mathcal{l}^{(X_2)}_{3} & \mathcal{l}^{(X_3)}_{3} \\
+\mathcal{l}^{(X_1)}_{4} & \mathcal{l}^{(X_2)}_{4} & \mathcal{l}^{(X_3)}_{4} \\
+\end{bmatrix}
++
+\begin{bmatrix}
+\psi_1 & 0 & 0 \\
+0  & \psi_2 & 0 \\
+0 & 0 & \psi_3 \\
+\end{bmatrix}
+\end{array}$$
+
+This shows us that the variance of any one variable $Var\Big[X_i\Big]$ is 
+
+$$\begin{array}{lcl} \sigma_{ii} &=&
+Var\Big[X_i\Big] 
+&=& \Big(\mathcal{l}_1^{(X_i)}\Big)^2 + \Big(\mathcal{l}_2^{(X_i)}\Big)^2 + ... + \Big(\mathcal{l}_m^{(X_i)}\Big)^2 &+& \psi_i \\
+&=& h_i^2 &+& \psi_i
+\end{array}$$
+
+The portion of the variance ($h_i$) in variable $X_i$ attributable to the $m$ common factors is called the $i^{th}$ **commonality**. 
+
+The remainder of the variance ($\psi_i$) in variable $X_i$ is called the **uniqueness**, or **specific variance**.
+
+# Number of Factors
+The most interprettable factor models are those in which $m$ (number of common factors) is smaller relative to $p$ (number of variables). However, having a small $m$ sometimes results in the factorisation $\Sigma=\mathbf{L}\mathbf{L}^T+\Psi$ not existing (or a solution existing which contains negative variances, correlations above 1, or has other inadmissable qualities).
+
+# Factor Rotation
+Let $m$ be greater than 1 (more than 1 factor in the model), and $\mathbf{T}$ be any $m\times m$ orthogonal matrix (i.e. $\mathbf{T}^T\mathbf{T}=\mathbf{T}\mathbf{T}^T=\mathbf{I}$)
+
+Then, the orthogonal factor model is:
+
+$$\begin{array}{lcl}
+\mathbf{X}-\mu &=& \mathbf{L}\mathbf{F} &+& \epsilon \\
+\mathbf{X}-\mu &=& \underset{\mathbf{L}^*}{\underbrace{\mathbf{L}\mathbf{T}}} \underset{\mathbf{F}^*}{\underbrace{\mathbf{T}^T\mathbf{F}}} &+& \epsilon \\
+\end{array}$$
+
+These new factor loadings $\mathbf{L}^*$ and new common factors $\mathbf{F}^*$ have the same statistical properties as $\mathbf{L}$:
+
+$$\begin{array}{lcl}
+E\Big[\mathbf{F}^*\Big] &=& E\Big[\mathbf{T}^T\mathbf{F}\Big] &=& \mathbf{T}^T E\Big[\mathbf{F}\Big] &=& \mathbf{0}_{p\times 1}  \\
+Cov\Big[\mathbf{F}^*\Big] &=& E\Big[\mathbf{F}^* (\mathbf{F}^*)^T\Big] &=& E\Big[\mathbf{T}^T\mathbf{F}(\mathbf{T}^T\mathbf{F})^T\Big] &=& \mathbf{T}^TCov\Big[\mathbf{F}\Big]\mathbf{T} &=& \mathbf{I}\\
+\end{array}$$
+ 
+And we still get the covariance matrix of $\mathbf{X}$:
+
+$$\begin{array}{lcl} \mathbf{L}^*(\mathbf{L}^*)^T + \Psi 
+&=& \mathbf{L\mathbf{T}}(\mathbf{L}\mathbf{T})^T + \Psi \\
+&=& \mathbf{L}\mathbf{T}\mathbf{T}^T\mathbf{L}^T + \Psi \\
+&=& \mathbf{L}\mathbf{L}^T + \Psi \\
+&=& \Sigma \\
+\end{array}$$
+
+Since, these new factor loadings $\mathbf{L}^*$ and new common factors $\mathbf{F}^*$ have the same statistical properties as $\mathbf{L}$: and $\mathbf{F}$, each choice of orthogonal matrix $\mathbf{T}$ generates a different, valid, orthogonal factor model.
+
+# Factor Model Fitting Process
+1. Constraints are imposed on the model structure which allow $\mathbf{L}$ and $\mathbf{\Psi}$ to be uniquely estimated (by solving $\Sigma=LL^T+\Psi$)
+
+2. The matrix of factor loadings ($\mathbf{L}$) is then rotated, according to some ease-of-interpretation criterion.
+
+3. From the rotated loadings and estimated specific variances, factor scores are ascertained.
+
+# The Principal Component (and Principal Factor) Method of Factor Model Estimation
+We estimate $\mathbf{L}$ and $\Psi$ by solving the equation for the covariance of $\mathbf{X}$
+
+$$\Sigma \quad = \quad \mathbf{L}\mathbf{L}^T+\Psi$$
+
+The spectral (eigen) decomposition of $\Sigma$ provides a solution:
+
+$$\begin{array}{lcl}
+\Sigma &=& \lambda_1 \space \mathbf{e}_1\mathbf{e}_1^T \quad + \quad
+\lambda_2 \space \mathbf{e}_2\mathbf{e}_2^T \quad + \quad
+\lambda_3 \space \mathbf{e}_3\mathbf{e}_3^T \quad + \quad
+.... \quad + \quad
+\lambda_p \space \mathbf{e}_p\mathbf{e}_p^T \\
+&=&
+\lambda_1\begin{bmatrix}e_1^{(\lambda_1)}\\ e_2^{(\lambda_1)} \\ .\\ . \\. \\ e_p^{(\lambda_1)}\end{bmatrix} 
+\begin{bmatrix}e_1^{(\lambda_1)}& e_2^{(\lambda_1)} & ... & e_p^{(\lambda_1)}\end{bmatrix}
++ 
+\lambda_2\begin{bmatrix}e_1^{(\lambda_2)}\\ e_2^{(\lambda_2)} \\ . \\ . \\ . \\  e_p^{(\lambda_2)}\end{bmatrix} 
+\begin{bmatrix}e_1^{(\lambda_2)}& e_2^{(\lambda_2)} & ... & e_p^{(\lambda_2)}\end{bmatrix}
++ \lambda_3 ..... \\
+&=&
+\begin{bmatrix}
+\sqrt{\lambda_1}\mathbf{e}_1 & | & \sqrt{\lambda_2}\mathbf{e}_2 & | & ... & | & \sqrt{\lambda_m}\mathbf{e}_p 
+\end{bmatrix}
+\begin{bmatrix}
+\sqrt{\lambda_1}\mathbf{e}_1^T \\
+\hline \\
+\sqrt{\lambda_2}\mathbf{e}_2^T \\
+\hline \\
+. \\
+\hline \\
+. \\
+\hline \\
+\sqrt{\lambda_2}\mathbf{e}_p^T \\
+\end{bmatrix} \hspace{10mm} \text{the first matrix is the eigenvectors cbind()ed and the second matrix is the transposed eigenvectors rbind()ed}\\
+&=&
+\begin{bmatrix}
+\sqrt{\lambda_1} e_{1}^{(\lambda_1)} & \sqrt{\lambda_2} e_{1}^{(\lambda_2)} & ... & \sqrt{\lambda_p} e_{1}^{(\lambda_p)} \\
+\sqrt{\lambda_1} e_{2}^{(\lambda_1)} & \sqrt{\lambda_2} e_{2}^{(\lambda_2)} & ... & \sqrt{\lambda_p} e_{2}^{(\lambda_p)} \\
+. & . & ... & . \\
+. & . & ... & . \\
+\sqrt{\lambda_1} e_{p}^{(\lambda_1)} & \sqrt{\lambda_2} e_{p}^{(\lambda_2)} & ... & \sqrt{\lambda_p} e_{p}^{(\lambda_p)} \\
+\end{bmatrix}
+\begin{bmatrix}
+\sqrt{\lambda_1}e_1^{(\lambda_1)} & \sqrt{\lambda_1}e_2^{(\lambda_1)} & ... & \sqrt{\lambda_1}e_p^{(\lambda_1)} \\  
+\sqrt{\lambda_2}e_1^{(\lambda_2)} & \sqrt{\lambda_2}e_2^{(\lambda_2)} & ... & \sqrt{\lambda_2}e_p^{(\lambda_2)} \\
+. & . & ... & . \\
+\sqrt{\lambda_p}e_1^{(\lambda_p)} & \sqrt{\lambda_p}e_2^{(\lambda_p)} & ... & \sqrt{\lambda_p}e_p^{(\lambda_p)} \\
+\end{bmatrix} \\
+&=& \mathbf{L}\mathbf{L}^T + \mathbf{0}_{p \times 1}
+\end{array}$$
+
+So, this gives us a valid orthogonal factor model with as many factors ($m$) as variables ($p$), and with no specific variances ($\psi_i=0 \space \forall i$). The factor loadings here are the cofficients of the principal components $e_{ii}$, scaled by the square root of the eigenvalues $\sqrt{\lambda_i}$. 
+
+A model with so many common factors is not very desirable (very difficult to interpret), so what we can do (especially if they are small) is to discard the $p-m$ smallest eigenvalues, keeping only the first $m$ terms of the spectral/eigen decomposition. 
+
+This will give the factor model:
+
+$$\begin{array}{lcl}
+\Sigma &=&
+\begin{bmatrix}
+\sqrt{\lambda_1}\mathbf{e}_1 & | & \sqrt{\lambda_2}\mathbf{e}_2 & | & ... & | & \sqrt{\lambda_m}\mathbf{e}_m 
+\end{bmatrix}
+\begin{bmatrix}
+\sqrt{\lambda_1}\mathbf{e}_1^T \\
+\hline \\
+\sqrt{\lambda_2}\mathbf{e}_2^T \\
+\hline \\
+. \\
+\hline \\
+. \\
+\hline \\
+\sqrt{\lambda_2}\mathbf{e}_m^T \\
+\end{bmatrix} &+& 
+\begin{bmatrix}
+\psi_1 & 0 & 0 & ... & 0 \\
+0& \psi_2 & 0 & ... & 0 \\
+. & . & . & ... & . \\
+. & . & . & ... & . \\
+0 & 0 & 0 & ... & \psi_p \\
+\end{bmatrix}
+\end{array}$$
+
+In this model, the elements of $\Psi$ are 
+
+$$\psi_i \quad = \quad \sigma_{ii} - \sum_{j=1}^m \mathcal{l}_{ij}^2 \quad = \quad \sigma_{ii} - \sum_{j=1}^m \Big(\sqrt{\lambda_i}\mathbf{e}_i^{(\lambda_j)}\Big)^2 $$
+
+This is the **Principal Component Solution**.    
+
+When applying this method to a dataset, the data are normally centred first by subtracting the sample mean $\overline{x}_j$ (this makes no difference to the sample covarariance matrix $\mathbf{S}$).
+
+In datasets where variables are measured on different scales, it is best to work with standardised variables (subtract $\overline{x}_j$ from each each variable, and divide by $\sqrt(s_{jj})$). The sample covariance matrix of the standardised observations is $\mathbf{R}$ (the sample correlation matrix).
+
+Standardization stops variables with relatively large variances dominating the factor loadings (as in PCA).
+
+Here is a summary of the **Principal Component Solution**:
+
+# Summary of Principal Component Solution
+1. Choose a number of factors $m$
+
+2. Calculate the loadings 
+
+$$\overset{\sim}{\mathbf{L}}=cbind(\sqrt{\hat\lambda_1}\mathbf{\hat e}_1, \space \sqrt{\hat\lambda_2}\mathbf{\hat e}_2, \space ... \sqrt{\hat\lambda_m}\mathbf{\hat e}_m, \space )$$
+
+3. The communalities for each variable $i$ is calculated as the sum of squared elements in row $i$ of $\overset{\sim}{\mathbf{L}}$
+
+4. The estimated specific variances are the diagonal entries of $\mathbf{S}-\overset{\sim}{\mathbf{L}}\space\overset{\sim}{\mathbf{L}}^T$, or for each variable $i$ as $1-h_i^2$
+
+For our model, we can calculate the **residual matrix**
+
+$$\mathbf{S}-\Big(\mathbf{L}\mathbf{L}^T+\overset{\sim}{\Psi}\Big)$$
+
+which measures the performance of our factor model on each element of the covariance matrix $\mathbf{S}$.
+
+# Choosing $m$ (number of factors) for the Principal Component factor method
+The proportion of the sample variance explained by a single factor $j$ is
+
+$$\frac{\hat{\lambda_j}}{s_{11}+s_{22}+...+s_{pp}}$$
+
+# Example of Principal Component Factor Analysis: consumer preference data
+
+The correlation matrix of our dataset looks like this:
+
+```{r consumer_pref_data, echo=FALSE}
+consumer_pref_cormat <- 
+  matrix(c(1,0.02,0.96,0.42,0.01,0.02,1,0.13,0.71,0.85,0.96,0.13,1,0.50,0.11,
+0.42,0.71,0.50,1,0.79,0.01,0.85,0.11,0.79,1),5,5,byrow=TRUE)
+
+rownames( consumer_pref_cormat ) <- c("taste","good buy for money", "flavour", "suitable for snack", "provides lots energy")
+colnames( consumer_pref_cormat ) <- c("taste","good buy for money", "flavour", "suitable for snack", "provides lots energy")
+
+consumer_pref_cormat
+```
+
+Here is a scree plot of the eigenvalues of the correlation matrix:
+
+```{r doitbitchface}
+
+plot( eigen(consumer_pref_cormat)$values,
+      type = "b",
+      ylab = "eigen-value",
+      main = "Scree plot"
+)
+```
+
+
+The proportion of variance explained by the first 2 factors is:
+
+```{r ohmyshittingfookens}
+p <- 5
+sum( eigen(consumer_pref_cormat)$values[1:2] )/p
+sum( eigen(consumer_pref_cormat)$values[1:2] )/sum( diag(consumer_pref_cormat) )
+```
+
+(93%)
+
+So, we will choose to fit a principal components factor model with $m=2$ components.
+
+The matrix of loadings $\overset{\sim}{\mathbf{L}}$ we estimate as:
+
+```{r matrix_of_loadings}
+eigenval <- eigen(consumer_pref_cormat)$values
+eigenvec <- eigen(consumer_pref_cormat)$vectors
+
+L <- cbind( sqrt(eigenval[1])*eigenvec[,1], sqrt(eigenval[2])*eigenvec[,2] )
+L
+```
+
+The communalities ($h_i^2$) for each variable $x_i$ are 
+
+```{r do_it_biiiiitch}
+communalities <- 
+    apply( L,
+           MAR = 1,        # for each row of L L^T 
+           function(row_i){ sum(row_i^2) }
+    )
+
+names(communalities) <- rownames(consumer_pref_cormat)
+communalities
+```
+
+The specific variances for each variable $x_i$ are:
+
+```{r doityouyoutoyouyouy}
+specific_variances <- 1-communalities
+specific_variances
+diag( consumer_pref_cormat - L%*%t(L) )
+```
+
+
+# Orthogonal Factor Model by Maximum Likelihood
+For the maximum likelihood method, we assume that the factors $\mathbf{F}_j$ and the errors $\epsilon_j$ are jointly normal. Further, we must impose another constraint: 
+
+$$\mathbf{L}^T\Psi^{-1}\mathbf{L} \text{ is a diagonal matrix}$$
+
+The proportion of variance explained by the $j^{th}$ factor is $\frac{h_j^2}{s_{11}+s_{22}+...+s_{pp}}$
+
+We perform factor analysis by maximum likelihood on some stock market data. 
+
+The data looks like this:
+
+```{r load_stock_data, echo=FALSE}
+
+raw_stock_data <- 
+matrix( c(
+ 0.0130338, -0.0078431, -0.0031889, -0.0447693,  0.0052151,
+ 0.0084862,  0.0166886, -0.0062100,  0.0119560,  0.0134890,
+-0.0179153, -0.0086393,  0.0100360,  0.0000000, -0.0061428,
+ 0.0215589, -0.0034858,  0.0174353, -0.0285917, -0.0069534,
+ 0.0108225,  0.0037167, -0.0101345,  0.0291900,  0.0409751,
+ 0.0101713, -0.0121978, -0.0083768,  0.0137083,  0.0029895,
+ 0.0111288,  0.0280044,  0.0080721,  0.0305433,  0.0032290,
+ 0.0484801, -0.0051480,  0.0182495,  0.0063348,  0.0076752,
+-0.0344914, -0.0137991, -0.0080468, -0.0299011, -0.0108108,
+-0.0046596,  0.0209882, -0.0060841, -0.0203940, -0.0126677,
+-0.0018205, -0.0055675, -0.0107587, -0.0089898, -0.0183648,
+ 0.0148515,  0.0346684, -0.0060004,  0.0362855,  0.0287032,
+-0.0092426, -0.0052029,  0.0047161,  0.0264916,  0.0129547,
+-0.0458668, -0.0278243, -0.0142696,  0.0374776,  0.0332022,
+-0.0244432, -0.0182914,  0.0059048, -0.0259572, -0.0202333,
+-0.0183742, -0.0140289,  0.0011361,  0.0073284, -0.0097182,
+-0.0297788, -0.0284571, -0.0164555,  0.0310847,  0.0164377,
+-0.0225080, -0.0228833,  0.0344231, -0.0062006,  0.0067584,
+ 0.0119617, -0.0067916,  0.0185908, -0.0193632, -0.0153440,
+ 0.0209811,  0.0240509,  0.0129586,  0.0355419,  0.0150962,
+ 0.0118669,  0.0025328, -0.0036036,  0.0021186,  0.0028784,
+ 0.0140160,  0.0172255,  0.0003617,  0.0150106,  0.0141115,
+-0.0149506,  0.0031610, -0.0001808,  0.0310352,  0.0226415,
+ 0.0203322, -0.0148548, -0.0182607, -0.0028283, -0.0161439,
+ 0.0112265, -0.0221613, -0.0051565, -0.0247164,  0.0105485,
+-0.0327505, -0.0158879, -0.0037023,  0.0143332,  0.0164695,
+-0.0261119, -0.0313390,  0.0156076,  0.0024575,  0.0082154,
+ 0.0182675,  0.0156863, -0.0219539, -0.0498468, -0.0110910,
+ 0.0219907,  0.0043436,  0.0136551,  0.0152655,  0.0217441,
+-0.0331257, -0.0204229, -0.0101495, -0.0186362, -0.0255376,
+ 0.0213763,  0.0188864,  0.0210664,  0.0228744,  0.0013793,
+ 0.0484518,  0.0440539,  0.0087639,  0.0160338,  0.0073462,
+ 0.0276183,  0.0168319,  0.0104977,  0.0004153,  0.0043300,
+ 0.0031932,  0.0024943,  0.0103887,  0.0228311,  0.0356251,
+-0.0010610,  0.0085953, -0.0023046, -0.0040584,  0.0065732,
+-0.0037175, -0.0060552,  0.0035537,  0.0114099,  0.0211145,
+ 0.0023987, -0.0597924, -0.0118626, -0.0251813, -0.0110851,
+ 0.0148897,  0.0163187,  0.0265185,  0.0200455,  0.0219875,
+-0.0089075, -0.0068477,  0.0047129,  0.0129660,  0.0196161,
+-0.0227333, -0.0140276, -0.0069493,  0.0024000, -0.0165494,
+-0.0329997, -0.0313480, -0.0362141,  0.0055866, -0.0065208,
+ 0.0302098,  0.0522778,  0.0317662,  0.0267857,  0.0105865,
+ 0.0195493,  0.0395079,  0.0381773,  0.0216425,  0.0238843,
+-0.0045273,  0.0204825,  0.0174547,  0.0253452,  0.0059341,
+-0.0446763, -0.0408118, -0.0163225, -0.0035049, -0.0008137,
+ 0.0070008,  0.0060451,  0.0154081,  0.0320252,  0.0252443,
+ 0.0100111,  0.0048532, -0.0016675, -0.0050224, -0.0266084,
+-0.0112885,  0.0057498,  0.0100217, -0.0173067, -0.0024480,
+ 0.0236703,  0.0155500, -0.0162064,  0.0001835, -0.0069530,
+ 0.0165941,  0.0457104,  0.0065557,  0.0284299,  0.0434514,
+-0.0040139, -0.0118432, -0.0041750,  0.0039237, -0.0136175,
+-0.0069855,  0.0098061,  0.0003354, -0.0261148, -0.0286114,
+-0.0154221, -0.0233060, -0.0238055,  0.0113097,  0.0257467,
+-0.0252817,  0.0088378, -0.0094453,  0.0075758, -0.0124498,
+ 0.0039470,  0.0094174,  0.0067614,  0.0241676,  0.0164701,
+ 0.0188149,  0.0379692,  0.0154985,  0.0510400,  0.0784157,
+-0.0055127, -0.0075251, -0.0111921, -0.0044903,  0.0198479,
+-0.0260532, -0.0168492, -0.0080604,  0.0432676,  0.0587486,
+ 0.0128059, -0.0059983,  0.0013831,  0.0148919,  0.0649373,
+ 0.0146108,  0.0025862,  0.0100138,  0.0362891,  0.0048395,
+-0.0373858, -0.0126827, -0.0114530, -0.0272533, -0.0396532,
+-0.0028769, -0.0195950, -0.0070897, -0.0100172,  0.0262454,
+-0.0300058, -0.0497446, -0.0167189, -0.0507510, -0.0583157,
+-0.0193337,  0.0021033,  0.0178888,  0.0154897,  0.0262930,
+ 0.0172884,  0.0174907,  0.0022620,  0.0195178, -0.0089331,
+-0.0163983,  0.0077928, -0.0072917, -0.0358752, -0.0636054,
+ 0.0275841,  0.0125085, -0.0078699,  0.0196896,  0.0573919,
+ 0.0176991,  0.0233603,  0.0216816, -0.0127639, -0.0401924,
+ 0.0034783, -0.0079017,  0.0050035,  0.0071275,  0.0100215,
+-0.0323512, -0.0146018, -0.0084120, -0.0482225, -0.0628987,
+ 0.0465672,  0.0410867,  0.0349723,  0.0152170,  0.0056721,
+-0.0071306, -0.0107828, -0.0086986,  0.0303185,  0.0517014,
+-0.0071818,  0.0058862,  0.0091124, -0.0064473,  0.0060779,
+-0.0031829,  0.0017339, -0.0006689,  0.0064892,  0.0214996,
+ 0.0182874, -0.0038944,  0.0046854,  0.0619937,  0.0431379,
+-0.0142531, -0.0106429, -0.0141572,  0.0001557, -0.0450225,
+-0.0046270, -0.0169045,  0.0089542,  0.0390661,  0.0027938,
+-0.0072632,  0.0075927,  0.0000000, -0.0049431,  0.0186314,
+ 0.0301434, -0.0019947,  0.0261219, -0.0307090, -0.0208547,
+-0.0071023, -0.0430824, -0.0177872, -0.0518714,  0.0230447,
+-0.0128755, -0.0109074, -0.0066456,  0.0167076, -0.0126280,
+ 0.0028986,  0.0030502, -0.0073591,  0.0443048, -0.0112340,
+-0.0265896, -0.0002339, -0.0033698,  0.0615551,  0.0561091,
+ 0.0068290,  0.0124006,  0.0076078, -0.0419997, -0.0365773,
+-0.0259510, -0.0240351, -0.0303691, -0.0209345, -0.0068717,
+ 0.0136240,  0.0182335,  0.0086520,  0.0568640,  0.0387476,
+ 0.0209080,  0.0165116,  0.0089209, -0.0230172,  0.0416320,
+ 0.0049737,  0.0187600,  0.0023805,  0.0123049,  0.0078337,
+-0.0262009, -0.0044914, -0.0166243, -0.0096353,  0.0020622,
+-0.0041854,  0.0060907, -0.0067276,  0.0134710, -0.0045908,
+ 0.0090063, -0.0022422,  0.0000000, -0.0429774, -0.0620229,
+ 0.0053555, -0.0083146,  0.0069469, -0.0188272, -0.0161072,
+ 0.0307783, -0.0160888,  0.0031045, -0.0539478, -0.0556609,
+ 0.0373241,  0.0359281,  0.0252751,  0.0581879,  0.0169708,
+ 0.0238029,  0.0031125, -0.0068757,  0.0122545,  0.0281715,
+ 0.0256826,  0.0525266,  0.0406957, -0.0316623, -0.0188482,
+-0.0060622,  0.0086334,  0.0058413,  0.0445584,  0.0305941,
+ 0.0217449,  0.0229645,  0.0291983,  0.0084395,  0.0319296,
+ 0.0033740, -0.0153061, -0.0238245, -0.0016738, -0.0172270,
+ 0.0033626,  0.0029016, -0.0030507, -0.0012193, -0.0097005,
+ 0.0170147,  0.0095061,  0.0181994, -0.0161758, -0.0075614,
+ 0.0103929, -0.0026612,  0.0044290, -0.0024818, -0.0164502,
+-0.0127948, -0.0143678, -0.0187402, -0.0049759, -0.0163732
+),
+byrow=TRUE,
+ncol = 5
+)
+
+colnames(raw_stock_data) <- 
+    c("JP Morgan",
+      "Citibank",
+      "Wells Fargo",
+      "Royal Dutch Shell",
+      "Texaco"
+      )  
+
+kable(raw_stock_data)
+```
+
+We perform factor analyis by MLE in R using the function factanal():
+```{r dotheanal}
+factor_anal_MLE <- factanal( covmat = cor(raw_stock_data),
+                             factors = 2,
+                             rotation = "none"
+                            )
+factor_anal_MLE
+```
+
+The proportion of variance explained by the first 2 factors is 
+
+$$\frac{1.622+1.610}{p} \quad = \quad \frac{3.232}{5} \quad = \quad 0.6464 \quad\quad \text{(65%)}$$
+
+The residual matrix is 
+
+```{r getthematrixL}
+L <- factor_anal_MLE$loadings[,1:2]
+L
+Psi <- diag(factor_anal_MLE$uniquenesses) 
+Psi
+
+kable(
+  cor(raw_stock_data) - L%*%t(L) - Psi
+)
+```
+
+# Factor Rotation
+The matrix of estimated factor loadings $\hat{\mathbf{L}}$ in a factor model can be multiplied by any orthogonal matrix $\mathbf{T}$ to give a new matrix of factor loadings $\mathbf{\hat{L}^*}=\mathbf{\hat L}\mathbf{T}$, and $\mathbf{\hat{L}^*}$ will reproduce the identical covariance matrix to $\mathbf{\hat{L}}$, and the communalities and residual matrix do not change either (mathematically, it is immaterial whether $\mathbf{\hat L}$ or $\mathbf{\hat L^*}$ is used).   
+
+$$\begin{array}{lcl}
+\mathbf{X}-\mu &=& \mathbf{L}\mathbf{F}+\epsilon \\
+\Sigma &=& Cov\Big[\mathbf{X}\Big] \\
+&=& \mathbf{L}\mathbf{L}^T + \Psi \\
+&=& \mathbf{L}\mathbf{T}\mathbf{T}^T\mathbf{L}^T + \Psi \\
+&=& \mathbf{L}\mathbf{T}(\mathbf{L}\mathbf{T})^T + \Psi \\
+&=& \mathbf{L^*}(\mathbf{L^*})^T + \Psi \\
+\end{array}$$
+
+Geometrically, orthogonal matrices correspond to rigid rotations and reflections of the co-ordinate axes.
+
+Factor rotation (the choice of orthogonal matrix $\mathbf{T}$) allows us to obtain more interpretable factor loadings: we'd ideally like each variable to load heavily on a single factor, and very low on all of the other factors.
+
+# Alternative Variance Formula
+The formula normally used to calculate sample variance is 
+
+$$Var[X] \quad = \quad \frac{1}{n}\sum_{i=1}^n\Big(x_i-\overline{x}\Big)^2$$
+
+An alternative form of this is:
+
+$$Var[X] \quad = \quad \frac{1}{n}\Big(\sum_{i=1}^nx^2 - \frac{1}{n}(\sum_{i=1}^n x)^2\Big)$$
+
+```{r showthesamvar}
+x <- runif(100, -100, 100)
+n <- length(x)
+
+var(x)          # R divides by (n-1) not (n) for an unbiased estimate of variance
+(1/(n-1)) * sum( (x - mean(x))^2 )
+(1/(n-1)) * (  sum( x^2 ) - (1/(n))*( sum(x) )^2  ) 
+```
+
+# Varimax rotation
+On a given factor, if all of the loadings had similar values, then this would be of little interest. If all of the loadings had similar values, then the variance of the loadings would be close to 0. **Varimax** rotation chooses the orthogonal rotation $\mathbf{T}$ as the one which maximises the variance amongst the loadings. Specifically, it deals with squared loadings so as to only deal with large and small loadings in absolute value (i.e. if -10 is a big loading, then 10 is a big loading of equal magnitude). The variance amongst the squared loadings will be maximised where some of the loadings are made very small, and others very big. 
+
+The loadings $\mathcal{l_{ij}}$ are also scaled by dividing them by their communality $h_i$. This gives greater weight to variables with small communalities. 
+
+$$\begin{array}{lcl}
+\underset{p \times 1}{\mathbf{X} - \mu} &=& \underset{p\times m}{\mathbf{L}} \space \underset{m \times 1}{\mathbf{F}} &+& \underset{p \times 1}{\mathbf{\epsilon}}\\
+\space &\space& \space &\space& \space\\
+\begin{bmatrix}
+X_1 - \mu_1 \\
+X_2 - \mu_2 \\
+. \\
+.\\
+X_p - \mu_p 
+\end{bmatrix}
+&=& 
+\underset{\text{matrix of factor loadings}}{
+\begin{bmatrix}
+\mathcal{l}_{11} & \mathcal{l}_{12} & ... & \mathcal{l}_{1m} \\ 
+\mathcal{l}_{21} & \mathcal{l}_{22} & ... & \mathcal{l}_{2m} \\
+. & . & ... & . \\
+. & . & ... & . \\
+\mathcal{l}_{p1} & \mathcal{l}_{p2} & ... & \mathcal{l}_{pm} \\
+\end{bmatrix}}
+\begin{bmatrix}
+F_1\\
+F_2\\
+.\\
+.\\
+F_m
+\end{bmatrix} 
+&+&
+\begin{bmatrix}
+\epsilon_1\\
+\epsilon_2\\
+.\\
+.\\
+\epsilon_p
+\end{bmatrix} 
+\end{array}$$
+
+$$h_i \quad = \quad \sqrt{h_i^2} \quad = \quad \sqrt{\mathcal{l}_{1i}^2+\mathcal{l}_{2i}^2+...+\mathcal{l}_{mi}^2}$$
+
+So, if our squared scaled loadings are 
+
+$$\overset{\sim}{\mathcal{l}_{ij}}^2 \quad = \quad \Big(\frac{\mathcal{l_{ij}}}{h_{i}}\Big)^2$$
+
+Then the varimax-chosen orthogonal rotation $\mathbf{T}$ is the the one which maximises:
+
+$$V \quad = \quad Var\Big[\overset{\sim}{\mathcal{l}_{ij}}^2\Big] \quad = \quad \frac{1}{p}\Big(\sum_{i=1}^p (\overset{\sim}{\mathcal{l}_{ij}}^2)^2 - \frac{1}{p}(\sum_{i=1}^n \overset{\sim}{\mathcal{l}_{ij}}^2)^2\Big) \quad = \quad \frac{1}{p}\Big(\sum_{i=1}^p \overset{\sim}{\mathcal{l}_{ij}}^4 - \frac{1}{p}(\sum_{i=1}^n \overset{\sim}{\mathcal{l}_{ij}}^2)^2\Big)$$
+
+After finding the varimax loadings, the loadings are multiplied by $h_i$ again, so that the original communalities are preserved.
+
+# Varimax on the Consumer Preference Data
+The correlation matrix of the consumer preference data is:
+```{r showthemfucka}
+consumer_pref_cormat
+```
+
+The loadings provided by the first 2 eigenvectors of $\Sigma$ using the principal component method are:
+
+```{r dpthesfdkjsnksfd}
+L <- cbind( sqrt(eigenval[1])*eigenvec[,1], sqrt(eigenval[2])*eigenvec[,2] )
+```
+
+and these loadings rotated by varimax are:
+
+```{r lalaladodod}
+varimax(L)
+```
+
+the orthogonal matrix $\mathbf{T}$ is
+
+```{r getthemofoT}
+T_rotmat <- varimax(L)$rotmat
+varimax_rotated_loadings <- L%*%T_rotmat
+rownames(varimax_rotated_loadings) <- rownames(consumer_pref_cormat)
+colnames(varimax_rotated_loadings) <- paste("factor", 1:2, sep="")
+varimax_rotated_loadings
+```
+
+Clearly, variables 2,4,5 define factor 1 and variables 1,3 define factor 2. These factors could be labelled Factor 1=Nutritional Value and Factor 2=Taste
+
+The proportion of total variance explained by the 2 factors is:
+```{r proportionvar}
+total_variance <- sum(diag(consumer_pref_cormat))
+total_variance
+
+cbind( factor1 = sum(varimax_rotated_loadings[,1]^2) / total_variance,
+       factor1 = sum(varimax_rotated_loadings[,2]^2) / total_variance
+      )
+```
+
+# Promax rotation (oblique rotation)
+Orthogonal rotations are appropriate for a factor model in which the common factors are assumed to be independent. **Varimax** is an orthogonal rotation. Considering the factors as coordinate axes, an orthogonal rotation corresponds to a rigid rotation of the axes (axes remain orthogonal to one another). An **oblique** (non-orthogonal) rotation corresponds to a non-rigid rotation of the axes (axes need not remain orthogonal). Oblique rotations do not follow from the postulated model.
+
+**Promax** is achieved by first performing an orthogonal rotation (such as **varimax**), then taking the loadings to some power (makes small loadings relatively smaller, and big loadings relatively bigger) to get a 'target matrix', then finding a least-squares fit from the varimax solution to the target matrix.
+
+Here we compare the 2 loading methods:
+```{r doitontheshtockdatum}
+unrotated <-  factanal( covmat = cor(raw_stock_data),
+                        factors = 2,
+                        rotation = "none"
+                      )
+varimax <-  factanal( covmat = cor(raw_stock_data),
+                        factors = 2,
+                        rotation = "varimax"
+                      )
+
+promax <-factanal( covmat = cor(raw_stock_data),
+                   factors = 2,
+                   rotation = "promax"
+                 )
+
+par( mfrow=c(1,3), pty="s" )
+plot( unrotated$loadings, xlim=c(0,1), ylim=c(-0.1,1), main="unrotated" )
+plot( varimax$loadings, xlim=c(0,1), ylim=c(-0.1,1), main="varimax" )
+plot( promax$loadings, xlim=c(0,1), ylim=c(-0.1,1), main="promax" )
+```
+
+
+
+Good blog on promax: https://cpb-us-w2.wpmucdn.com/blogs.baylor.edu/dist/9/3718/files/2014/10/Oblique_Rotation_Explained-29z8tjz.pdf
+
+
+# Factor Scores
+Recall that the factor model is 
+
+$$\begin{array}{lcl}
+\underset{p \times 1}{\mathbf{X} - \mu} &=& \underset{p\times m}{\mathbf{L}} \space \underset{m \times 1}{\mathbf{F}} &+& \underset{p \times 1}{\mathbf{\epsilon}}\\
+\space &\space& \space &\space& \space\\
+\begin{bmatrix}
+X_1 - \mu_1 \\
+X_2 - \mu_2 \\
+. \\
+.\\
+X_p - \mu_p 
+\end{bmatrix}
+&=& 
+\underset{\text{matrix of factor loadings}}{
+\begin{bmatrix}
+\mathcal{l}_{11} & \mathcal{l}_{12} & ... & \mathcal{l}_{1m} \\ 
+\mathcal{l}_{21} & \mathcal{l}_{22} & ... & \mathcal{l}_{2m} \\
+. & . & ... & . \\
+. & . & ... & . \\
+\mathcal{l}_{p1} & \mathcal{l}_{p2} & ... & \mathcal{l}_{pm} \\
+\end{bmatrix}}
+\begin{bmatrix}
+F_1\\
+F_2\\
+.\\
+.\\
+F_m
+\end{bmatrix} 
+&+&
+\begin{bmatrix}
+\epsilon_1\\
+\epsilon_2\\
+.\\
+.\\
+\epsilon_p
+\end{bmatrix} 
+\end{array}$$
+
+$$h_i \quad = \quad \sqrt{h_i^2} \quad = \quad \sqrt{\mathcal{l}_{1i}^2+\mathcal{l}_{2i}^2+...+\mathcal{l}_{mi}^2}$$
+
+$$\Sigma \quad = \quad Cov\Big[ \mathbf{X}\Big] \quad = \quad \mathbf{L}\mathbf{L}^T + \Psi$$
+
+Having estimated $\mathbf{L}$ and $\Psi$, we are now interested in estimating values for the common factor vectors 
+
+$$\mathbf{F}_1, \mathbf{F}_2, ..., \mathbf{F}_n$$
+
+We are not estimating parameters here in the usual sense. For each observation $i$ in our data, we are estimating the values that the common factor variables $F_1, F_2, ..., F_m$ have taken on for observation $i$. 
+
+# Estimating Factor Scores: Weighted Least Squares Method 
+This method assumes that the mean vector $\mu$, the factor loadings $\mathbf{L}$ and the specific variance $\Psi$ are known (non-random). 
+
+We choose $\hat{\mathbf{f}}$ to be the $\mathbf{f}$ which minimizes the sum of weighted square errors (each squared error divided by it's own variance):
+
+$$\begin{array}{lcl} 
+\sum_{i=1}^p \frac{\epsilon_i^2}{\psi_i} &=& \epsilon^T\Psi^{-1}\epsilon \\
+&=& \Big(\mathbf{x}-\mu-\mathbf{L}\mathbf{f}\Big)^T\Psi\Big(\mathbf{x}-\mu-\mathbf{L}\mathbf{f}\Big) \\
+\end{array}$$
+
+The solution to this is 
+
+$$\hat{\mathbf{f}} \quad = \quad \Big(\mathbf{L}^T\Psi^{-1}\mathbf{L}\Big)^{-1}\mathbf{L}^T\Psi^{-1}\Big(\mathbf{x}-\mu\Big)$$
+
+Where we use the sample estimates $\mathbf{\hat{L}}$ (rotated loadings), $\hat{\Psi}$ and $\hat{\mu}=\overline{x}$
+
+So, for each observation $\underset{p \times 1}{\mathbf{x}_{i}}$, the factor scores by weighted least squares for this observation are:
+
+$$\underset{p \times 1}{\hat{\mathbf{f}_i}} \quad = \quad \Big(\mathbf{L}^T\Psi^{-1}\mathbf{L}\Big)^{-1}\mathbf{L}^T\Psi^{-1}\Big(\underset{p \times 1}{\mathbf{x}_i}-\underset{p \times 1}{\overline{x}}\Big)$$
+ 
+If we had used the Principal Components method to estimate the factor loadings, then ordinary least squares (non-weighted least squares) is usually used to estimate the factor scores. 
+ 
+Here is this illustrated using the stock price data:
+```{r getitstockz}
+head(raw_stock_data)
+```
+
+The MLE loadings rotated by *varimax* are 
+```{r rotatlod}
+factor_anal_MLE <- factanal( x = raw_stock_data,
+                             factors = 2,
+                             rotation = "varimax",
+                             scores = "Bartlett"
+                            )
+factor_anal_MLE
+```
+
+The factor scores using the weighted least squares method are:
+
+```{r factor_scores_market_stock, fig.width=12, fig.height=12}
+L_varimax <- factor_anal_MLE$loadings[,1:2] 
+specific_variances <- diag(factor_anal_MLE$uniquenesses) 
+
+x_bar <- colMeans(raw_stock_data)
+
+factor_scores_stock_data <-
+   apply( scale(raw_stock_data),          # we use our standardised data 
+          MAR = 1,            # apply to each row
+          function(x_row){
+                   solve( 
+                          t(L_varimax) %*%        # L'
+                          solve(specific_variances) %*%   # Psi^-1
+                          L_varimax               # L
+                        ) %*%
+                  t(L_varimax) %*%                # L'
+                  solve(specific_variances) %*%   # Psi^-1
+                  x_row                  # x = (x - x_bar) because data is standardised            
+          }
+        ) %>% 
+  t(.)
+
+colnames( factor_scores_stock_data ) <- c("factor1", "factor2")
+
+head(factor_scores_stock_data)
+
+head( factor_anal_MLE$scores )
+
+par(mfrow=c(1,2), pty="s")
+plot( y = factor_scores_stock_data[,"factor2"],
+      x = factor_scores_stock_data[,"factor1"],
+      ylab = "factor 1",
+      xlab = "factor 2",
+      main = "by Joe: MLE varimax rotation \n factor scores on stock data"  
+    )
+abline( v=0, h=0)
+
+plot( y = factor_anal_MLE$scores[,2],
+      x = factor_anal_MLE$scores[,1],
+      ylab = "factor 1",
+      xlab = "factor 2",
+      main = "using R: MLE varimax rotation \n factor scores on stock data"  
+    )
+abline( v=0, h=0)
+
+```
+
+# Factor scores by Regression Method
+We again assume that $\mathbf{L}$ and $\Psi$ are known. 
+
+Under the orthogonal factor model, and further assuming that $\mathbf{F}$ and $\epsilon$ are jointly normally distributed leads us to the following result: 
+
+$$\begin{array}{lcl}
+\mathbf{F}|\mathbf{x} \quad \sim \quad \text{N}\Bigg(\mathbf{L}^T(\mathbf{L}\mathbf{L}^T+\Psi)^{-1}(\mathbf{x}-\mu)\space, \quad 
+\mathbf{I}-\mathbf{L}^T(\mathbf{L}\mathbf{L}^T+\Psi)^{-1}\mathbf{L}
+\Bigg)
+\end{array}$$
+
+The quantities $\mathbf{L}^T(\mathbf{L}\mathbf{L}^T+\Psi)^{-1}$ are the coefficients in a multivariate regression of the factors on the variables. 
+
+This gives us the following regression estimates of the factor scores of observation $\mathbf{x}_i$:
+
+$$\mathbf{\hat{f}}_i \quad = \quad \mathbf{L}^T\mathbf{S}^{-1}(\mathbf{x}-\overline{x})$$
+
+Here are the factor scores for the (standardised) stock data:
+
+```{r doiittttttt}
+# get the regression factor scores manually:
+factor_scores_stock_data <-
+   apply( scale(raw_stock_data),          # we use our standardised data 
+          MAR = 1,            # apply to each row
+          function(x_row){
+                    t(L_varimax) %*%
+                        solve(cor(raw_stock_data)) %*%
+                    x_row                           # don't need to subtract x_bar because standardised data
+          }
+        ) %>% 
+  t(.)
+
+colnames(factor_scores_stock_data) <- c("factor1","factor2")
+
+# get the regression factor scores in R:
+factor_anal_MLE <- factanal( x = raw_stock_data,
+                             factors = 2,
+                             rotation = "varimax",
+                             scores = "regression"
+                            )
+
+head(factor_anal_MLE$scores, 10)
+head(factor_scores_stock_data, 10)
+```

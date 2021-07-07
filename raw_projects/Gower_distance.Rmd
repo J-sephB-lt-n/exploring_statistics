@@ -1,0 +1,614 @@
+---
+title: "Gower Distance: a dissimilarity measure for mixed variable types"
+author: "Joe"
+date: "28 November 2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(cluster)      # for daisy()
+library(MASS)         # isoMDS() 
+library(dplyr)        # for '%>%' 
+library(knitr)        # for kable()
+library(tibble)   # for rownames_to_column()
+library(ggplot2)
+```
+
+# Prerequisite Concept: Feature Scaling (Range Scaling)
+If variables/features in the data are on different measurement scales (for example, one is measured in years and another in centimetres), then these differing scales can end up causing undesirable results in a model or analysis (such as one of the variables unecessarily dominating a statistic solely because it is measured on a different scale).   
+
+Range scaling reduces a variable to a chosen range [a,b] without changing the relationships between (relative positions of) the observations/samples within the variable. 
+
+To reduce a univariate variable $X$ to a range [a,b], we use:
+
+$$scaled[X] \quad = \quad a + \frac{\Big(X-min(X)\Big)\Big(b-a\Big)}{ max(X)-min(X)}$$
+
+For example, suppose we have a variable *age* containing the following observations:
+
+$$\Big\{12,17,19,42,80 \Big\}$$ 
+We can scale these age values to the range [-5,5]. Observe the change in the y-axis scale. 
+
+```{r showyo}
+par(mfrow = c(1,2))
+age <- c(12,17,19,42,80)
+plot( y = age,
+      x = 1:5,
+      xlab = "i"
+    )
+scaled_age <- -5 + (age-min(age))*(5--5)/(max(age)-min(age))
+plot( y = scaled_age,
+      x = 1:5,
+      xlab = "i"
+    )
+axis(side=2,at=-5:5)
+```
+
+The most common scaling is to the range [0,1], for which the formula is simply:
+
+$$scaled[X] \quad = \quad \frac{X-min(X)}{ max(X)-min(X)}$$
+
+I define thus function in R to use later:
+
+```{r definethatb1ch}
+normalize_01 <- function(x){ ( x - min(x) )/( max(x) - min(x) ) }
+```
+
+# Gower Coefficient
+
+The Gower Coefficient is a measure of distance/dissimilarity between observations (samples) which is designed to be used when a dataset consists of mixed data types. To calculate the distance between 2 given observations/samples, the distance between each variable is calculated individually, then these variable distances are aggregated using a weighted average. This allows for different distance/dissimilarity measures to be used for different variables. 
+
+A shortfall of this very simple method is that the use of different distance/dissimilarity measures can lead to some of the variables having too little (or too much) influence on the final distance value. There is no 'correct' weighting of the variable distances when they are aggregated, and so it can be difficult to decide how to choose the variable weights.     
+
+Suppose that we have the following customer dataset, in which we wish to look for groups/clusters of similar customers:
+
+```{r hellodata}
+set.seed(1969)
+n <- 15
+customer_data <- data_frame( id = c(1:n),
+                             gender = sample(c("male","female"), size=n, replace=TRUE),
+                             area = sample(c("N","S","E","W"), size=n, replace=TRUE),
+                             credit = sample(c(0,1), size=n, replace=TRUE ),
+                             age = sample( 18:80, size=n, replace=TRUE ),
+                             spend = round( rexp(n, rate=0.001) )
+                           ) %>% 
+  mutate_at( c("gender", "area", "credit"),
+             as.factor 
+            )     # turn these variables into type 'factor'
+
+kable(customer_data)
+```
+
+We are going to calculate a measure of the distance between each pair of samples/observations/rows in this dataset using Gower distance, with equal weighting on each variable. 
+
+First, we normalize the numeric columns to have range [0,1] 
+
+```{r label, options}
+customer_data_normalized <- 
+  customer_data %>% 
+      mutate_at( c("age","spend"), normalize_01)
+
+kable(customer_data_normalized)
+
+```
+
+Gower Distance between a pair of observations $i$ and $j$ is:
+
+$$D_{ij} \quad = \quad \frac{\sum_{v=1}^p d_{ijv}\delta_{ijv}w_v}{\sum_{v=1}^p \delta_{ijv}w_v}$$
+
+Where 
+
+we have $p$ variables
+
+$d_{ijv}$ is the distance/dissimilarity between observation (row) $i$ and observation (row) $j$
+
+$\delta_{ijv}$ take on the value 0 if either $i$ or $j$ (or both) are missing a value for variable $v$ (so that the distance measure can ignore NA observations)
+
+$w_v$ is a weight that we have assigned to variable $v$ in the distance/dissimilarity calculation.
+
+$d_{ij}$ (the dissimilarity/distance) between observations (rows) $i$ and $j$ takes on a value between 0 (most similar/close i.e. identical) and 1 (maximum distance). 
+
+We illustrate Gower distance/dissimilarity on our dataset: we calculate the Gower distance between observation/customer/sample 1 and 2, assigning equal weighting to each variable:
+
+```{r dataset_again, echo=FALSE}
+kable(customer_data_normalized)
+```
+
+* The distance/dissimilarity on **gender** is 1 because their genders disagree (are different)
+
+* The distance/dissimilarity on **area** is 0 because their areas are the same
+
+* Their distance/dissimilarity on **credit** is 1, because customer 2 has credit facility and customer 1 does not.
+
+* Their distance/dissimilarity on **age** is |0.0961538-0.1730769|=0.0769231
+
+* Their distance/dissimilarity on **spend** is |0.1754606-0.9694305|=0.7939699
+
+So, the distance/dissimilarity measures on each of the 5 variables when comparing customer 1 and customer 2 are (1,0,1,0.0769231,0.7939699). 
+
+We perform a weighted sum of these 5 variable distances to get the final Gower distance between these 2 customers:
+
+* We assign a weight of 1 to each variable
+
+* To ensure that the weights sum to 1, we scale each weight using [original weight]/[sum of all original weights]. Where each original weight was 1 for our dataset, this makes each scaled weight equal to $\frac{1}{5}$
+
+So, the gower distance between customers 1 and 2 is 
+
+$$(\frac{1}{5}\times 1) + (\frac{1}{5}\times 0) + (\frac{1}{5}\times 1) + (\frac{1}{5}\times 0.0769231) + (\frac{1}{5}\times 0.7939699) = 0.5741786 $$
+This is just the average (mean) of the variable distances in this case where the weights are equal.
+
+This can be performed in R using the function __daisy()__ in the __cluster__ package:
+
+```{r do_it_in_R}
+dist_matrix <- 
+    cluster::daisy( x = customer_data[,-1],  # daisy does the normalization of numeric variables for us (we just give it the original dataset)
+                    metric = "gower"
+                  )
+dist_matrix
+```
+
+We can visualise these distances/dissimilarities using __MultiDimensional Scaling__. MDS is a non-linear dimension-reduction technique which represents observations in a high-dimensional space (like a dataset with many variables) in a space of lower dimension (such as 2 dimensions, which is convenient for plotting). MDS tries to preserve in the lower dimensional space - as best as possible - the relative distances between the points/observations in the high-dimensional space. *Metric* MDS tries to approximate the exact distances between points in the higher dimensional space, whereas *Non-Metric* MDS approximates only the ranks of the points (i.e. tries to achieve the same ordering of distances).     
+
+```{r classical_MDS}
+
+do_classical_MDS <- cmdscale( dist_matrix, 
+                              eig=TRUE, 
+                              k=2 # return 2 dimensions 
+                            ) 
+plot( x = do_classical_MDS$points[,1],
+      y = do_classical_MDS$points[,2],
+      cex = 3,
+      xlab="", ylab=""
+    )
+text( x = do_classical_MDS$points[,1],
+      y = do_classical_MDS$points[,2],
+      labels = customer_data$id
+    )
+
+```
+
+```{r nonMetric_MDS}
+do_non_metric_MDS <- MASS::isoMDS( dist_matrix, 
+                                   k=2 # return 2 dimensions 
+                                 )
+plot( x = do_non_metric_MDS$points[,1],
+      y = do_non_metric_MDS$points[,2],
+      cex = 3,
+      xlab="", ylab=""
+    )
+text( x = do_non_metric_MDS$points[,1],
+      y = do_non_metric_MDS$points[,2],
+      labels = customer_data$id
+    )
+
+```
+
+We can adjust the variable weights in the Gower distance/dissimilarity calculation in order to put importance onto certain chosen variables.
+
+Suppose, for example, that we want to weight spend and age more heavily than the other variables:
+
+Let's calculate the distance between customer 4 and customer 10:
+
+variable  |  distance      | weight      | weighted distance
+----------|----------------|-------------|---------------------
+gender    |     0          |    0.05     |   0
+area      |     1          |    0.05     |   0.05
+credit    |     1          |    0.1      |   0.1
+age       |     0.25       |    0.4      |   0.1
+spend     |     0.06867672 |    0.4      |   0.02747069
+
+So, the weighted Gower distance/dissimilarity is 0+0.05+0.1+0.1+0.02747069=0.2774707
+
+In R:
+
+```{r weighted_dist_example}
+cluster::daisy( x = customer_data[,-1],  # daisy does the normalization of numeric variables for us
+                metric = "gower",
+                weights = c( 0.05, 0.05, 0.1, 0.4, 0.4 )
+              )
+
+# the weights can just be proportional, instead of summing to 1: (gives the same result)
+cluster::daisy( x = customer_data[,-1],  # daisy does the normalization of numeric variables for us
+                metric = "gower",
+                weights = c( 5, 5, 10, 40, 40 )
+              )
+```
+
+If we put all of the weight on area, we can see people cluster by area:
+```{r area_weighting}
+dist_matrix <- 
+    cluster::daisy( x = customer_data[,-1],  # daisy does the normalization of numeric variables for us
+                    metric = "gower",
+                    weights = c(1,10,1,1,1)
+                                      )
+do_non_metric_MDS <- MASS::isoMDS( dist_matrix, 
+                                   k=2 # return 2 dimensions 
+                                 )
+plot( x = do_non_metric_MDS$points[,1],
+      y = do_non_metric_MDS$points[,2],
+      cex = 3,
+      xlab="", ylab="",
+      col = as.numeric(customer_data$area)
+    )
+text( x = do_non_metric_MDS$points[,1],
+      y = do_non_metric_MDS$points[,2],
+      labels = customer_data$id,
+      col = as.numeric(customer_data$area)
+    )
+kable(customer_data)
+```
+
+If we put a lot of weight onto age and spend:
+```{r age_and_spend, fig.width=10}
+dist_matrix <-
+    cluster::daisy( x = customer_data[,-1],  # daisy does the normalization of numeric variables for us
+                    metric = "gower",
+                    weights = c(1,1,1,50,50)
+                  )
+do_non_metric_MDS <- MASS::isoMDS( dist_matrix,
+                                   k=2 # return 2 dimensions
+                                 )
+do_non_metric_MDS$points %>%
+  as_data_frame() %>%  
+  rownames_to_column() %>%
+  rename( id = rowname ) %>%
+  mutate( id = as.integer(id) ) %>%
+  left_join( customer_data ) %>%
+  mutate( categs = paste0(gender, area, credit) ) %>% 
+  ggplot( data = .,
+          aes( x = V1,
+               y = V2,
+               colour = spend,
+               size = age,
+               label = categs
+              )  
+        ) + 
+  #geom_point() +
+  scale_colour_gradient2(low="red", mid="blue", high="black", midpoint = 1000) +
+  geom_text() +
+  theme_bw()
+ 
+kable(customer_data)
+
+```
+
+
+# Choosing weights for the Gower coefficient
+
+```{r hmmyo, fig.width=12, fig.height=12, warnings=FALSE}
+par(mfrow=c(4,4))
+
+for( i in 1:16 ){
+  
+  # get random weights:
+  random_weights <- sample( 1:20, size=5, replace=TRUE )
+  random_weights <- random_weights / sum(random_weights)      # make the weights sum to 1 (purely aesthetic)
+  
+  # get distance matrix:
+  dist_matrix <-
+      cluster::daisy( x = customer_data[,-1],  # daisy does the normalization of numeric variables for us
+                      metric = "gower",
+                      weights = random_weights
+                    )
+  
+  # do MDS:
+  do_non_metric_MDS <- MASS::isoMDS( dist_matrix,
+                                     k=2 # return 2 dimensions
+                                   )
+  
+  # make the plot:
+  plot( x = do_non_metric_MDS$points[,1],
+        y = do_non_metric_MDS$points[,2],
+        main = paste0( "weights: ", paste(round(random_weights,2), collapse=", ") ),
+        xlab = "",
+        ylab = "",
+        xaxt = "n",
+        yaxt = "n",
+        pch = 16,
+        cex=1.5,
+        col = customer_data$id
+      )
+}
+
+```
+
+The weights clearly have a large effect on the distance calculation.
+
+Let's try find weights which create 3 clear clusters in the data:
+
+```{r optim_gower_weights3k}
+
+k <- 3      # number of kmeans centres 
+
+function_to_minimise <- function( par     # vector of 5 weights  
+                                ){
+  
+  # get distance matrix:
+  dist_matrix <-
+      cluster::daisy( x = customer_data[,-1],  # daisy does the normalization of numeric variables for us
+                      metric = "gower",
+                      weights = par
+                    )
+  
+  # do MDS:
+  do_non_metric_MDS <- MASS::isoMDS( dist_matrix,
+                                     k=2 # return 2 dimensions
+                                   )
+  
+  # get MDS co-ordinates:
+  MDS_coords <- do_non_metric_MDS$points
+  
+  # do k-means:
+  do_kmeans <- kmeans( MDS_coords, centers=k )
+  # plot( x = do_non_metric_MDS$points[,1],
+  #       y = do_non_metric_MDS$points[,2],
+  #       col = do_kmeans$cluster
+  #     )
+  # points( x = do_kmeans$centers[,1],
+  #         y = do_kmeans$centers[,2],
+  #         col = 1:3,
+  #         pch = "X"
+  #       )
+  
+  return(do_kmeans$tot.withinss)
+  
+}
+
+do_the_optim <- 
+    optim( par = c(1,1,1,1,1),
+           fn = function_to_minimise 
+          )
+
+final_weights <- do_the_optim$par
+
+  # get distance matrix:
+  dist_matrix <-
+      cluster::daisy( x = customer_data[,-1],  # daisy does the normalization of numeric variables for us
+                      metric = "gower",
+                      weights = final_weights
+                    )
+
+  # do MDS:
+  do_non_metric_MDS <- MASS::isoMDS( dist_matrix,
+                                     k=2 # return 2 dimensions
+                                   )
+  
+  # get MDS co-ordinates:
+  MDS_coords <- do_non_metric_MDS$points
+  
+  # do k-means:
+  do_kmeans <- kmeans( MDS_coords, centers=k )
+  plot( x = do_non_metric_MDS$points[,1],
+        y = do_non_metric_MDS$points[,2],
+        col = do_kmeans$cluster,
+        type = "n",
+        xlab = "Dim.1",
+        ylab = "Dim.2"
+      )
+  text( x = do_non_metric_MDS$points[,1],
+        y = do_non_metric_MDS$points[,2],
+        col = do_kmeans$cluster,
+        labels = customer_data$id  
+      )
+  points( x = do_kmeans$centers[,1],
+          y = do_kmeans$centers[,2],
+          col = 1:k,
+          pch = "X"
+        )
+
+kable(customer_data)
+  
+
+summary( customer_data[do_kmeans$cluster==1,] ) 
+summary( customer_data[do_kmeans$cluster==2,] ) 
+summary( customer_data[do_kmeans$cluster==3,] ) 
+summary( customer_data[do_kmeans$cluster==4,] ) 
+summary( customer_data[do_kmeans$cluster==5,] ) 
+  
+# create actual relationships between the variables and see what happens
+# i.e. create clusters
+
+
+```
+
+Let's try find weights which create 4 clear clusters in the data:
+
+```{r optim_gower_weights_4k}
+
+k <- 4      # number of kmeans centres 
+
+function_to_minimise <- function( par     # vector of 5 weights  
+                                ){
+  
+  # get distance matrix:
+  dist_matrix <-
+      cluster::daisy( x = customer_data[,-1],  # daisy does the normalization of numeric variables for us
+                      metric = "gower",
+                      weights = par
+                    )
+  
+  # do MDS:
+  do_non_metric_MDS <- MASS::isoMDS( dist_matrix,
+                                     k=2 # return 2 dimensions
+                                   )
+  
+  # get MDS co-ordinates:
+  MDS_coords <- do_non_metric_MDS$points
+  
+  # do k-means:
+  do_kmeans <- kmeans( MDS_coords, centers=k )
+  # plot( x = do_non_metric_MDS$points[,1],
+  #       y = do_non_metric_MDS$points[,2],
+  #       col = do_kmeans$cluster
+  #     )
+  # points( x = do_kmeans$centers[,1],
+  #         y = do_kmeans$centers[,2],
+  #         col = 1:3,
+  #         pch = "X"
+  #       )
+  
+  return(do_kmeans$tot.withinss)
+  
+}
+
+do_the_optim <- 
+    optim( par = c(1,1,1,1,1),
+           fn = function_to_minimise 
+          )
+
+final_weights <- do_the_optim$par
+
+  # get distance matrix:
+  dist_matrix <-
+      cluster::daisy( x = customer_data[,-1],  # daisy does the normalization of numeric variables for us
+                      metric = "gower",
+                      weights = final_weights
+                    )
+
+  # do MDS:
+  do_non_metric_MDS <- MASS::isoMDS( dist_matrix,
+                                     k=2 # return 2 dimensions
+                                   )
+  
+  # get MDS co-ordinates:
+  MDS_coords <- do_non_metric_MDS$points
+  
+  # do k-means:
+  do_kmeans <- kmeans( MDS_coords, centers=k )
+  plot( x = do_non_metric_MDS$points[,1],
+        y = do_non_metric_MDS$points[,2],
+        col = do_kmeans$cluster,
+        type = "n",
+        xlab = "Dim.1",
+        ylab = "Dim.2"
+      )
+  text( x = do_non_metric_MDS$points[,1],
+        y = do_non_metric_MDS$points[,2],
+        col = do_kmeans$cluster,
+        labels = customer_data$id  
+      )
+  points( x = do_kmeans$centers[,1],
+          y = do_kmeans$centers[,2],
+          col = 1:k,
+          pch = "X"
+        )
+
+kable(customer_data)
+  
+
+summary( customer_data[do_kmeans$cluster==1,] ) 
+summary( customer_data[do_kmeans$cluster==2,] ) 
+summary( customer_data[do_kmeans$cluster==3,] ) 
+summary( customer_data[do_kmeans$cluster==4,] ) 
+summary( customer_data[do_kmeans$cluster==5,] ) 
+  
+# create actual relationships between the variables and see what happens
+# i.e. create clusters
+
+
+```
+
+Let's try find weights which create 5 clear clusters in the data:
+
+```{r optim_gower_weights5}
+
+k <- 5      # number of kmeans centres 
+
+function_to_minimise <- function( par     # vector of 5 weights  
+                                ){
+  
+  # get distance matrix:
+  dist_matrix <-
+      cluster::daisy( x = customer_data[,-1],  # daisy does the normalization of numeric variables for us
+                      metric = "gower",
+                      weights = par
+                    )
+  
+  # do MDS:
+  do_non_metric_MDS <- MASS::isoMDS( dist_matrix,
+                                     k=2 # return 2 dimensions
+                                   )
+  
+  # get MDS co-ordinates:
+  MDS_coords <- do_non_metric_MDS$points
+  
+  # do k-means:
+  do_kmeans <- kmeans( MDS_coords, centers=k )
+  # plot( x = do_non_metric_MDS$points[,1],
+  #       y = do_non_metric_MDS$points[,2],
+  #       col = do_kmeans$cluster
+  #     )
+  # points( x = do_kmeans$centers[,1],
+  #         y = do_kmeans$centers[,2],
+  #         col = 1:3,
+  #         pch = "X"
+  #       )
+  
+  return(do_kmeans$tot.withinss)
+  
+}
+
+do_the_optim <- 
+    optim( par = c(1,1,1,1,1),
+           fn = function_to_minimise 
+          )
+
+final_weights <- do_the_optim$par
+
+  # get distance matrix:
+  dist_matrix <-
+      cluster::daisy( x = customer_data[,-1],  # daisy does the normalization of numeric variables for us
+                      metric = "gower",
+                      weights = final_weights
+                    )
+
+  # do MDS:
+  do_non_metric_MDS <- MASS::isoMDS( dist_matrix,
+                                     k=2 # return 2 dimensions
+                                   )
+  
+  # get MDS co-ordinates:
+  MDS_coords <- do_non_metric_MDS$points
+  
+  # do k-means:
+  do_kmeans <- kmeans( MDS_coords, centers=k )
+  plot( x = do_non_metric_MDS$points[,1],
+        y = do_non_metric_MDS$points[,2],
+        col = do_kmeans$cluster,
+        type = "n",
+        xlab = "Dim.1",
+        ylab = "Dim.2"
+      )
+  text( x = do_non_metric_MDS$points[,1],
+        y = do_non_metric_MDS$points[,2],
+        col = do_kmeans$cluster,
+        labels = customer_data$id  
+      )
+  points( x = do_kmeans$centers[,1],
+          y = do_kmeans$centers[,2],
+          col = 1:k,
+          pch = "X"
+        )
+
+kable(customer_data)
+  
+
+summary( customer_data[do_kmeans$cluster==1,] ) 
+summary( customer_data[do_kmeans$cluster==2,] ) 
+summary( customer_data[do_kmeans$cluster==3,] ) 
+summary( customer_data[do_kmeans$cluster==4,] ) 
+summary( customer_data[do_kmeans$cluster==5,] ) 
+  
+# create actual relationships between the variables and see what happens
+# i.e. create clusters
+
+
+```
+
+Resoures: 
+http://www.cef.ulaval.ca/uploads/Membres/PavoineEtal2009.pdf
+http://members.cbio.mines-paristech.fr/~jvert/svn/bibli/local/Gower1971general.pdf
+https://www.statmethods.net/advstats/mds.html
+https://dc.etsu.edu/cgi/viewcontent.cgi?article=4915&context=etd

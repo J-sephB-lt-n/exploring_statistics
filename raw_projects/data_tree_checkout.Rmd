@@ -1,0 +1,481 @@
+---
+title: "Hierarchical Data: the data.tree package in R"
+author: "Joseph Bolton"
+date: "18 December 2019"
+output:
+  html_document:
+    df_print: paged
+    theme: darkly
+    highlight: espresso
+---
+
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 7px;
+text-align: center;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+<pre style="font-size: 14px; font-family: &quot;Ubuntu Mono&quot;; background-color: rgb(0,0,0); color: rgb(255,255,255); line-height: 8px;">7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777
+7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777
+7777777777777777777777777777777777777777777777777477777717777777777777777777777777777777777777777777
+7777777777777777777777777777777227777777774534175527771552777777132177727777777777777777777777777777
+7777777777777777777777771177775537777777777224313325274443145527165512567777777777777777777777777777
+7777777777777777777777772532775422221777777777712322771432234177771113323715534777777777777777777777
+7777777777777777777777771343471253557713477134154294777234355271447714722124217777777777777777777777
+7777777777777777777777777124424333417715511455235210416477122775537771323455547777777777777777777777
+7777777777777777777712173553134777772331245222771172802714115522411117567711122177777777777777777777
+7777777777777777777775434222126715115547165574535351097265275323465317527772553125577777777777777777
+7777777777777777777771455215276515572444436279111716081132771536122771033217221255377777777777777777
+7777777777777777777777712214311662142135421360917772882711434139112710527237455224343531777777777777
+7777777777777777777777243324339688502341154172606272882513341771057204422531724422334217777777777777
+7777777777777777777723417151144114086177733324573843889435354177405021552433542325332777777777777777
+7777777777777777777771221357714177740862712442242488894243441777685152124722233772435377777777777777
+7777777777777777777723341442233569966888641754332788813571227716927735144723517777777777777777777777
+7777777777777777777713411434172532224360888682777288522125311504777772505951777777777777777777777777
+7777777777777777134442233145412132723772350809177080112252368855556600542777777777777777777777777777
+7777777777777777714444142174537165214224422398043885136888654222222456621553177777777777777777777777
+7777777777777777777243246426541243333342224508888880888621777777772553254712217777777777777777777777
+7777777777777777773553273211126517437777777715888888861777777777777114242245353177777777777777777777
+7777777777777777772217777777711714327777777777488888377777777777777723342244211777777777777777777777
+7777777777777777777777777777777777777777777777788885777777777777777715317135577777777777777777777777
+7777777777777777777777777777777777777777777777788882777777777777777777777772317777777777777777777777
+7777777777777777777777777777777777777777777777788881777777777777777777777777777777777777777777777777
+7777777777777777777777777777777777777777777777188881777777777777777777777777777777777777777777777777
+7777777777777777777777777777777777777777777777188882777777777777777777777777777777777777777777777777
+7777777777777777777777777777777777777777777777288883777777777777777777777777777777777777777777777777
+7777777777777777777777777777777777777777777777388886777777777777777777777777777777777777777777777777
+7777777777777777777777777777777777777777777777688888177777777777777777777777777777777777777777777777
+7777777777777777777777777777777777777777777772888888617777777777777777777777777777777777777777777777
+7777777777777777777777777777777777777777124440888888886322117777777777777777777777777777777777777777
+7777777777777777777777777777777711222455668888888888880900000064177777777777777777177777777777777777
+7777777777777777777777777771355606342217395468888880088932777123665553434177777774277777777777777777
+7777777777777777777712112553272317777245277209886588230806669542177723471455333531777777777777777777
+7777777777777777777771555277122245565947771601089758021660954112533177177774517777777777777777777777
+7777777777777777777711777777777263277571222357288210804157145964727217777777277777777777777777777777
+7777777777777777777777777777774677771412771037738974458427777164627777777777777777777777777777777777
+7777777777777777777777777772459177772777719657728812575017777147163227777777777777777777777777777777
+7777777777777777777777777771447777777777392137150813174054777777715112177777777777777777777777777777
+7777777777777777777777777111777777777726477124448621776572517777771047777777777777777777777777777777
+7777777777777777777777777777777777777501777747108277718577727777777252217777777777777777777777777777
+7777777777777777777777777777777777776337777177980777264077777777777723177777777777777777777777777777
+7777777777777777777777777777777777744227777774856177157337777777777777227777777777777777777777777777
+7777777777777777777777777777777777757717777710822577247745177777777777771777777777777777777777777777
+7777777777777777777777777777777777227777777155817577227772617777777777777777777777777777777777777777
+7777777777777777777777777777777777117777777542817477717777267777777777777777777777777777777777777777
+7777777777777777777777777777777777777777772417047177777777762777777777777777777777777777777777777777
+7777777777777777777777777777777777777777771277897777777777732777777777777777777777777777777777777777
+7777777777777777777777777777777777777777772777654777777777751777777777777777777777777777777777777777
+7777777777777777777777777777777777777777777777375177777777117777777777777777777777777777777777777777
+7777777777777777777777777777777777777777777777477377777777777777777777777777777777777777777777777777
+7777777777777777777777777777777777777777777777777147777777777777777777777777777777777777777777777777
+7777777777777777777777777777777777777777777777777747777777777777777777777777777777777777777777777777
+7777777777777777777777777777777777777777777777777717777777777777777777777777777777777777777777777777
+7777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777777</pre>
+
+<!-- set style back to normal -->
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 14px;
+text-align: left;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+
+This post is a brief exploration of the functionality of the **data.tree** package, which is used for working with data that has a hierarchical structure.  
+
+Here is my setup, with the packages that I've used: 
+
+```{r setup, warning=FALSE, message=FALSE, results='hide'}
+library(tidyverse)
+library(data.tree)
+library(treemap)      # for the dataset GNI2014
+library(DiagrammeR)   # for nice plots of the trees
+library(RColorBrewer)
+library(igraph)
+library(networkD3)
+library(RColorBrewer)
+
+# change formatting of code output:
+knitr::opts_chunk$set(
+  class.output  = "bg-primary",
+  class.message = "bg-info text-info",
+  class.warning = "bg-warning text-warning",
+  class.error   = "bg-danger text-danger"
+)
+```
+
+# Resources
+
+To make this post, I've extracted the examples and bits of information that were most useful to me from the following two sources:
+
+* https://cran.r-project.org/web/packages/data.tree/vignettes/data.tree.html
+
+* https://cran.r-project.org/web/packages/data.tree/vignettes/applications.html
+
+These resources are clear and thorough, and I couldn't recommend them more highly. 
+
+# Creating a data.tree from scratch
+
+First, we create a **data.tree** structure from scratch.
+
+This example comes from https://cran.r-project.org/web/packages/data.tree/vignettes/data.tree.html
+
+Create the root node:
+```{r}
+acme <- Node$new("Acme Inc.")
+acme
+```
+
+Create 3 children of the root node:
+(accounting, research and IT)
+```{r}
+accounting <- acme$AddChild("Accounting")
+research <- acme$AddChild("Research")
+it <- acme$AddChild("IT")
+
+acme %>% 
+  as.data.frame() %>% 
+  as.matrix() %>% 
+  print(quote=FALSE)
+```
+
+Give the **accounting** node 2 children:
+```{r}
+software <- accounting$AddChild("New Software")
+standards <- accounting$AddChild("New Accounting Standards")
+
+acme %>% 
+  as.data.frame() %>% 
+  as.matrix() %>% 
+  print(quote=FALSE) 
+```
+
+Give the **Research** node 2 children:
+```{r}
+newProductLine <- research$AddChild("New Product Line")
+newLabs <- research$AddChild("New Labs")
+
+acme %>% 
+  as.data.frame() %>% 
+  as.matrix() %>% 
+  print(quote=FALSE) 
+```
+
+Give the **IT** node 3 children:
+```{r}
+outsource <- it$AddChild("Outsource")
+agile <- it$AddChild("Go agile")
+goToR <- it$AddChild("Switch to R")
+
+acme %>% 
+  as.data.frame() %>% 
+  as.matrix() %>% 
+  print(quote=FALSE) 
+```
+
+# Climbing the tree
+We can consider only the **IT** branch of the tree:
+```{r}
+acme$IT %>% 
+  as.data.frame() %>% 
+  as.matrix() %>% 
+  print(quote=FALSE) 
+```
+
+We can consider only the '**Switch to R**' branch of the **IT** branch of the tree:
+```{r}
+acme$IT$`Switch to R` %>% 
+  as.data.frame() %>% 
+  as.matrix() %>% 
+  print(quote=FALSE) 
+```
+
+The children nodes of a node can be accessed using the syntax *.$children[[i]]*:
+```{r}
+acme$children[[1]] %>% 
+  as.data.frame() %>% 
+  as.matrix() %>% 
+  print(quote=FALSE) 
+
+acme$children[[2]] %>% 
+  as.data.frame() %>% 
+  as.matrix() %>% 
+  print(quote=FALSE) 
+
+acme$children[[1]]$children[[2]]   # i.e. show the 2nd child (New Accounting Standards) of the 2nd child (Accounting)
+```
+
+Now, we add values (*cost* and *probability*) to the leaves of the tree (the *leaves* are the terminal nodes):
+
+```{r}
+acme$Accounting$`New Software`$cost <- 1000000
+acme$Accounting$`New Accounting Standards`$cost <- 500000
+acme$Research$`New Product Line`$cost <- 2000000
+acme$Research$`New Labs`$cost <- 750000
+acme$IT$Outsource$cost <- 400000
+acme$IT$`Go agile`$cost <- 250000
+acme$IT$`Switch to R`$cost <- 50000
+acme$Accounting$`New Software`$p <- 0.5
+acme$Accounting$`New Accounting Standards`$p <- 0.75
+acme$Research$`New Product Line`$p <- 0.25
+acme$Research$`New Labs`$p <- 0.9
+acme$IT$Outsource$p <- 0.2
+acme$IT$`Go agile`$p <- 0.05
+acme$IT$`Switch to R`$p <- 1
+
+print(acme, "cost", "p")
+```
+
+We can use a recursive function, applied to each node, to sum the cost for each node across all of it's children:
+```{r}
+# define the cost-summing function:
+cost_ftn <- 
+  function(node)
+  {
+      result <- node$cost
+      if(length(result) == 0) result <- sum( sapply( node$children, cost_ftn) )
+      return (result)
+  }
+
+# apply the function to all of the nodes:
+acme$Do( 
+         function(node)
+          {
+            node$sum_cost <- cost_ftn(node)
+          },
+         
+         filterFun = isNotLeaf    # don't apply the function to the leaves
+                                  # this is a built-in function, but we can supply any function here, including one we've created
+       )
+
+print(acme, "cost", "sum_cost")
+
+acme$Do( 
+         function(node)
+          {
+            node$cost_all <- cost_ftn(node)
+          }
+       )
+
+print(acme, "cost", "sum_cost", "cost_all")
+```
+
+# Plotting
+
+See https://graphviz.gitlab.io/_pages/doc/info/attrs.html for more information on the styling of *data.tree* plots. 
+
+See also http://www.bioconductor.org/packages/release/bioc/vignettes/Rgraphviz/inst/doc/newRgraphvizInterface.pdf.
+
+Plotting of *data.tree* objects using the *plot()* function in R calls the *render_graph()* function from the *DiagrammeR* package. 
+
+Run *?DiagrammeR::render_graph* in console for more information. 
+
+Here are some example plots of our tree:
+```{r}
+SetGraphStyle( acme, 
+               bgcolor = "black"    # make the treeplot have a black background
+              )
+SetNodeStyle( acme,
+              fontcolor = "white",    # make text in nodes to white
+              color = "white"         # make node outlines white
+            )
+SetEdgeStyle( acme,
+              color = "white"        # make edges (arrows) white
+            )
+
+plot( acme, 
+      width = 900    # specify width in pixels  
+    )
+plot( acme, 
+      layout = "nicely"
+    )
+plot( acme, layout = "fr" )
+```
+
+We can closely control the text appearing inside the nodes using a custom function. This could just as easily be done for text on edges too. We put on each node the total cost across all of it's children: 
+```{r}
+GetNodeLabel <- function(node)
+                {
+                  paste0( node$name,
+                          "\n",
+                          "$ ",
+                          format(node$cost_all, scientific = FALSE, big.mark = ",")
+                        )
+                }
+                 
+print( acme, "cost", "sum_cost", "cost_all" )
+
+SetNodeStyle( acme, 
+              label = GetNodeLabel,
+              fontname = "helvetica", 
+              fontcolor = "white",    # make text in nodes to white
+              color = "white"         # make node outlines white
+            )
+
+plot( acme,
+      width = 900  
+    )
+```
+
+We can change the direction/orientation with the *rankdir* argument:
+```{r}
+SetGraphStyle( acme, 
+               bgcolor = "black",    # make the treeplot have a black background
+              rankdir = "LR" 
+             )
+plot( acme )
+```
+
+Here is an example where we create a function to dynamically choose the border colour of each node according to the cost:
+```{r}
+
+# this command displays all of the palette options in RColorBrewer:
+# display.brewer.all()
+
+# get a list of all of the cost values in the whole tree:
+all_cost_values <- acme$Get('cost_all', traversal = "post-order")
+all_cost_values
+
+# define the chosen palette:
+define_colours <- brewer.pal(9, "Blues")
+define_palette <- colorRampPalette( define_colours )  
+
+# rank the cost values:
+col_order <- findInterval( all_cost_values, sort(all_cost_values) )
+
+# define the function which returns the colour, given a cost value:
+get_node_colour_ftn <- function(node)
+                       {
+                         define_palette( length(all_cost_values) )[ col_order[ which(all_cost_values==node$cost_all) ] ]  
+                       }
+
+SetNodeStyle( acme, 
+              label = GetNodeLabel,
+              color = get_node_colour_ftn,
+              penwidth = 5,
+              fontname = "helvetica", 
+              fontcolor = "white",    # make text in nodes to white
+              color = "white"         # make node outlines white
+            )
+
+plot( acme )
+```
+
+Here are some alternative ways to plot the data using other packages:
+```{r}
+plot(as.igraph(acme, directed = TRUE, direction = "climb"))
+
+# Simple network diagram:
+acmeNetwork <- ToDataFrameNetwork(acme, "name")
+simpleNetwork(acmeNetwork[-3], fontSize = 12)
+
+# Radial Network diagram:
+useRtreeList <- ToListExplicit( acme, unname = TRUE )
+radialNetwork( useRtreeList )
+```
+
+# Converting a data.tree to an R data.frame or list
+In order to do predictive modelling or analysis, it is useful to be able to convert the information in the *data.tree* structure to an R data.frame or list.
+
+What follows below are a few different ways to do this:
+
+```{r}
+ToDataFrameTree(acme, "level", "cost", "p")
+```
+
+```{r}
+ToDataFrameTable(acme, "pathString", "cost", "p")
+```
+
+Another way is:
+```{r}
+ToDataFrameNetwork(acme, "cost", "p")
+```
+
+Another way is:
+```{r}
+ToDataFrameTypeCol(acme, "cost", "p")
+```
+
+..or the *data.tree* can be converted to a nested list:
+```{r}
+as.list(acme) %>% str()
+```
+
+# Labelling the levels of the tree
+```{r}
+acme
+```
+
+add 2 children to the Outsource node (Outsource is a child of IT):
+```{r}
+acme$IT$Outsource$AddChild("India")
+acme$IT$Outsource$AddChild("Poland")
+
+acme
+```
+
+iterate through the nodes in the acme tree, 
+```{r}
+
+extract_levels <- acme$Get( "level", traversal="pre-order")
+extract_levels
+
+acme$Set( type = case_when( extract_levels==1 ~ "company (root)",
+                            extract_levels==2 ~ "department",
+                            extract_levels==3 ~ "project",
+                            extract_levels==4 ~ "outsource_country",
+                            TRUE ~ "error"
+                          )
+)
+
+print( acme, "level", "type", "cost" )
+```
+
+There are many ways to filter, prune and aggregate data.trees (see https://cran.r-project.org/web/packages/data.tree/vignettes/data.tree.html).
+
+# creating a **data.tree** from a data.frame
+```{r}
+# this code taken from https://cran.r-project.org/web/packages/data.tree/vignettes/data.tree.html
+data(GNI2014)
+head(GNI2014)
+```
+
+We specify the tree structure by creating a column called *pathString*:
+```{r}
+GNI2014$pathString <- paste( "world", 
+                             GNI2014$continent, 
+                             GNI2014$country, 
+                             sep = "/"
+                           )
+
+GNI2014 %>% select( pathString, continent, country ) %>% head(10) %>% knitr::kable()
+```
+
+```{r}
+population <- as.Node(GNI2014)
+
+print(population, "iso3", "population", "GNI", limit = 20)   
+
+# see ?FromDataFrameTable for more details 
+```
+
+Showcasing some tree-viewing options:
+```{r}
+print( population )
+print( population, limit = 8 )    # print top 8 rows 
+print( population, limit = 4 )    # print top 4 rows 
+
+```
+
+
+
+
+

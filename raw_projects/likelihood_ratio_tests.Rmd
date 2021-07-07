@@ -1,0 +1,230 @@
+---
+title: "Likelihood Ratio Tests: Developing Intuition via Simulation"
+output: html_notebook
+---
+
+```{r setup}
+library(tidyverse)
+```
+
+Suppose that we have a univariate random variable $Y$ with the distribution $f(y|\theta)$, where $\theta$ is a vector containing the parameters of the distribution function $f()$.  
+
+If we consider the function $f()$ to be a function of the parameters $\theta$ rather than of the data $y$, then we call $f()$ the *likelihood function* $\mathcal{L}(\theta|y)$
+
+The *maximum likelihood estimators* of the parameters $\theta$ are the values of $\theta$ which maximise the value of $\mathcal{L}(\theta|y)$. Out of all possible parameter values, these are the parameters which are the *most likely* to have generated our particular observed data $y$. 
+
+The *Likelihood-Ratio test statistic* $-2\cdot ln(LR)$ is 
+
+$$\begin{array}{lcl} -2\cdot ln(LR) &=& -2\cdot ln\Bigg(\displaystyle\frac{\mathcal{L}(\hat\theta_r|y)}{\mathcal{L}(\hat\theta|y)}\Bigg) \\
+&=& -2\Bigg[ ln\Big(\mathcal{L}(\hat\theta_r|y)\Big) - ln\Big(\mathcal{L}(\hat\theta|y)\Big)\Bigg]  \\
+\end{array}$$
+
+where $\hat\theta$ is the maximum-likelihood estimator of $\theta$ (i.e. the value of $\hat\theta$ maximising $\mathcal{L}(\hat\theta|y)$) and $\hat\theta_r$   
+
+$$y_i \quad=\quad \begin{cases} 1 \quad \text{ if diseased patient has died} \\
+0 \quad \text{ if diseased patient lived} \\
+\end{cases}$$
+
+Each $y_i$ is an independent random draw from a Bernoulli distribution $Y_i\sim Bernoulli\Big(p_i\Big)$
+
+The true data-generating process is:
+
+$$\begin{array}{lcl}
+Pr\Big[Y_i=1\Big] 
+&=& E\Big[Y_i\Big] \\
+&=& 0.2 \cdot \Big(1 \cdot \mathbb{I}_{\{\}}\Big)
+\end{array}$$
+
+```{r}
+simdata_ftn <- function(n){
+  
+  patient_id <- 1:n
+  baseline_prob <- rep(0.1, n)
+  gender <- sample( c("male","female"), size=n, replace=TRUE )
+  age <- round( abs( rnorm( n=n, mean=30, sd=20 ) ) +1 )
+  bmi <- sample( 5:35, size=n, replace=TRUE )
+  
+  disease_prob <- 
+    baseline_prob *
+      if_else( gender=="male", 1.5, 1 ) *
+      (1+age/50)
+  
+  disease_outcome <- sapply( disease_prob, 
+                             function(p){ sample( 0:1, size=1, prob=c(1-p,p) ) }  
+                           )
+  
+  tibble( patient_id = patient_id,
+          baseline_prob = baseline_prob,
+          gender = gender,
+          age = age,
+          bmi = bmi,
+          disease_prob = disease_prob,
+          disease_outcome = disease_outcome
+        ) %>% 
+    return(.)
+    
+}
+```
+
+```{r}
+# true_coefs <- list()
+# true_coefs$intercept <- -5
+# true_coefs$gender <- 0.5
+# true_coefs$age <- 0.12
+# true_coefs$bmi <- 0
+
+simdata_nicedata_ftn <- function(n, true_coefs){
+  
+  patient_id <- 1:n
+  gender <- sample( c("male","female"), size=n, replace=TRUE )
+  age <- round( abs( rnorm( n=n, mean=30, sd=20 ) ) +1 )
+  bmi <- sample( 5:35, size=n, replace=TRUE )
+  
+  eta <- rep(true_coefs$intercept, n) +
+         true_coefs$gender*(gender=="male") +
+         true_coefs$age*age
+    
+  disease_prob <- 1 / (1+exp(-eta) ) 
+
+    # hist(disease_prob)
+  # plot( age ~ disease_prob )
+  # plot( factor(gender)~disease_prob )
+  # 
+  
+  disease_outcome <- sapply( disease_prob, 
+                             function(p){ sample( 0:1, size=1, prob=c(1-p,p) ) }  
+                           )
+  
+  tibble( patient_id = patient_id,
+          gender = gender,
+          age = age,
+          bmi = bmi,
+          disease_prob = disease_prob,
+          disease_outcome = disease_outcome
+        ) %>% 
+    return(.)
+    
+}
+```
+
+test out the data-simulating function:
+```{r}
+simdata_ftn(n=100)
+```
+
+```{r}
+n_sims <- 100
+
+store_beta_coef_estimates <- matrix( rep(NA,n_sims*4),ncol=4 )
+colnames(store_beta_coef_estimates) <- c("[intercept]","gender","age","bmi")
+store_beta_coef_SE_estimates <- store_beta_coef_estimates 
+
+store_logLR_stat <- rep(NA, n_sims) 
+
+true_coefs <- list()
+true_coefs$intercept <- -5
+true_coefs$gender <- 0.5
+true_coefs$age <- 0.12
+true_coefs$bmi <- 0
+
+for( i in 1:n_sims ){
+  
+  generate_data <- simdata_nicedata_ftn(n=200, true_coefs=true_coefs)
+  
+  fit_glm_with_bmi <- glm( disease_outcome ~ gender + age + bmi,
+                                   family = binomial(link="logit"),
+                                   data = generate_data   
+                                 )
+  fit_glm_wout_bmi <- glm( disease_outcome ~ gender + age,
+                           family = binomial(link="logit"),
+                           data = generate_data   
+                         )
+  
+  store_beta_coef_estimates[i, ] <- coef(fit_glm_with_bmi)
+  store_beta_coef_SE_estimates[i, ] <- summary(fit_glm_with_bmi)[["coefficients"]][,"Std. Error"]
+
+  y <- generate_data$disease_outcome
+  # glm with bmi:
+  pi_hat <- predict(fit_glm_with_bmi, type="response") 
+  loglik_glm_with_bmi <- sum( y * log(pi_hat) + (1-y)*log(1-pi_hat) )  # same as logLik(fit_glm_with_bmi)  
+  # glm without bmi:
+  pi_hat <- predict(fit_glm_wout_bmi, type="response") 
+  loglik_glm_wout_bmi <- sum( y * log(pi_hat) + (1-y)*log(1-pi_hat) )  # same as logLik(fit_glm_wout_bmi)  
+
+  store_logLR_stat[i] <- -2 * (loglik_glm_wout_bmi - loglik_glm_with_bmi) 
+}
+
+
+```
+
+The true distribution of the *Likelihood-Ratio test statistic* $-2\cdot ln(LR)$ over all of the simulations is:
+```{r}
+hist(store_logLR_stat, breaks=50, freq=FALSE)
+curve( dchisq(x, df=1), col=2, add=TRUE )
+```
+
+The (true) distributions of the beta coefficients are:
+```{r}
+
+for( col_j in 1:ncol(store_beta_coef_estimates) ){
+  
+  hist( store_beta_coef_estimates[,col_j], 
+          freq = FALSE, 
+        breaks = 50,
+          main = colnames(store_beta_coef_estimates)[col_j]
+      )
+  curve( dnorm(    x = x, 
+                 mean = mean(store_beta_coef_estimates[,col_j]),
+                   sd = sd(store_beta_coef_estimates[,col_j])
+               ),
+          add = TRUE,
+          col = 2
+        )
+}
+
+```
+
+Suppose, though, that the data follows some other true distribution $g(y|\theta)$ as follows:
+
+$$g(y|\theta) \quad=\quad dothisjoe$$
+```{r eval=FALSE}
+
+n_sims <- 100
+
+store_beta_coef_estimates <- matrix( rep(NA,n_sims*4),ncol=4 )
+colnames(store_beta_coef_estimates) <- c("[intercept]","gender","age","bmi")
+store_beta_coef_SE_estimates <- store_beta_coef_estimates 
+
+store_logLR_stat <- rep(NA, n_sims) 
+
+for( i in 1:n_sims ){
+  
+  generate_data <- simdata_ftn(n=200)
+  
+  fit_glm_with_bmi <- glm( disease_outcome ~ gender + age + bmi,
+                                   family = binomial(link="logit"),
+                                   data = generate_data   
+                                 )
+  fit_glm_wout_bmi <- glm( disease_outcome ~ gender + age,
+                           family = binomial(link="logit"),
+                           data = generate_data   
+                         )
+  
+  store_beta_coef_estimates[i, ] <- coef(fit_glm_with_bmi)
+  store_beta_coef_SE_estimates[i, ] <- summary(fit_glm_with_bmi)[["coefficients"]][,"Std. Error"]
+
+  y <- generate_data$disease_outcome
+  # glm with bmi:
+  pi_hat <- predict(fit_glm_with_bmi, type="response") 
+  loglik_glm_with_bmi <- sum( y * log(pi_hat) + (1-y)*log(1-pi_hat) )  # same as logLik(fit_glm_with_bmi)  
+  # glm without bmi:
+  pi_hat <- predict(fit_glm_wout_bmi, type="response") 
+  loglik_glm_wout_bmi <- sum( y * log(pi_hat) + (1-y)*log(1-pi_hat) )  # same as logLik(fit_glm_wout_bmi)  
+
+  store_logLR_stat[i] <- -2 * (loglik_glm_wout_bmi - loglik_glm_with_bmi) 
+}
+```
+
+# References
+
+1. http://nitro.biosci.arizona.edu/courses/EEB519A-2007/pdfs/MLE.pdf

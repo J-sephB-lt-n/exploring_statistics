@@ -1,0 +1,19 @@
+---
+title: "Graph-Based Recommenders & Node2Vec"
+author: "Joseph Bolton"
+output: html_notebook
+---
+
+import R libraries:
+```{r}
+library(tidyverse)
+library(reticulate)
+
+reticulate::py_discover_config()
+```
+
+import python libraries:
+```{python}
+2 + 2
+```
+

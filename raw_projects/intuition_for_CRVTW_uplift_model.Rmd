@@ -1,0 +1,263 @@
+---
+title: "Intuition for the CRVTW uplift model"
+author: "Joseph Bolton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    df_print: paged
+    theme: darkly
+    highlight: espresso
+---
+
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 7px;
+text-align: center;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+<pre style="font-size: 10px; font-family: &quot;Ubuntu Mono&quot;; background-color: rgb(0,0,0); color: rgb(250,250,250); line-height: 10px;">......................................................................
+......................................................................
+..............................$$$.....................................
+...................................$$$$...............................
+.................................$$$$$$$..............................
+.................................$$$$$$$$.............................
+..................................$$$$$$..............................
+.........................$$$$$........................................
+........................$$$$$$$.......................................
+.........................$$$$$$.....$$$...............................
+.......................................$$$............................
+......................................$$$$$...........................
+.................................$$$..$$$$$...........................
+......................................................................
+............................$$$$$....$................................
+............................$$$$......................................
+......................................................................
+..........................$$$$$$$$$$$$$$$$............................
+........................$$................$$..........................
+........................$$.................$$.........................
+.........................$$..............$$$..........................
+..........................$...........$..$$...........................
+..........................$...........$..$$...........................
+..........................$..............$$...........................
+..........................$..............$$...........................
+..........................$..............$$...........................
+..........................$.....$$$$.....$$...........................
+..........................$.....$$$$$....$$...........................
+..........................$......$$......$$...........................
+..........................$..............$$...........................
+..........................$..............$$...........................
+.........................$$...............$$..........................
+........................$............$.....$$.........................
+......................$$...........$$$$$....$$........................
+.....................$$.............$$$$......$$......................
+....................$$.........................$$.....................
+..................$$............................$$....................
+.................$$..$$$$$$$$$$..$$$$$$$.....$$$..$$..................
+................$$..$$$$$$$$$$$.$$$$$$$$......$$$..$$.................
+..............$$..$$$$$$$$$$$$$$$$$$$$$$......$$$$...$................
+.............$$..$$$$$$$$$$$$$$$...$$$$$$...$$$$$$$$..$$..............
+............$...$$$$$$$$$$$$$$$$$.$$$$$$$$$$$$$$$$$$$..$$.............
+..........$$..$$$$$$$$$$$$$$$$$$$$$$$....$$$$$$$$$$$$$...$$...........
+.........$$..$$$$$$$$$$$$$$$$$$...$$$....$$$$$$$$$$$$$$$..$$..........
+........$$..$$$$$$$$$$$$$$$$$$$..$$$$$$$$$$$$$$$$$$$$$$$$..$$.........
+......$$...$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$...$$.......
+.....$$..$$$$$$$$$$$$$$$$$$$$$$$$..$$$$$$$$$$$$$$$$$$$$$$$$$..$$......
+....$$..$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$..$$.....
+....$..$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$..$.....
+....$..$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$..$.....
+.....$.........................................................$$.....
+......$$$...................................................$$$.......
+..........$.$..........................................$$$$...........
+......................................................................</pre>
+
+This page is a very brief intuitive introduction to the **Continuous Response
+Variable Transformation with Weightings** (CRVTW) uplift model discussed by the paper:
+
+"*Response Transformation and Profit Decomposition for Revenue Uplift Modeling*" 
+
+[Robin M. Gubela, Stefan Lessmann, Szymon Jaroszewicz. 2019]
+
+```{r setup, echo=FALSE}
+library(splines)
+```
+
+Consider the following data, in which we are interested in estimating how an administered treatment has affected outcome $y$ for units with different values of feature $x$. 
+
+```{r echo=FALSE, fig.width=8, fig.height=8}
+set.seed(9713)
+sample_size_n <- 1000
+y <- rexp( n=sample_size_n, rate=0.05 )
+x <- runif( n=sample_size_n, min=0, max=100 )
+treat_grp <- sample( 0:1, size=sample_size_n, replace=TRUE) 
+#treat_effect <- 
+  
+# plot( y ~ x, col=treat_grp+2, pch=16 )
+# legend( "topright",
+#         legend = c("control","treatment"),
+#         col = 2:3,
+#         pch = 16
+#       )
+# # true uplift:
+# lines( x = seq(0,100,0.1),
+#        y = dnorm( seq(0,100,0.1), mean=50, sd=10 )*1000
+#      )
+
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white")
+
+true_uplift_effect <- treat_grp*1000*dnorm(x, mean=50, sd=12) + rnorm( n=length(y), mean=0, sd=20 )  
+
+y <- y + true_uplift_effect     # add the true uplift effect
+
+y <- abs(y)       # make sure that spend can not be negative
+
+plot( y ~ x, col=treat_grp+2, pch=16 )
+legend( "topright",
+        legend = c("control group (untreated)","treated group"),
+        col = 2:3,
+        pch = 16,
+        box.col = "white"
+      )
+```
+
+There appears to be a treatment effect somewhere between $40<x<60$.
+
+We create the following transformed outcome variable:  
+
+$$z_i \quad=\quad \begin{cases} \hspace{3.5mm}\Bigg(\displaystyle\frac{n}{n_{treated}}\Bigg) \cdot y_i \quad \text{ if unit } i \text{ received treatment} \\ - \Bigg(\displaystyle\frac{n}{n_{control}}\Bigg) \cdot y_i \quad \text{ if unit } i \text{ did not receive treatment (control group)} \end{cases}$$
+
+Here is how this transformed outcome variable $z$ looks:
+
+```{r fig.height=8, fig.width=8, echo=FALSE}
+par( mfrow = c(2,1), mar=c(5,5,5,5),
+     bg="black", col="white", col.axis="white", col.lab="white", col.main="white"
+     )
+
+factor_treat1 <- length(treat_grp) / sum(treat_grp)
+factor_treat2 <- length(treat_grp) / sum(treat_grp==0)
+
+z_crvtw <- ifelse( treat_grp==1, factor_treat1, -factor_treat2 ) * y
+
+plot( y ~ x, col=treat_grp+2, pch=16, main="original data" )
+legend( "topright",
+        legend = c("control group","treated group"),
+        col = 2:3,
+        pch = 16,
+        box.col = "white"
+      )
+plot( z_crvtw ~ x, col=treat_grp+2, pch=16, main="transformed outcome [z]" )
+abline( h = 0 )
+legend( "topright",
+        legend = c("control group","treated group"),
+        col = 2:3,
+        pch = 16,
+        box.col = "white"
+      )
+```
+
+We fit a natural spline regression model to the transformed outcome $z$:
+
+```{r echo=FALSE, fig.height=8, fig.width=8}
+fit_lm_z <- lm( z ~ ns(x, df=6), 
+                data = data.frame( z = z_crvtw, x = x )
+              ) 
+  
+x_seq <- seq(0, 100, by=0.1 )
+
+par( mfrow = c(2,1), mar=c(5,5,5,5),
+     bg="black", col="white", col.axis="white", col.lab="white", col.main="white"
+     )
+
+plot( y ~ x, col=treat_grp+2, pch=16, main="original data" )
+legend( "topright",
+        legend = c("control group","treated group"),
+        col = 2:3,
+        pch = 16,
+        box.col = "white"
+      )
+plot( z_crvtw ~ x, col=treat_grp+2, pch=16, main="transformed outcome [z]" )
+abline( h = 0 )
+lines( x = x_seq,
+       y = predict( fit_lm_z, newdata = data.frame(x=x_seq) ),
+       col = 4,
+       lwd = 2
+     )
+legend( "topright",
+        legend = c("natural spline regression fit"),
+        col = 4,
+        lty = 1,
+        box.col = "white"
+      )
+```
+
+This fitted model gives an estimate of the Conditional Average Treatment Effect (*CATE*) $\space\tau(x)$ which, in a random sampling context, is: 
+
+$$\tau(x) \quad=\quad E\Big[Y_i\space\Bigl|X_i=x, \space\text{Treatment}=Yes\Big] \quad\mathbf{-}\quad E\Big[Y_i\space\Bigl|X_i=x, \space\text{Treatment}=No\Big]$$
+
+It does this since: 
+
+$$E\Big[Z_i\Bigl|X_i=x\Big] \quad=\quad E\Big[Y_i\space\Bigl|X_i=x, \space\text{Treatment}=Yes\Big] \quad\mathbf{-}\quad E\Big[Y_i\space\Bigl|X_i=x, \space\text{Treatment}=No\Big]$$
+
+Here is a comparison of the estimated uplift effect with the true uplift effect (I only know the true uplift effect because I simulated it): 
+
+```{r fig.height=10, fig.width=8, echo=FALSE}
+
+par( mfrow = c(2,1), mar=c(5,5,5,5),
+     bg="black", col="white", col.axis="white", col.lab="white", col.main="white"
+     )
+
+plot( y ~ x, col=treat_grp+2, pch=16, main = "original data" )
+legend( "topright",
+        legend = c("control group","treated group"),
+        col = 2:3,
+        pch = 16,
+        box.col="white"
+      )
+
+plot( z_crvtw ~ x, col=treat_grp+2, pch=16, main="transformed outcome Z (with estimated uplift signal)"
+    )
+abline( h = 0 )
+lines( x = x_seq,
+       y = predict( fit_lm_z, newdata = data.frame(x=x_seq) ),
+       col = 4,
+       lwd = 2
+     )
+legend( "topright",
+        legend = c("natural spline regression fit"),
+        col = 4,
+        lty = 1,
+        box.col="white"
+      )
+
+plot( y ~ x, col=treat_grp+2, pch=16, main = "original data (with estimated uplift signal)" )
+legend( "topright",
+        legend = c("natural spline regression fit"),
+        col = 4,
+        lty = 1,
+        box.col="white"
+      )
+lines( x = x_seq,
+       y = predict( fit_lm_z, newdata = data.frame(x=x_seq) ),
+       col = 4,
+       lwd = 2
+     )
+
+plot( y ~ x, col=treat_grp+2, pch=16,
+        main = "true uplift signal"
+      )
+legend( "topright",
+        legend = c("true uplift signal"),
+        col = "white",
+        lty = 1,
+        box.col="white",
+        lwd = 2
+      )
+# true uplift:
+lines( x = seq(0,100,0.1),
+       y = dnorm( seq(0,100,0.1), mean=50, sd=12 )*1000
+     )
+abline( h=0 )
+```

@@ -1,0 +1,1172 @@
+---
+title: "Beautiful Lesser-Known Visualisations in R"
+subtitle: Colour Palettes, Sankey Diagrams, Scatterplots with Marginal Density Plots, Gaussian Graphical Models, Ridge-line plots, Raincloud Plots, Scatterplot Matrices, Caterpillar Plots, Time Series Decomposition Plots, Heatmaps
+author: "Joseph Bolton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    df_print: paged
+    theme: darkly
+    highlight: espresso
+---
+
+```{r echo=FALSE}
+# change formatting of code output:
+knitr::opts_chunk$set(
+  class.output  = "bg-primary",
+  class.message = "bg-info text-info",
+  class.warning = "bg-warning text-warning",
+  class.error   = "bg-danger text-danger"
+)
+```
+
+I've put together here a little gallery of my favourite lesser-known visualisation methods in R. 
+
+Here are all of the packages that I'm going to use: 
+
+```{r setup, warning=FALSE, message=FALSE}
+library(tidyverse)
+
+library(patchwork)      # for arranging ggplots
+library(networkD3)    # package for making Sankey diagrams 
+library(ggalluvial)   # alternative package (addition to ggplot) for making Sankey diagrams
+library(ggpubr)       # for scatterplots with marginal density plots 
+library(ggridges)     # for Ridge-Line plots
+library(GGally)        # for making scatterplot matrices, caterpillar plots
+library(car)         # for making scatterplot matrices
+library(forecast)    # required for ggplot to plot stl() time-series decompositions
+
+library(RColorBrewer)   # for custom colour palettes
+
+# packages needed for Gaussian Graphical Models:
+library(correlation)
+library(see) 
+library(ggraph) 
+library(BayesFactor)
+```
+
+Note that I'm really scratching only the very surface of what each of these packages can do. All are worth exploring deeply in their own right. 
+
+All of the R code used to create these plots is available at the end of this page. 
+
+I also want to highlight the package **patchwork** which is *UNBELIEVABLE* for laying out multiple ggplots: see https://cran.r-project.org/web/packages/patchwork/vignettes/patchwork.html  
+
+# Longley's Economic Regression Data
+
+For some of the examples, I will use the dataset **Longley's Economic Regression Data**:
+
+```{r echo=FALSE}
+data(longley)
+longley <- as_tibble(longley)
+longley
+```
+
+# Colour Palettes in R
+First off, I want to mention that the package **RColorBrewer** contains the following predefined colour palettes: 
+
+```{r fig.width=10, fig.height=10}
+RColorBrewer::display.brewer.all()
+```
+
+For example, here are the first 7 colours of the **Dark2** palette used on a base R scatterplot:
+```{r}
+plot(    y = runif(7, 0, 100),
+         x = 1:7,
+       col = brewer.pal( n=7, name="Dark2"),
+       pch = 16,
+       cex = 2,
+      xlab = "x",
+      ylab = "y"
+    )
+```
+
+# Sankey Diagrams
+*Sankey diagrams* are nice for showing quantities flowing between different states (e.g. customers moving between different segments, or money between different entities). 
+
+Suppose that we wish to visualise the following data, consisting of customers moving between different activity definitions from one period to the next:
+
+```{r echo=FALSE}
+# create data for Sankey example:
+data_for_sankey <- 
+  bind_rows( 
+              tibble( group = "group 1", year = 1, segment = "inactive" ),
+              tibble( group = "group 1", year = 2, segment = "inactive" ),
+              tibble( group = "group 1", year = 3, segment = "active" ),
+               
+              tibble( group = "group 2", year = 1, segment = "inactive" ),
+              tibble( group = "group 2", year = 2, segment = "low activity" ),
+              tibble( group = "group 2", year = 3, segment = "inactive" ),
+              
+              tibble( group = "group 3", year = 1, segment = "active" ),
+              tibble( group = "group 3", year = 2, segment = "active" ),
+              tibble( group = "group 3", year = 3, segment = "inactive" ),
+              
+              tibble( group = "group 4", year = 1, segment = "active" ),
+              tibble( group = "group 4", year = 2, segment = "highly active" ),
+              tibble( group = "group 4", year = 3, segment = "active" ),
+              
+              tibble( group = "group 5", year = 1, segment = "active" ),
+              tibble( group = "group 5", year = 2, segment = "highly active" ),
+              tibble( group = "group 5", year = 3, segment = "inactive" ),
+              
+              tibble( group = "group 6", year = 1, segment = "low activity" ),
+              tibble( group = "group 6", year = 2, segment = "active" ),
+              tibble( group = "group 6", year = 3, segment = "low activity" ),
+              
+              tibble( group = "group 7", year = 1, segment = "active" ),
+              tibble( group = "group 7", year = 2, segment = "inactive" ),
+              tibble( group = "group 7", year = 3, segment = "active" ),
+              
+              tibble( group = "group 8", year = 1, segment = "low activity" ),
+              tibble( group = "group 8", year = 2, segment = "active" ),
+              tibble( group = "group 8", year = 3, segment = "active" )
+          ) %>% 
+    mutate( year = factor(year) ) %>%
+    left_join( 
+               bind_rows( tibble(group="group 1", n_customers=11),
+                          tibble(group="group 2", n_customers=2),
+                          tibble(group="group 3", n_customers=17),
+                          tibble(group="group 4", n_customers=1),
+                          tibble(group="group 5", n_customers=6),
+                          tibble(group="group 6", n_customers=20),
+                          tibble(group="group 7", n_customers=12),
+                          tibble(group="group 8", n_customers=19)
+                       ),
+               by = "group"
+             )
+
+# display data for Sankey in wide format:
+data_for_sankey %>% 
+  pivot_wider( id_cols = c(group, n_customers), names_from=year, values_from = segment, names_prefix="year_" )
+```
+
+Here is a simple *Sankey diagram* visualising this dataset created using the **networkD3** package:
+
+```{r echo=FALSE}
+# put the data for Sankey plot in convenient format for function networkD3::sankeyNetwork():
+text_links_data <- 
+  bind_rows( 
+             tibble( source_period = 1, source_status="active", 
+                     target_period = 2, target_status="active",
+                       n_customers = 17 
+                  ),
+             tibble( source_period = 1, source_status="active", 
+                     target_period = 2, target_status="highly_active",
+                       n_customers = 7
+                  ),
+             tibble( source_period = 1, source_status="active", 
+                     target_period = 2, target_status="inactive",
+                       n_customers = 12
+                  )
+             ,
+             tibble( source_period = 1, source_status="inactive", 
+                     target_period = 2, target_status="inactive",
+                       n_customers = 11
+                     
+                  ),
+             tibble( source_period = 1, source_status="inactive", 
+                     target_period = 2, target_status="low_activity",
+                       n_customers = 2
+                  ),
+             tibble( source_period = 1, source_status="low_activity", 
+                     target_period = 2, target_status="active",
+                       n_customers = 39
+                  )
+             ,
+             
+             tibble( source_period = 2, source_status="active", 
+                     target_period = 3, target_status="active",
+                       n_customers = 19
+                  ),
+             tibble( source_period = 2, source_status="active", 
+                     target_period = 3, target_status="inactive",
+                       n_customers = 17
+                  ),
+             tibble( source_period = 2, source_status="active", 
+                     target_period = 3, target_status="low_activity",
+                       n_customers = 20 
+                  ),
+             tibble( source_period = 2, source_status="highly_active", 
+                     target_period = 3, target_status="active",
+                       n_customers = 1
+                  )
+             ,
+             tibble( source_period = 2, source_status="highly_active", 
+                     target_period = 3, target_status="inactive",
+                       n_customers = 6
+                  ),
+             tibble( source_period = 2, source_status="inactive", 
+                     target_period = 3, target_status="active",
+                       n_customers = 23
+                  ),
+             tibble( source_period = 2, source_status="low_activity", 
+                     target_period = 3, target_status="inactive",
+                       n_customers = 2
+                  )
+  ) 
+
+# each node needs to be given assigned a node number 0,1,2,.... (node indexing must start at 0)
+node_numbers <- 
+  bind_rows( 
+             # source nodes
+             text_links_data %>% 
+               distinct(source_period, source_status) %>% 
+               rename( period = source_period,
+                       node_status = source_status
+                     ) 
+             ,
+             # target nodes
+             text_links_data %>% 
+               distinct(target_period, target_status) %>% 
+               rename( period = target_period,
+                       node_status = target_status
+                     )
+    ) %>% 
+  distinct( period, node_status ) %>% 
+  arrange( node_status ) %>% 
+  mutate( node_number = row_number()-1 )
+
+# define colours of the nodes (based on node status):
+define_palette_for_nodes <- 
+  RColorBrewer::brewer.pal( n=length(unique(node_numbers$node_status)), name="Set1" ) # see RColorBrewer::display.brewer.all() for other palette options
+
+node_colours <- tibble( node_status = unique(node_numbers$node_status),
+                        node_colour = define_palette_for_nodes
+                      ) 
+
+# define node information in format required by the function networkD3::sankeyNetwork()
+links_data <- 
+  text_links_data %>% 
+    left_join( node_numbers, by=c("source_period"="period", "source_status"="node_status") ) %>% 
+      rename( source_node = node_number ) %>% 
+    left_join( node_numbers, by=c("target_period"="period", "target_status"="node_status") ) %>% 
+      rename( target_node = node_number )
+
+# make the D3 sankey plot:
+networkD3::sankeyNetwork(     Links = as.data.frame(links_data),
+                              Nodes = as.data.frame(node_numbers),
+                             Source = "source_node",
+                             Target = "target_node",
+                              Value = "n_customers",
+                             NodeID = "node_status",
+                          LinkGroup = "source_status",
+                          NodeGroup = "node_status",
+                           fontSize = 20,
+                         iterations = 0,
+                        nodePadding = 20,  # controls separation of nodes
+                        # set custom node colours:
+                        colourScale = JS( 
+                                          paste0("d3.scaleOrdinal() 
+                                                    .domain([",
+                                                              paste( 
+                                                                     paste("\"", node_colours$node_status, "\"", sep=""),
+                                                                     collapse=", "
+                                                                   ),
+                                                            "])
+                                                    .range([",
+                                                              paste( 
+                                                                     paste("\"", node_colours$node_colour, "\"", sep=""),
+                                                                     collapse=", "
+                                                                   ),
+                                                            "])"
+                                                )
+                                        )
+)
+
+```
+
+We can show even more information using the **ggalluvial** package, which allows us to track the journey of any single group from the very beginning (left-hand-side of the plot) to the very end (right-hand-side of the plot). Notice that practically none of the *active* customers in the final (third) year were also *active* customers in the first year - this information is not visible in the **D3** plot above. 
+
+```{r echo=FALSE, fig.width=8, fig.height=6}
+ggplot( data = data_for_sankey,
+          aes(       x = year,
+                     y = n_customers,
+               stratum = segment,
+               alluvium = group,
+                   fill = segment
+             )
+        ) +
+    geom_flow( stat = "alluvium",
+               lode.guidance = "frontback",
+               colour = "darkgray"
+             ) +
+    scale_fill_brewer( type="qual", palette="Set2" ) +
+    geom_stratum() +
+    geom_text( aes(label=segment), stat="stratum", nudge_y=1.5 ) +
+    geom_text( aes(label=n_customers), stat="stratum", nudge_y=-1.5) +
+    labs( title = "Customer Movement Between Segments over 3 Years")
+```
+
+Alternatively, here is the **ggalluvial**-produced equivalent of the **D3** Sankey plot shown earlier. It shows only the flow between subsequent years:  
+
+```{r echo=FALSE, fig.width=8, fig.height=6}
+ggplot( data = data_for_sankey,
+          aes(       x = year,
+                     y = n_customers,
+               stratum = segment,
+               alluvium = group,
+                   fill = segment
+             )
+        ) +
+    geom_flow() +
+    scale_fill_brewer( type="qual", palette="Set2" ) +
+    geom_stratum() +
+    geom_text( aes(label=segment), stat="stratum", nudge_y=1.5 ) +
+    geom_text( aes(label=n_customers), stat="stratum", nudge_y=-1.5) +
+    labs( title = "Customer Movement Between Segments over 3 Years")
+```
+
+# Scatterplot with Marginal Density Plots
+*Scatterplots* illustrate the bivariate distribution of two continuous variables. The addition of *histograms*, *boxplots* or *density* plots on the margins of a *scatterplot* give a nice (additional) view of the univariate distribution of each variable. The marginal univariate distributions are also nice for picking up when points on the *scatterplot* are being plotted on top of one another (*overplotting*). These plots of the **iris** dataset were created using the function **ggscatterhist()** in the **ggpubr** package: 
+
+```{r echo=FALSE}
+ggscatterhist(
+ iris, x = "Sepal.Length", y = "Sepal.Width",
+ color = "Species", size = 3, alpha = 0.6,
+ palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+ margin.plot = "boxplot",
+ ggtheme = theme_bw()
+)
+
+ggscatterhist(
+ iris, x = "Sepal.Length", y = "Sepal.Width",
+ color = "Species", size = 3, alpha = 0.6,
+ palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+ margin.params = list(fill = "Species", color = "black", size = 0.2)
+)
+
+ggscatterhist(
+ iris, x = "Sepal.Length", y = "Sepal.Width",
+ size = 3, alpha = 0.6,
+ margin.plot = "histogram",
+ ggtheme = theme_bw()
+)
+
+```
+
+# Gaussian Graphical Models
+Visualisations aside, the **correlation** package is very nice for exploring associations between variables in a dataset. 
+
+For example:
+```{r warning=FALSE, message=FALSE}
+correlation::correlation(longley)
+```
+
+..including Bayesian measures of association:
+```{r warning=FALSE, message=FALSE}
+correlation::correlation(longley, bayesian=TRUE)
+```
+
+..and here is a Guassian Graphical Model to visualise these correlations:
+```{r warning=FALSE, message=FALSE}
+longley %>% 
+  correlation(partial = TRUE) %>% 
+  plot()
+```
+
+# Ridge-Line Plots
+*Ridge-line plots* are a convenient way to plot more than one univariate density on the same plot. Here are four different ways to display the distribution of *sepal-length* between different *species* (data from the **iris** dataset) using the package **ggridges**:
+
+```{r fig.width=12, fig.height=12, echo=FALSE}
+plot1 <- 
+  ggplot(iris, aes(x=Sepal.Length, y=Species, fill = factor(stat(quantile)))) +
+    stat_density_ridges(
+      geom = "density_ridges_gradient", calc_ecdf = TRUE,
+      quantiles = 4, quantile_lines = TRUE,
+      bandwidth = 0.181
+    ) +
+    scale_fill_viridis_d(name = "Quartiles") +
+    labs( title = "Density Plots with Quartiles" )
+
+plot2 <- 
+  ggplot(iris, aes(x = Sepal.Length, y = Species)) +
+    geom_density_ridges(
+             jittered_points = TRUE,
+             quantile_lines = TRUE, 
+             scale = 0.9, 
+             alpha = 0.7,
+             vline_size = 1, vline_color = "red",
+             point_size = 0.4, point_alpha = 1,
+             position = position_raincloud(adjust_vlines = TRUE),
+             bandwidth = 0.181
+    ) +
+    labs( title = "Raincloud Plot with Quartile Lines" )
+
+plot3 <- 
+  ggplot(iris, aes(x = Sepal.Length, y = Species)) +
+    geom_density_ridges(
+      jittered_points = TRUE,
+      position = position_points_jitter(width = 0.05, height = 0),
+      point_shape = '|', point_size = 3, point_alpha = 1, alpha = 0.7,
+      bandwidth = 0.181
+    ) +
+  labs( title = "Rug Plot")
+
+plot4 <- 
+  ggplot(iris, aes(x = Sepal.Length, y = Species, fill = Species)) +
+    geom_density_ridges(
+      aes(point_color = Species, point_fill = Species, point_shape = Species),
+      alpha = .2, point_alpha = 1, jittered_points = TRUE,
+      bandwidth = 0.181,
+      quantile_lines = TRUE, quantiles=4
+    ) +
+    scale_point_color_hue(l = 40) +
+    scale_discrete_manual(aesthetics = "point_shape", values = c(21, 22, 23)) +
+    labs( title = "Density Plots with Jittered Points" ) 
+
+( plot1 + plot2 ) / ( plot3 + plot4 )      # this requires package [patchwork]
+
+```
+
+# Raincloud Plots
+Similar to a *ridge-line plot*, a *raincloud plot* allows one to visually contrast the distributions of several different univariate continuous variables. It is a *density*, *scatter* and *box plot*, all on the same plot: 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# function from http://jianchen.info/RainCloud_Plot_in_R/
+
+# =========================== function definition ===========================
+  
+## define function of geom_flat_volin
+# devtools::install_github(repo = "IndrajeetPatil/ggstatsplot")
+
+"%||%" <- function(a, b) {
+ if (!is.null(a))
+     a
+ else
+     b
+    }
+
+geom_flat_violin <-
+ function(mapping = NULL,
+        data = NULL,
+        stat = "ydensity",
+        position = "dodge",
+        trim = TRUE,
+        scale = "area",
+        show.legend = NA,
+        inherit.aes = TRUE,
+        ...) {
+ggplot2::layer(
+ data = data,
+ mapping = mapping,
+ stat = stat,
+ geom = GeomFlatViolin,
+ position = position,
+ show.legend = show.legend,
+ inherit.aes = inherit.aes,
+ params = list(trim = trim,
+                scale = scale,
+                ...)
+)
+  }
+
+GeomFlatViolin <-
+  ggproto(
+"GeomFlatViolin",
+Geom,
+setup_data = function(data, params) {
+  data$width <- data$width %||%
+    params$width %||% (resolution(data$x, FALSE) * 0.9)
+
+# ymin, ymax, xmin, and xmax define the bounding rectangle for each group
+data %>%
+    dplyr::group_by(.data = ., group) %>%
+    dplyr::mutate(
+      .data = .,
+      ymin = min(y),
+      ymax = max(y),
+      xmin = x,
+      xmax = x + width / 2
+    )
+},
+
+draw_group = function(data, panel_scales, coord)
+{
+# Find the points for the line to go all the way around
+data <- base::transform(data,
+                          xminv = x,
+                          xmaxv = x + violinwidth * (xmax - x))
+
+# Make sure it's sorted properly to draw the outline
+newdata <-
+    base::rbind(
+      dplyr::arrange(.data = base::transform(data, x = xminv), y),
+      dplyr::arrange(.data = base::transform(data, x = xmaxv), -y)
+    )
+
+# Close the polygon: set first and last point the same
+# Needed for coord_polar and such
+ newdata <- rbind(newdata, newdata[1,])
+
+  ggplot2:::ggname("geom_flat_violin",
+                   GeomPolygon$draw_panel(newdata, panel_scales, coord))
+},
+
+draw_key = draw_key_polygon,
+
+default_aes = ggplot2::aes(
+  weight = 1,
+  colour = "grey20",
+  fill = "white",
+  size = 0.5,
+  alpha = NA,
+  linetype = "solid"
+),
+
+required_aes = c("x", "y")
+  )
+# =========================== function definition ===========================
+
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+ggplot(data = iris, aes(y = Sepal.Width, x = Species, fill = Species)) +
+  geom_flat_violin(position = position_nudge(x = .2, y = 0), alpha = .5) +
+  geom_boxplot(width = .1,  outlier.shape = NA, alpha = 0.5) +
+  geom_point( aes(y = Sepal.Width, color = Species), 
+              position = position_jitter(width = .15), size = 2, alpha = 0.6) +
+
+  theme(legend.position="none") + theme(axis.title = element_text(family = "Times New Roman")) + 
+  theme(axis.text=element_text(size=10, family = "Times New Roman")) + 
+  theme(legend.title = element_text(family = "Times New Roman")) + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + theme(panel.background = element_blank()) +
+  #theme(panel.border = element_rect(color = 'black',fill=NA, size = 1)) + 
+  theme(axis.line = element_line(colour = 'black', size = 0.5)) + 
+  theme(axis.ticks = element_line(colour = "black", size = 0.4)) 
+```
+
+# Scatterplot Matrices
+*Scatterplot matrices* are a quick way to plot the bivariate relationships between all pairs of variables in a dataset. Here are four alternative views of the **iris** dataset, using the packages **car** and **GGally**:
+
+```{r fig.width=8, fig.height=8, warning=FALSE, echo=FALSE}
+car::scatterplotMatrix(   x = iris,    # data to be plotted
+                        pch = 16,       # point type
+                        col = "black",   # point colour
+                        # settings of fitted lines:
+                        smooth = list( smoother=loessLine, 
+                                       spread=TRUE, 
+                                       lty.smooth=1,
+                                       lwd.smooth=1.5, 
+                                       lty.spread=3, 
+                                       lwd.spread=1,
+                                       col.smooth = "blue",
+                                       col.spread = "green"
+                                      ),
+                        regLine = list(col="orange")
+                        )
+
+# plot by groups:
+car::scatterplotMatrix( x = iris,    # data to be plotted
+                        by.groups = TRUE,    # fitted lines fit by group
+                        groups = iris$Species,
+                        legend = list(coords="bottomright")
+                      )
+
+# Slower function, but very nice:
+# for extensive plot customisation, see https://ggobi.github.io/ggally/
+GGally::ggpairs( iris, 
+                 title = "Scatterplot Matrix",
+                 progress = FALSE
+               )
+
+GGally::ggpairs( iris, 
+                 title = "Scatterplot Matrix",
+                 progress = FALSE,
+                 mapping = ggplot2::aes(colour = Species)
+               )
+```
+
+# Caterpillar Plots
+A *caterpillar plot* is a nice way to visualise the coefficients and confidence intervals of the parameter/coefficient estimates of a model. For example:
+
+```{r}
+fit_linear_model <- lm( Sepal.Length ~ Sepal.Width + Petal.Length + Petal.Width, data = iris )
+cbind( estimate=coef(fit_linear_model), confint(fit_linear_model) )
+
+ggcoef(
+  fit_linear_model,
+  vline_color = "red",
+  vline_linetype =  "solid",
+  errorbar_color = "blue",
+  errorbar_height = .25
+)
+
+# or using a custom data frame instead of a model:
+cust <- data.frame(
+  term = c("male vs. female", "30-49 vs. 18-29", "50+ vs. 18-29", "urban vs. rural"),
+  estimate = c(.456, 1.234, 1.897, 1.003),
+  conf.low = c(.411, 1.042, 1.765, 0.678),
+  conf.high = c(.498, 1.564, 2.034, 1.476),
+  variable = c("sex", "age", "age", "residence")
+)
+cust$term <- factor(cust$term, cust$term)
+ggcoef(cust, exponentiate = TRUE)
+```
+
+If customisation of the plot is required outside of the scope of the **GGally::ggcoef()** function, then these plots can be created from scratch in **ggplot2** using the functions **geom_point()** and **geom_errorbar()**.   
+
+# Time Series Decomposition Plots
+This is technically more a statistical than a data visualistion method, but I love the idea of trying to break a univariate time series into component parts, here using the function **stl** and plotting with base R:
+
+```{r}
+stl( nottem, 
+     t.window = 13,
+     s.window = "periodic",
+       robust = TRUE
+    ) %>% 
+  plot()
+```
+
+An alternative is to plot the output of the **stl** function using the **ggplot2** package (note that this also requires Rob Hyndman's **forecast** package to be loaded):
+
+```{r}
+nottem %>% 
+  stl( nottem, 
+       t.window = 13,
+       s.window = "periodic",
+         robust = TRUE
+      ) %>% 
+  ggplot2::autoplot()
+```
+
+# Heatmaps
+*Heatmaps* show the value of a continuous variable cross-tabulated across two categorical variables. Here is a simple *heatmap* of the distribution of the variable *avg_unemployed* by *decade* and *armed_forces* quintile, from the **Longley** dataset. The plot is created using *geom_tile()* from the **ggplot2** package: 
+
+```{r echo=FALSE}
+data_for_heatmap <- 
+  longley %>%
+    mutate( decade = paste0( "19", floor( (Year-1900)/10 )*10, "'s" ) ) %>% 
+    mutate( armed_forces_quintile = ntile(Armed.Forces, n=5) ) %>% 
+    group_by( decade, armed_forces_quintile ) %>% 
+    summarise( avg_unemployed = mean(Unemployed) )
+
+#The data for the heatmap plot look like this:
+data_for_heatmap 
+
+# make the heatmap:
+ggplot(   data = data_for_heatmap,
+        aes(     x = armed_forces_quintile,
+                 y = decade,
+              fill = avg_unemployed,
+             label = round(avg_unemployed)
+           )
+      ) +
+  geom_tile() + 
+  geom_text( colour = "red" )               # add the labels to each cell
+
+```
+
+# Resources
+
+* https://github.com/easystats/correlation
+
+* http://jianchen.info/RainCloud_Plot_in_R/
+
+* https://cran.r-project.org/web/packages/ggridges/vignettes/introduction.html
+
+* https://ggobi.github.io/ggally/
+
+* https://data.library.virginia.edu/setting-up-color-palettes-in-r/
+
+* https://cran.r-project.org/web/packages/ggalluvial/vignettes/ggalluvial.html
+
+* https://otexts.com/fpp2/decomposition.html
+
+# Appendix: Code for all Plots
+```{r eval=FALSE}
+
+#########################
+# DATA FOR SANKEY PLOTS #
+#########################
+
+# create data for Sankey example:
+data_for_sankey <- 
+  bind_rows( 
+              tibble( group = "group 1", year = 1, segment = "inactive" ),
+              tibble( group = "group 1", year = 2, segment = "inactive" ),
+              tibble( group = "group 1", year = 3, segment = "active" ),
+               
+              tibble( group = "group 2", year = 1, segment = "inactive" ),
+              tibble( group = "group 2", year = 2, segment = "low activity" ),
+              tibble( group = "group 2", year = 3, segment = "inactive" ),
+              
+              tibble( group = "group 3", year = 1, segment = "active" ),
+              tibble( group = "group 3", year = 2, segment = "active" ),
+              tibble( group = "group 3", year = 3, segment = "inactive" ),
+              
+              tibble( group = "group 4", year = 1, segment = "active" ),
+              tibble( group = "group 4", year = 2, segment = "highly active" ),
+              tibble( group = "group 4", year = 3, segment = "active" ),
+              
+              tibble( group = "group 5", year = 1, segment = "active" ),
+              tibble( group = "group 5", year = 2, segment = "highly active" ),
+              tibble( group = "group 5", year = 3, segment = "inactive" ),
+              
+              tibble( group = "group 6", year = 1, segment = "low activity" ),
+              tibble( group = "group 6", year = 2, segment = "active" ),
+              tibble( group = "group 6", year = 3, segment = "low activity" ),
+              
+              tibble( group = "group 7", year = 1, segment = "active" ),
+              tibble( group = "group 7", year = 2, segment = "inactive" ),
+              tibble( group = "group 7", year = 3, segment = "active" ),
+              
+              tibble( group = "group 8", year = 1, segment = "low activity" ),
+              tibble( group = "group 8", year = 2, segment = "active" ),
+              tibble( group = "group 8", year = 3, segment = "active" )
+          ) %>% 
+    mutate( year = factor(year) ) %>%
+    left_join( 
+               bind_rows( tibble(group="group 1", n_customers=11),
+                          tibble(group="group 2", n_customers=2),
+                          tibble(group="group 3", n_customers=17),
+                          tibble(group="group 4", n_customers=1),
+                          tibble(group="group 5", n_customers=6),
+                          tibble(group="group 6", n_customers=20),
+                          tibble(group="group 7", n_customers=12),
+                          tibble(group="group 8", n_customers=19)
+                       ),
+               by = "group"
+             )
+
+# display data for Sankey in wide format:
+data_for_sankey %>% 
+  pivot_wider( id_cols = c(group, n_customers), names_from=year, values_from = segment, names_prefix="year_" )
+
+###################################
+# SANKEY DIAGRAM using D3 PACKAGE #
+###################################
+
+# put the data for Sankey plot in convenient format for function networkD3::sankeyNetwork():
+text_links_data <- 
+  bind_rows( 
+             tibble( source_period = 1, source_status="active", 
+                     target_period = 2, target_status="active",
+                       n_customers = 17 
+                  ),
+             tibble( source_period = 1, source_status="active", 
+                     target_period = 2, target_status="highly_active",
+                       n_customers = 7
+                  ),
+             tibble( source_period = 1, source_status="active", 
+                     target_period = 2, target_status="inactive",
+                       n_customers = 12
+                  )
+             ,
+             tibble( source_period = 1, source_status="inactive", 
+                     target_period = 2, target_status="inactive",
+                       n_customers = 11
+                     
+                  ),
+             tibble( source_period = 1, source_status="inactive", 
+                     target_period = 2, target_status="low_activity",
+                       n_customers = 2
+                  ),
+             tibble( source_period = 1, source_status="low_activity", 
+                     target_period = 2, target_status="active",
+                       n_customers = 39
+                  )
+             ,
+             
+             tibble( source_period = 2, source_status="active", 
+                     target_period = 3, target_status="active",
+                       n_customers = 19
+                  ),
+             tibble( source_period = 2, source_status="active", 
+                     target_period = 3, target_status="inactive",
+                       n_customers = 17
+                  ),
+             tibble( source_period = 2, source_status="active", 
+                     target_period = 3, target_status="low_activity",
+                       n_customers = 20 
+                  ),
+             tibble( source_period = 2, source_status="highly_active", 
+                     target_period = 3, target_status="active",
+                       n_customers = 1
+                  )
+             ,
+             tibble( source_period = 2, source_status="highly_active", 
+                     target_period = 3, target_status="inactive",
+                       n_customers = 6
+                  ),
+             tibble( source_period = 2, source_status="inactive", 
+                     target_period = 3, target_status="active",
+                       n_customers = 23
+                  ),
+             tibble( source_period = 2, source_status="low_activity", 
+                     target_period = 3, target_status="inactive",
+                       n_customers = 2
+                  )
+  ) 
+
+# each node needs to be given assigned a node number 0,1,2,.... (node indexing must start at 0)
+node_numbers <- 
+  bind_rows( 
+             # source nodes
+             text_links_data %>% 
+               distinct(source_period, source_status) %>% 
+               rename( period = source_period,
+                       node_status = source_status
+                     ) 
+             ,
+             # target nodes
+             text_links_data %>% 
+               distinct(target_period, target_status) %>% 
+               rename( period = target_period,
+                       node_status = target_status
+                     )
+    ) %>% 
+  distinct( period, node_status ) %>% 
+  arrange( node_status ) %>% 
+  mutate( node_number = row_number()-1 )
+
+# define colours of the nodes (based on node status):
+define_palette_for_nodes <- 
+  RColorBrewer::brewer.pal( n=length(unique(node_numbers$node_status)), name="Set1" ) # see RColorBrewer::display.brewer.all() for other palette options
+
+node_colours <- tibble( node_status = unique(node_numbers$node_status),
+                        node_colour = define_palette_for_nodes
+                      ) 
+
+# define node information in format required by the function networkD3::sankeyNetwork()
+links_data <- 
+  text_links_data %>% 
+    left_join( node_numbers, by=c("source_period"="period", "source_status"="node_status") ) %>% 
+      rename( source_node = node_number ) %>% 
+    left_join( node_numbers, by=c("target_period"="period", "target_status"="node_status") ) %>% 
+      rename( target_node = node_number )
+
+# make the D3 sankey plot:
+networkD3::sankeyNetwork(     Links = as.data.frame(links_data),
+                              Nodes = as.data.frame(node_numbers),
+                             Source = "source_node",
+                             Target = "target_node",
+                              Value = "n_customers",
+                             NodeID = "node_status",
+                          LinkGroup = "source_status",
+                          NodeGroup = "node_status",
+                           fontSize = 20,
+                         iterations = 0,
+                        nodePadding = 20,  # controls separation of nodes
+                        # set custom node colours:
+                        colourScale = JS( 
+                                          paste0("d3.scaleOrdinal() 
+                                                    .domain([",
+                                                              paste( 
+                                                                     paste("\"", node_colours$node_status, "\"", sep=""),
+                                                                     collapse=", "
+                                                                   ),
+                                                            "])
+                                                    .range([",
+                                                              paste( 
+                                                                     paste("\"", node_colours$node_colour, "\"", sep=""),
+                                                                     collapse=", "
+                                                                   ),
+                                                            "])"
+                                                )
+                                        )
+)
+
+
+#############################################
+# SANKEY DIAGRAM using ggplot2 & ggalluvial #
+#############################################
+
+ggplot( data = data_for_sankey,
+          aes(       x = year,
+                     y = n_customers,
+               stratum = segment,
+               alluvium = group,
+                   fill = segment
+             )
+        ) +
+    geom_flow( stat = "alluvium",
+               lode.guidance = "frontback",
+               colour = "darkgray"
+             ) +
+    scale_fill_brewer( type="qual", palette="Set2" ) +
+    geom_stratum() +
+    geom_text( aes(label=segment), stat="stratum", nudge_y=1.5 ) +
+    geom_text( aes(label=n_customers), stat="stratum", nudge_y=-1.5) +
+    labs( title = "Customer Movement Between Segments over 3 Years")
+
+ggplot( data = data_for_sankey,
+          aes(       x = year,
+                     y = n_customers,
+               stratum = segment,
+               alluvium = group,
+                   fill = segment
+             )
+        ) +
+    geom_flow() +
+    scale_fill_brewer( type="qual", palette="Set2" ) +
+    geom_stratum() +
+    geom_text( aes(label=segment), stat="stratum", nudge_y=1.5 ) +
+    geom_text( aes(label=n_customers), stat="stratum", nudge_y=-1.5) +
+    labs( title = "Customer Movement Between Segments over 3 Years")
+
+
+########################################
+# SCATTERPLOT + MARGINAL DENSITY PLOTS #
+########################################
+
+ggscatterhist(
+ iris, x = "Sepal.Length", y = "Sepal.Width",
+ color = "Species", size = 3, alpha = 0.6,
+ palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+ margin.plot = "boxplot",
+ ggtheme = theme_bw()
+)
+
+ggscatterhist(
+ iris, x = "Sepal.Length", y = "Sepal.Width",
+ color = "Species", size = 3, alpha = 0.6,
+ palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+ margin.params = list(fill = "Species", color = "black", size = 0.2)
+)
+
+ggscatterhist(
+ iris, x = "Sepal.Length", y = "Sepal.Width",
+ size = 3, alpha = 0.6,
+ margin.plot = "histogram",
+ ggtheme = theme_bw()
+)
+
+
+
+#####################
+# RIDGE-LINE PLOTS  #
+#####################
+plot1 <- 
+  ggplot(iris, aes(x=Sepal.Length, y=Species, fill = factor(stat(quantile)))) +
+    stat_density_ridges(
+      geom = "density_ridges_gradient", calc_ecdf = TRUE,
+      quantiles = 4, quantile_lines = TRUE,
+      bandwidth = 0.181
+    ) +
+    scale_fill_viridis_d(name = "Quartiles") +
+    labs( title = "Density Plots with Quartiles" )
+
+plot2 <- 
+  ggplot(iris, aes(x = Sepal.Length, y = Species)) +
+    geom_density_ridges(
+             jittered_points = TRUE,
+             quantile_lines = TRUE, 
+             scale = 0.9, 
+             alpha = 0.7,
+             vline_size = 1, vline_color = "red",
+             point_size = 0.4, point_alpha = 1,
+             position = position_raincloud(adjust_vlines = TRUE),
+             bandwidth = 0.181
+    ) +
+    labs( title = "Raincloud Plot with Quartile Lines" )
+
+plot3 <- 
+  ggplot(iris, aes(x = Sepal.Length, y = Species)) +
+    geom_density_ridges(
+      jittered_points = TRUE,
+      position = position_points_jitter(width = 0.05, height = 0),
+      point_shape = '|', point_size = 3, point_alpha = 1, alpha = 0.7,
+      bandwidth = 0.181
+    ) +
+  labs( title = "Rug Plot")
+
+plot4 <- 
+  ggplot(iris, aes(x = Sepal.Length, y = Species, fill = Species)) +
+    geom_density_ridges(
+      aes(point_color = Species, point_fill = Species, point_shape = Species),
+      alpha = .2, point_alpha = 1, jittered_points = TRUE,
+      bandwidth = 0.181,
+      quantile_lines = TRUE, quantiles=4
+    ) +
+    scale_point_color_hue(l = 40) +
+    scale_discrete_manual(aesthetics = "point_shape", values = c(21, 22, 23)) +
+    labs( title = "Density Plots with Jittered Points" ) 
+
+( plot1 + plot2 ) / ( plot3 + plot4 )      # this requires package [patchwork]
+
+
+
+###################
+# RAINCLOUD PLOTS #
+###################
+# function from http://jianchen.info/RainCloud_Plot_in_R/
+
+# =========================== START function definition ===========================
+  
+## define function of geom_flat_volin
+# devtools::install_github(repo = "IndrajeetPatil/ggstatsplot")
+
+"%||%" <- function(a, b) {
+ if (!is.null(a))
+     a
+ else
+     b
+    }
+
+geom_flat_violin <-
+ function(mapping = NULL,
+        data = NULL,
+        stat = "ydensity",
+        position = "dodge",
+        trim = TRUE,
+        scale = "area",
+        show.legend = NA,
+        inherit.aes = TRUE,
+        ...) {
+ggplot2::layer(
+ data = data,
+ mapping = mapping,
+ stat = stat,
+ geom = GeomFlatViolin,
+ position = position,
+ show.legend = show.legend,
+ inherit.aes = inherit.aes,
+ params = list(trim = trim,
+                scale = scale,
+                ...)
+)
+  }
+
+GeomFlatViolin <-
+  ggproto(
+"GeomFlatViolin",
+Geom,
+setup_data = function(data, params) {
+  data$width <- data$width %||%
+    params$width %||% (resolution(data$x, FALSE) * 0.9)
+
+# ymin, ymax, xmin, and xmax define the bounding rectangle for each group
+data %>%
+    dplyr::group_by(.data = ., group) %>%
+    dplyr::mutate(
+      .data = .,
+      ymin = min(y),
+      ymax = max(y),
+      xmin = x,
+      xmax = x + width / 2
+    )
+},
+
+draw_group = function(data, panel_scales, coord)
+{
+# Find the points for the line to go all the way around
+data <- base::transform(data,
+                          xminv = x,
+                          xmaxv = x + violinwidth * (xmax - x))
+
+# Make sure it's sorted properly to draw the outline
+newdata <-
+    base::rbind(
+      dplyr::arrange(.data = base::transform(data, x = xminv), y),
+      dplyr::arrange(.data = base::transform(data, x = xmaxv), -y)
+    )
+
+# Close the polygon: set first and last point the same
+# Needed for coord_polar and such
+ newdata <- rbind(newdata, newdata[1,])
+
+  ggplot2:::ggname("geom_flat_violin",
+                   GeomPolygon$draw_panel(newdata, panel_scales, coord))
+},
+
+draw_key = draw_key_polygon,
+
+default_aes = ggplot2::aes(
+  weight = 1,
+  colour = "grey20",
+  fill = "white",
+  size = 0.5,
+  alpha = NA,
+  linetype = "solid"
+),
+
+required_aes = c("x", "y")
+  )
+# =========================== END function definition ===========================
+
+# make rain-cloud plot:
+ggplot(data = iris, aes(y = Sepal.Width, x = Species, fill = Species)) +
+  geom_flat_violin(position = position_nudge(x = .2, y = 0), alpha = .5) +
+  geom_boxplot(width = .1,  outlier.shape = NA, alpha = 0.5) +
+  geom_point( aes(y = Sepal.Width, color = Species), 
+              position = position_jitter(width = .15), size = 2, alpha = 0.6) +
+
+  theme(legend.position="none") + theme(axis.title = element_text(family = "Times New Roman")) + 
+  theme(axis.text=element_text(size=10, family = "Times New Roman")) + 
+  theme(legend.title = element_text(family = "Times New Roman")) + 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) + theme(panel.background = element_blank()) +
+  #theme(panel.border = element_rect(color = 'black',fill=NA, size = 1)) + 
+  theme(axis.line = element_line(colour = 'black', size = 0.5)) + 
+  theme(axis.ticks = element_line(colour = "black", size = 0.4)) 
+
+
+
+########################
+# SCATTERPLOT MATRICES #
+########################
+
+car::scatterplotMatrix(   x = iris,    # data to be plotted
+                        pch = 16,       # point type
+                        col = "black",   # point colour
+                        # settings of fitted lines:
+                        smooth = list( smoother=loessLine, 
+                                       spread=TRUE, 
+                                       lty.smooth=1,
+                                       lwd.smooth=1.5, 
+                                       lty.spread=3, 
+                                       lwd.spread=1,
+                                       col.smooth = "blue",
+                                       col.spread = "green"
+                                      ),
+                        regLine = list(col="orange")
+                        )
+
+# plot by groups:
+car::scatterplotMatrix( x = iris,    # data to be plotted
+                        by.groups = TRUE,    # fitted lines fit by group
+                        groups = iris$Species,
+                        legend = list(coords="bottomright")
+                      )
+
+# Slower function, but very nice:
+# for extensive plot customisation, see https://ggobi.github.io/ggally/
+GGally::ggpairs( iris, 
+                 title = "Scatterplot Matrix",
+                 progress = FALSE
+               )
+
+GGally::ggpairs( iris, 
+                 title = "Scatterplot Matrix",
+                 progress = FALSE,
+                 mapping = ggplot2::aes(colour = Species)
+               )
+
+
+
+###########
+# HEATMAP #
+###########
+
+data_for_heatmap <- 
+  longley %>%
+    mutate( decade = paste0( "19", floor( (Year-1900)/10 )*10, "'s" ) ) %>% 
+    mutate( armed_forces_quintile = ntile(Armed.Forces, n=5) ) %>% 
+    group_by( decade, armed_forces_quintile ) %>% 
+    summarise( avg_unemployed = mean(Unemployed) )
+
+#The data for the heatmap plot look like this:
+data_for_heatmap 
+
+# make the heatmap:
+ggplot(   data = data_for_heatmap,
+        aes(     x = armed_forces_quintile,
+                 y = decade,
+              fill = avg_unemployed,
+             label = round(avg_unemployed)
+           )
+      ) +
+  geom_tile() + 
+  geom_text( colour = "red" )               # add the labels to each cell
+
+
+```

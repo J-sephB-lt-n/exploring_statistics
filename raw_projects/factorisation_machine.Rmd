@@ -1,0 +1,165 @@
+---
+title: "Context-Aware Recommendations using Factorisation Machines"
+author: "Joseph Bolton"
+output: html_notebook
+---
+
+```{r setup, echo=FALSE}
+library(tidyverse)
+library(rsparse)
+```
+
+https://www.csie.ntu.edu.tw/~b97053/paper/Rendle2010FM.pdf
+
+http://d2l.ai/chapter_recommender-systems/fm.html
+
+```{r simdata, echo=FALSE}
+n_user <- 5       # number of unique users
+n_items <- 10
+n_obs <- 20       # number of observations in data
+
+gen_obs <- function( n_user, n_items, n_obs ){       # function to generate random rows of data
+  
+  store_obs_list <- list() 
+  
+  food_categories <- c("chinese","italian","fast_food","coffee","deli", "thai")
+    
+  item_food_category_ref <- 
+    sample( food_categories,
+            size = n_items,
+            replace = TRUE
+          )
+  names(item_food_category_ref) <- paste( "item", 1:n_items, sep="_" )
+  print( t(t(item_food_category_ref)) )
+  
+  for( row_i in 1:n_obs ){ 
+    user_1hot <- data.frame( matrix( rep(0, n_user), nrow=1 ) )
+    colnames(user_1hot) <- paste( "user", 1:n_user, sep="" )
+    user_1hot[[sample(1:n_user,size=1)]] <- 1
+    timeofday_1hot <- tibble(   morning = 0,
+                              afternoon = 0,
+                                evening = 0
+                            )
+    timeofday_1hot[[sample(1:3,size=1)]] <- 1
+    items_1hot <- data.frame( matrix( rep(0, n_items), nrow=1 ) )
+    colnames(items_1hot) <- paste( "item", 1:n_items, sep="_" )
+    items_1hot[[sample(1:n_items,size=1)]] <- 1
+    food_category_this_item <- item_food_category_ref[ which(items_1hot==1) ]
+    food_categories_1hot <- data.frame( matrix( rep( 0, length(food_categories) ), nrow=1 ) )
+    names(food_categories_1hot) <- food_categories
+    food_categories_1hot[food_category_this_item] <- 1
+    
+    store_obs_list[[row_i]] <- 
+      bind_cols(
+       tibble( rating = sample(1:10, size=1) ),
+       user_1hot,
+       items_1hot,
+       food_categories_1hot,
+       timeofday_1hot
+      )
+  }
+  
+  alldata_1hot <- store_obs_list %>% reduce( bind_rows ) 
+  alldata_summary <- tibble( x = "" ) %>% slice(0)
+  for( row_i in 1:nrow(alldata_1hot) ){
+      alldata_summary <- bind_rows( 
+        alldata_summary,
+        tibble( x = paste( names(alldata_1hot[ row_i, which(unlist(alldata_1hot[row_i,])==1) ]), collapse=", " ) )
+      )
+  }  
+  
+  alldata_summary <- 
+    bind_cols( alldata_1hot %>% select(rating),
+               alldata_summary  
+              ) %>% 
+    mutate( x = gsub("rating, ","",x) )
+  
+  return( 
+          list( data_1hot = alldata_1hot,
+                data_summary = alldata_summary
+              )
+        )
+}
+
+simdata <- 
+  gen_obs( n_user=5, n_items=5, n_obs=20 )
+
+simdata$data_1hot
+
+simdata$data_summary %>% 
+  arrange(x)
+```
+
+```{r}
+y <- simdata$data_1hot$rating
+k <- 5       # dimension of interaction vectors
+X <- cbind( intercept=1, simdata$data_1hot[,-1] )
+
+# initialise w vector (vector of coefficients)
+w_vec <- round( runif(ncol(X)), digits = 2 )
+names(w_vec) <- colnames(X) 
+
+# initialise matrix of vectors 
+num_vectors <- ncol(X)-1
+v_matrix <- 
+  matrix( round( runif(num_vectors*k), digits=2 ),
+          ncol = num_vectors
+        )
+colnames(v_matrix) <- colnames(X[,-1])        
+
+# given a 
+get_yhat_ftn <- function( w_coefs, v_mat ){  
+  
+  # yoyo
+}
+
+get_yhat_ftn( w_coefs = w_vec,
+                v_mat =  v_matrix 
+            )
+
+```
+
+The Factorisation Model is:
+(all from https://www.csie.ntu.edu.tw/~b97053/paper/Factorization%20Machines%20with%20libFM.pdf)
+
+$$\begin{array}{lcl} 
+\mathbf{y} &=& y_1,y_2,...,y_n \\
+\hat y(\mathbf{x}) &=& \underset{\text{standard linear model}}{\underbrace{w_0 + \displaystyle\sum_{j=1}^p w_p x_p}} + \\
+\displaystyle\frac{\partial}{\partial \theta} \hat y(\mathbf{x}) &=& 
+\begin{cases}
+1 \hspace{10mm} \text{ if } \theta \text{ is } w_0 \\
+x_i \hspace{10mm} \text{ if } \theta \text{ is } w_i \\
+x_i \Big(\displaystyle\sum_{j=1}^p v_{j,f}\space x_j\Big) - v_{i,f}x_i^2 \hspace{10mm}\text{ if } \theta \text{ is } v_{i,f} \\
+\end{cases} \\
+\text{for regression least squares loss}: &\space& \space \\
+\displaystyle\frac{\partial}{\partial \theta} \mathcal{L} &=& (18) \\
+\end{array}$$
+
+The double sum just gives every combination of $i$ and $j$:
+
+```{r label, options}
+for( i in 1:5 ){
+  for( j in (i+1):5 ){
+    paste0( i, j ) %>% print()
+  }
+}
+```
+
+```{r}
+X <- cbind( intercept=1, 
+            X1 = sample(0:1, size=10, replace=TRUE),
+            X2 = sample(0:1, size=10, replace=TRUE)   
+          ) 
+y <- rnorm(10)
+```
+
+
+# References
+
+* Optimizing Factorization Machines for Top-N
+Context-Aware Recommendations https://fajieyuan.github.io/papers/WISE2016.pdf
+
+* Rendell Factorization Machines with libFM https://www.csie.ntu.edu.tw/~b97053/paper/Factorization%20Machines%20with%20libFM.pdf
+
+* https://www.csie.ntu.edu.tw/~b97053/paper/Rendle2010FM.pdf 
+

@@ -1,0 +1,88 @@
+---
+title: "Hessian_Matrix"
+author: "Joe"
+date: "06 February 2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+All of the results that follow assume continuity of all of the derivatives. 
+
+If $f$ is a function of $n$ variables, with vector of inputs $\mathbf{x} = (x_1,\space x_2, ... , x_n)$ and scalar output $f(\mathbf{x})$, then the **Hessian Matrix** $\mathbf{H}$ of $f$ is the matrix of it's second partial derivatives:
+
+$$\mathbf{H} \quad = \quad \begin{bmatrix} \frac{\partial^2 \space f}{\partial x_1^2 } & \frac{\partial^2 \space f}{\partial x_1 \space \partial x_2 } & ... & \frac{\partial^2 \space f}{\partial x_1 \space \partial x_n } \\
+\frac{\partial^2 \space f}{\partial x_2 \space \partial x_1 } & \frac{\partial^2 \space f}{\partial x_2^2} & ... & \frac{\partial^2 \space f}{\partial x_2 \space \partial x_n } \\
+. & . & . & . \\
+. & . & . & . \\
+\frac{\partial^2 \space f}{\partial x_n \space \partial x_1 } & \frac{\partial^2 \space f}{\partial x_n \space \partial x_2 } & ... & \frac{\partial^2 \space f}{\partial x_n^2 } \\
+\end{bmatrix}$$
+
+## Example
+Consider the function 
+
+$$f(\mathbf{x}) \quad = \quad f(x,y,z) \quad = \quad x^2e^y + \frac{5xz^3}{y}$$
+
+The hessian matrix for this function is:
+
+$$\mathbf{H} \quad = \quad \begin{bmatrix} \frac{\partial^2 \space f}{\partial x^2 } & \frac{\partial^2 \space f}{\partial x \space \partial y } & \frac{\partial^2 \space f}{\partial x \space \partial z } \\
+\frac{\partial^2 \space f}{\partial y \space \partial x } & \frac{\partial^2 \space f}{\partial y^2} & \frac{\partial^2 \space f}{\partial y \space \partial z } \\
+\frac{\partial^2 \space f}{\partial z \space \partial x } & \frac{\partial^2 \space f}{\partial z \space \partial y } & \frac{\partial^2 \space f}{\partial z^2 } \\
+\end{bmatrix}$$
+
+
+The second partial derivatives are:
+
+$$\frac{\partial^2 \space f}{\partial x^2} \quad = \quad \frac{\partial}{\partial \space x}\Bigg( \frac{\partial \space f}{\partial \space x}\Bigg) \quad = \quad \frac{\partial}{\partial \space x}\Bigg( 2xe^y + \frac{5z^3}{y} \Bigg) \quad = \quad 2e^y$$
+
+$$\frac{\partial^2 \space f}{\partial x \space \partial y} \quad = \quad \frac{\partial}{\partial \space x}\Bigg( \frac{\partial \space f}{\partial \space y}\Bigg) \quad = \quad \frac{\partial}{\partial \space x}\Bigg( x^2e^y -5xz^3y^{-2}\Bigg) \quad = \quad 2xe^y -\frac{5z^3}{y^2}$$
+
+$$\frac{\partial^2 \space f}{\partial x \space \partial z} \quad = \quad \frac{\partial}{\partial \space x}\Bigg( \frac{\partial \space f}{\partial \space z}\Bigg) \quad = \quad \frac{\partial}{\partial \space x}\Bigg( \frac{15xz^2}{y}\Bigg) \quad = \quad \frac{15z^2}{y}$$
+
+$$\frac{\partial^2 \space f}{\partial y \space \partial x} \quad = \quad \frac{\partial^2 \space f}{\partial x \space \partial y} \hspace{5cm}\text{Schwarz/Clairaut's Theorem}$$
+
+$$\frac{\partial^2 \space f}{\partial y^2} \quad = \quad \frac{\partial}{\partial \space y}\Bigg( \frac{\partial \space f}{\partial \space y}\Bigg) \quad = \quad \frac{\partial}{\partial \space x}\Bigg( x^2e^y - \frac{5xz^3}{y^2} \Bigg) \quad = \quad x^2e^y + \frac{10xz^3}{y^3}$$
+
+$$\frac{\partial^2 \space f}{\partial y \space \partial z} \quad = \quad \frac{\partial}{\partial \space y}\Bigg( \frac{\partial \space f}{\partial \space z}\Bigg) \quad = \quad \frac{\partial}{\partial \space y}\Bigg( \frac{15xz^2}{y}\Bigg) \quad = \quad -\frac{15xz^2}{y^2}$$
+
+$$\frac{\partial^2 \space f}{\partial z \space \partial x} \quad = \frac{\partial^2 \space f}{\partial x \space \partial z}$$
+
+$$\frac{\partial^2 \space f}{\partial z \space \partial y} \quad = \frac{\partial^2 \space f}{\partial y \space \partial z}$$
+
+$$\frac{\partial^2 \space f}{\partial z^2} \quad = \quad \frac{\partial}{\partial \space z}\Bigg( \frac{\partial \space f}{\partial \space z}\Bigg) \quad = \quad \frac{\partial}{\partial \space z}\Bigg( \frac{15xz^2}{y} \Bigg) \quad = \quad \frac{30xz}{y}$$
+
+So, the **Hessian matrix** for $f(x,y,z)$ is
+
+$$\mathbf{H} \quad = \quad \begin{bmatrix} 2e^y & 2xe^y - \frac{5z^3}{y^2} & \frac{15z^2}{y} \\
+2xe^y - \frac{5z^3}{y^2} & x^2e^y + \frac{10xz^3}{y^3} & -\frac{15xz^2}{y^2}\\
+\frac{15z^2}{y} & -\frac{15xz^2}{y^2} & \frac{30xz}{y} \\
+\end{bmatrix}$$
+
+For example, the Hessian matrix at the point $\mathbf{x}=(1,2,3)$ is
+```{r actual_Hessian}
+x <- 1
+y <- 2
+z <- 3
+matrix( c(2*exp(y),                2*x*exp(y)-5*z^3/y^2,     15*z^2/y,
+          2*x*exp(y)-5*z^3/y^2,    x^2*exp(y)+10*x*z^3/y^3,  -15*x*z^2/y^2,
+          15*z^2/y,                -15*x*z^2/y^2,            30*x*z/y                 
+         ), 
+        nrow=3, ncol=3, byrow=3
+      )
+rm(x);rm(y);rm(z)
+```
+
+and here is a numerical approximation of the Hessian matrix in R (to validate my calculations):
+
+```{r show_in_R}
+library(pracma)
+
+function_xyz <- function(x){ x[1]^2*exp(x[2]) + 5*x[1]*x[3]^3 / x[2] } 
+
+pracma::hessian( f = function_xyz, 
+                 x0 = c(1,2,3) 
+                )
+
+```

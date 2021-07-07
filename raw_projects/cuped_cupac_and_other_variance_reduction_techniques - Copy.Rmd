@@ -1,0 +1,2059 @@
+---
+title: "CUPED, CUPAC, and Other Ways to Reduce Variance in an Experiment"
+author: "Joseph Bolton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    df_print: paged
+    theme: darkly
+    highlight: espresso
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(MASS)
+library(tidyverse)
+library(ranger)
+library(MatchIt)
+library(knitr)
+library(CCA)
+library(splines)
+library(stats)    
+
+library(foreach)
+library(doParallel)
+
+# change formatting of code output:
+knitr::opts_chunk$set(
+  class.output  = "bg-primary",
+  class.message = "bg-info text-info",
+  class.warning = "bg-warning text-warning",
+  class.error   = "bg-danger text-danger"
+)
+
+options(scipen=999)
+
+set.seed(8989)
+```
+
+
+Random sampling (random assignment to 'treatment' and 'control' groups) in an experiment allows one to calculate an unbiased estimate of a causal treatment effect. 
+
+The *average treatment effect* is the most common summary measure of a treatment effect: it is estimated as the difference in (sample) mean response between the treated group and untreated ('control') group:
+
+$$\overline{Y}_{treatment}-\overline{Y}_{control}$$
+
+which is an unbiased estimator of 
+
+$$E\Big[Y_i^{\text{if received treatment}}-Y_i^{\text{if NOT received treatment}}\Big]$$ 
+
+..if assignment to 'treatment' and 'control' groups was random. 
+
+However, there are other possible treatment effect estimators (estimators of $\quad E\Big[Y_i^{\text{if received treatment}}-Y_i^{\text{if NOT received treatment}}\Big]$) which have lower variance over repeated experiments than this simple difference between sample means, while remaining [unbiased](https://en.wikipedia.org/wiki/Bias_(statistics)).
+
+Reducing estimator variance allows one to measure effects with greater precision, to detect smaller effects, or to achieve comparable precision with a smaller sample size. In this post, I assess 15 different treatment effect estimators via simulation, comparing their performance over 1000 simulated experiments.  
+
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 15px;
+text-align: center;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+<pre style="font-size: 15px; font-family: &quot;Ubuntu Mono&quot;; background-color: rgb(0,0,0); color: rgb(255,255,255); line-height: 15px;">.............................................................................................................................
+.............................................................................................................................
+.............................................................................................................................
+......................................................11111111111111111......................................................
+...............................................1110000000001111.110000000001111..............................................
+.........................................1110001.110000000001.1.1.00000000001.000011.........................................
+......................................11000000011.100000000111111100000000001.0000000011.....................................
+...................................10000000000011110001110000010000011110000110000000000011..................................
+................................1111111100000001111.....1111111111111......111000000001.111111...............................
+..............................10001.11.1000011...11110000...........100001111...1100001.1..10011.............................
+............................10000011111111011.100000000001..........100000000001.11110111111000001...........................
+..........................1000000000011011....100000000001..........00000000000.....1111000000000001.........................
+........................100000000001101........10000000000.........10000000000........110110000000001........................
+.......................10111000001111...........10000000001........1000000000............111100000..001......................
+.....................1000.1.1001..111............1000000001........000000000.............11..10001..1001.....................
+....................10000111001.1000001...........10111....11111111...11101............100001..10011000001...................
+...................1000000001..1000000001........111..111001......100111..11........1100000000..10000000001..................
+..................1000000001..1000000000001....1011.10000001......0000001..1111...11000000000001..1000000001.................
+.................10000000011.100000000000000.101.....1000001.....1000001......11.1000000000000001.1000000000.................
+................11.11.100101...110000000001..11.......100000.....100001........1..1000000000011...01001111111................
+................00.1..10101........1100001..10001.......00001....00001......110001..1000111........01001111.11...............
+...............10011111110.............11.100000001......0001...10001.....110000001..11............10101111100...............
+...............10000000101.............101.1100000001.....000...1001....11000000111.10..............11100000001..............
+...............0000000010.............101......11000001....001..001...110000011......01.............10100000001..............
+..............100000001.111...........11..........1110001...01.101..1100011..........101..........1111100000000..............
+..............100000001.10000000001111111..............1101..1..1.10111.............111.1111000000000..100000001.............
+..............10111.10..1000000000000..100000001111111.....1......1.....11111110000000..1000000000000..100111001.............
+..............101.1.10..1000000000000..10000000000000000111..101...1110000000000000000..1000000000000..101...101.............
+..............10110110..10000000000001.100001111111.......11......11......111111110000..1000000000000..100111001.............
+..............100000001.1000000011111.11..............11001..1.11..10111..............111111110000000..100000001.............
+..............10000000111.............10.........11100011..101..01...1000011.........101............11100000000..............
+...............0000000010..............01.....110000011...1001..101....100000011.....01.............10100000001..............
+...............10000100101.............10111000000011....1000...1001.....1000000011.11..............01000010001..............
+...............1001..10010............111..00000011.....10001...10001......10000001..111...........1010111..10...............
+................001..100101.......11000001..10011......100001....00001.......10001..10000111......101001111.11...............
+................100110000101..11000000000001..1.......100000.....100000........1..10000000000011.101000110111................
+.................1000000001..100000000000001.111.....1000001.....1000000.....111.1000000000000001.1000000000.................
+..................1000000001..1000000000011....1111.10000001......0000001.11011....100000000000..1000000000..................
+...................1000000001..1000000011.........11...1111.......11111...11.........100000000..1000000000...................
+....................10001111111..100011...........1001111..11111111..111100............100001..11.1.11000....................
+......................001.1.1100...1.............1000000001........0000000001............11..1000.111.01.....................
+.......................11111110001111...........1000000000.........10000000001..........111100000111111......................
+........................1000000000011011.......10000000001.........100000000001.......101100000000001........................
+..........................10000000000011011...100000000001..........00000000000....1101100000000001..........................
+............................10000001110001111.100000000001..........100000000011.11110011110000011...........................
+..............................110000.1000000111...1111001...........1001111....1100000001100001..............................
+................................11001000000000001111.....111111111111....11110000000000111101................................
+...................................110000000001.1.1100001000001000000100001.11.00000000001...................................
+......................................111000000.111100000000011100000000001.11.00000011......................................
+..........................................111001111100000000011.00000000000.1110011..........................................
+................................................111100000000011100000000011111...............................................
+.........................................................111111111111........................................................
+.............................................................................................................................
+.............................................................................................................................</pre>
+
+<!-- set code style back to normal -->
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 14px;
+text-align: left;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+
+
+More specifically, the situation which I am considering is this:
+
+* We have an 'experimental' dataset - $n$ independent subjects $(y_i, \mathbf{x}_i, T_i) \space i=1,..,n$ - where response variable $y_i$ is some unknown function (possibly with a random component) of the feature vector $\mathbf{x}_i$ and the treatment $T_i$ i.e. $Y$ is some random data-generating process $Y_i=f(\mathbf{x}_i, T_i) + \epsilon_{i} \\ T_i=\begin{cases}1 \quad\text{if subject }i\text{ received treatment}\\0 \quad\text{if subject }i\text{ did NOT receive treatment}\end{cases} \\\epsilon_i \text{ is random error/noise}$
+
+* We have control over the assignment of the observations $i$  in the 'experimental' dataset: to *treatment* ($T_i=1$), or to *control* ($T_i=0$) groups. 
+
+* We also have a 'training' dataset - a set of $m$ observations $(y_j, \mathbf{x}_j) \space j=1,..,m$ - which are samples from the same data-generating process $Y_j=f(\mathbf{x}_j, T_j=0)+\epsilon_{j}$ which generated our 'experimental' dataset. We consider this data to have been collected prior to, or to be otherwise independent of, the 'experimental' data. We can use this dataset to make inferences about (or model) the relationship between $Y$ and $\mathbf{x}$, without it affecting the inferences from our experiment (for example, it could be used to inform assignment to experimental *treatment*/*control* groups). No *treatment* is given to subjects in the 'training' dataset.
+
+* For simplicity, in my experiments I have assumed that the treatment effect is constant: simply increasing the $Y_i$ value of any individual exposed to the treatment by $+2$. 
+
+The methods for estimator variance reduction that I've assessed in this simulation are:
+
+method name             | description
+------------------------|--------------------------------------------------------------------------------
+**simple_difference**   | Subjects in the 'experimental' dataset are assigned at random to *treatment* and *control* groups. The treatment effect is then estimated as the difference between the sample group means ($\overline{y}_{treated}-\overline{y}_{control}$). This is the baseline estimator that I'm trying to improve upon. The 'training' dataset is not used. 
+**cupac_ranger**        | Subjects in the 'experimental' dataset are assigned at random to *treatment* and *control* groups. A [Random Forest](https://www.stat.berkeley.edu/~breiman/randomforest2001.pdf) model is trained on the full 'training' dataset. The [Control Variates](https://exp-platform.com/cuped/) method is then used to estimate the treatment effect on the 'experimental' dataset, using the model-predicted response $\hat y$ on the 'experimental' dataset as the *control variate*. [DoorDash](https://www.doordash.com/en-US) engineering call this technique [CUPAC](https://doordash.engineering/2020/06/08/improving-experimental-power-through-control-using-predictions-as-covariate-cupac/). I provide a short description of the [Control Variates](https://exp-platform.com/cuped/) method [at the end of this post](#controlvariates) 
+**cupac_lm**            | This method is the same as **cupac_ranger**, except that a linear model is used as the predictive model, instead of a [Random Forest](https://www.stat.berkeley.edu/~breiman/randomforest2001.pdf) model
+**matched_control**     | Subjects in the 'experimental' dataset are assigned at random to *treatment* and *control* groups. A matched *control* group is created by pairing each *treatment* subject with a single *control* subject (with replacement). The treatment effect is then estimated as the difference between the mean response $Y$ in the original *treatment* group and the mean response $Y$ in this matched *control* group. The 'training' dataset is not used.
+**y_stratified**        | Subjects in the 'experimental' dataset are assigned at random to *treatment* and *control* groups. The subjects in the 'experimental' dataset are then grouped into strata based on rough binning of the features $\mathbf{X}$. The treatment effect is estimated in each stratum ($\overline{y}_{treated\text{ in stratum } k}-\overline{y}_{control \text{ in stratum } k}$), then these estimates are combined via a weighted sum into a single estimate (the weights used are proportional to the relative sizes of the strata). The 'training' dataset is not used for this method   
+**y_matched_propensity_score** | Reduction of estimator variance in a random experiment is not the usual use of propensity matching, but I tried it anyway (spoiler: it doesn't work very well). Subjects in the 'experimental' dataset are assigned at random to *treatment* and *control* groups. Propensity $\space e(\mathbf{x})=Pr[T=1|\mathbf{x}] \space$ (conditional probability of treatment) is estimated using a logistic regression model fit also to the 'experimental' dataset. Following that, in the 'experimental dataset' each *treated* subject is paired with a *control* subject whose predicted propensity is as close as possible to their own (matching done with replacement). The average treatment effect is then estimated as the difference between the mean response $Y$ in the *treatment* group and the mean response $Y$ in the propensity-matched *control* group. The 'training' dataset is not used for this method
+**matchit_propensity_score**| In case I made a mistake in my manual propensity-score matching, I performed the same procedure using the R libary [MatchIt](https://cran.r-project.org/web/packages/MatchIt/vignettes/matching-methods.html), which is a wonderful library with phenomenal documentation (read it for a thorough introduction to propensity methods). The result is identical to the **y_matched_propensity_score** method
+**propensity_score_weighting**| Subjects in the 'experimental' dataset are assigned at random to *treatment* and *control* groups. Propensity $\space e(\mathbf{x})=Pr[T=1|\mathbf{x}] \space$ is then estimated using a logistic regression model also trained on the 'experimental' dataset. Then, the treatment effect is estimated as the difference between the weighted average response $Y$ in the *treatment* group and the weighted average response $Y$ in the *control* group, where each *treated* subject is weighted by the factor $\frac{1}{\hat e(\mathbf{x})}$ and each *control* group subject is weighted by $\frac{1}{1-\hat e(\mathbf{x})}$. The 'training' dataset is not used for this method
+**reduce_variance_by_lm**| Subjects in the 'experimental' dataset are assigned at random to *treatment* and *control* groups. The effects of the features $\mathbf{x}$ and the treatment $T$ on the response $Y$ are then estimated using a linear regression model $Y_i=\beta_0+\beta_1X_{i1}+\beta_2X_{i2}+\beta_3X_{i3}+...+\beta_pX_{ip}+\beta_{p+1}T_i$ fit to the 'experimental' dataset ($T_i=\begin{cases} 1 \quad\text{ if subject } i \text{ received treatment}\\0 \quad\text{ if subject } i \text{ did not receive treatment}\end{cases}$). $\quad$ Model coefficient $\beta_{p+1}$ is then the estimate of the *treatment* effect. This method reduces variance in the treatment effect estimator by attributing some of the previously unexplained variance in the estimator to the effects of the features ($\mathbf{x}$). The 'training' dataset is not used for this method
+**match_on_yhat_lm**    | Subjects in the 'experimental' dataset are assigned at random to *treatment* and *control* groups. A linear model is trained on the 'training' dataset to predict response $Y$ from the features $\mathbf{x}$. This model is then used to generate a predicted response $\hat{y}$ for every subject in the 'experimental' dataset. In the 'experimental' dataset, each *treated* subject is then matched with a *control* subject (with replacement) with the same (or as close as possible) predicted response $\hat{y}$. The treatment effect is then estimated as the difference between the mean response $Y$ in the *treated* group and the mean response $Y$ in the matched *control* group
+**match_on_yhat_ranger**| This method is the same as **match_on_yhat_lm**, except that a [Random Forest](https://www.stat.berkeley.edu/~breiman/randomforest2001.pdf) model is used instead of a linear model 
+**group_assign_on_yhat_ranger**| A [Random Forest](https://www.stat.berkeley.edu/~breiman/randomforest2001.pdf) model is trained on the 'training' dataset to predict response $Y$ from features $\mathbf{x}$. This model is then used to generate predicted response values $\hat y$ for the subjects in the 'experimental' dataset. Then, these predicted response values $\hat y$ are used to **assign** subjects in the 'experimental' dataset to *treatment* and *control* groups (ensuring that the distribution of $\hat y$ is the same in both *treatment* and *control*) prior to the administering of the treatment
+**group_assign_on_yhat_knn**| This method is the same as **yhat_ranger**, except that *1-nearest-neighbour* regression is used instead of a [Random Forest](https://www.stat.berkeley.edu/~breiman/randomforest2001.pdf) model
+**cca_control_var**           | Subjects in the 'experimental' dataset are assigned at random to *treatment* and *control* groups. A linear combination of the features $\mathbf{x}$ in the 'experimental' dataset is then used to form a new univariate feature $z$. The weights in this linear combination are chosen using [canonical correlation analysis](https://en.wikipedia.org/wiki/Canonical_correlation), which ensures that the variable $z$ is maximally correlated with the response $Y$ ([Pearson Correlation](https://en.wikipedia.org/wiki/Pearson_correlation_coefficient)). The [canonical correlation analysis](https://en.wikipedia.org/wiki/Canonical_correlation) is performed (i.e. weights learned) on the 'training' dataset. The weights learned on the 'training' dataset are then applied to the subjects in the 'experimental' dataset to form the new feature $z$ in the 'experimental' dataset. The [Control Variates](https://exp-platform.com/cuped/) method is then used to estimate the treatment effect on the 'experimental' dataset, using this new feature $z$ as the *control variate*
+**cca_naughty**         | This method is the same as **cca_control_var**, except that the weights used in the linear combination that creates new variable $z$ are learned on the 'experimental' data itself, rather than on the 'training' dataset. This method seems empirically to perform well (refer to the results later on), but I'm unsure of whether it can be trusted in all situations (it feels too much like data leakage to me). The 'training' dataset is not used for this method
+**multivar_PCA_control_var**| This is my own extension of the [Control Variates](https://exp-platform.com/cuped/) method, extended to incorporate multiple *control variates*. Since the optimisation becomes very messy with correlated features, I use [Principal Component Analysis](https://en.wikipedia.org/wiki/Principal_component_analysis) on the sample features (to decorrelate them) prior to implementing the method, assuming that the effect of this on inference is neglible. I've put a [longer explanation of this method at the end of this post](#manycontrolvariates). 
+
+The showcase in this post is not my R code (which was written very quickly, so is long and unoptimised). I have folded the code sections for readability. I have left a button available for you to unfold the code blocks if you wish, in order to interrogate my methods. 
+
+```{r}
+run_1_experiment <- function( 
+                              n_control_group,
+                              n_target_group,
+                              n_training_group,
+                              population_sim_method = c( 
+                                                         "multivariate_normal",
+                                                         "linear_model_with_interactions",
+                                                         "feature_partition",
+                                                         "knn_reps"   
+                                                       ),
+                              effect_size
+                            ){
+
+   results_this_experiment <- c( true_difference = effect_size )
+  
+   # simulate populations --------------------------------------------------------------------------------
+   if( population_sim_method == "multivariate_normal" ){
+     
+       control_mu <- c( 
+                        y  = 5,
+                        x1 = 2,
+                        x2 = -1,
+                        x3 = 0
+                      ) 
+       
+       target_mu <- c( 
+                       y  = control_mu["y"] + effect_size,
+                       x1 = 2,
+                       x2 = -1,
+                       x3 = 0
+                     )
+       names(target_mu) <- c("y","x1","x2","x3")
+       
+       shared_sigma <- matrix( c(    # y     x1     x2     x3 
+                                      1  ,   0.2,   0.5,   0.3, # y 
+                                      0.2,   1  ,   0.7,   0.1, # x1 
+                                      0.5,   0.7,   1  ,   0.6, # x2 
+                                      0.3,   0.1,   0.6,   1     # x3 
+                                 ),
+                               byrow = TRUE,
+                               nrow = 4,
+                               ncol = 4
+                              )
+       colnames(shared_sigma) <- c("y","x1","x2","x3")
+       rownames(shared_sigma) <- colnames(shared_sigma)
+       
+       control_group <- 
+         MASS::mvrnorm( 
+                        n     = n_control_group,
+                        mu    = control_mu,
+                        Sigma = shared_sigma
+                      ) %>% 
+         as_tibble()
+       
+       target_group <- 
+         MASS::mvrnorm( 
+                        n     = n_target_group,
+                        mu    = target_mu,
+                        Sigma = shared_sigma
+                       ) %>% 
+         as_tibble()
+      
+       training_data <- 
+         MASS::mvrnorm( n     = n_training_group,
+                        mu    = control_mu,
+                        Sigma = shared_sigma
+                       ) %>% 
+         as_tibble()
+       
+       # assign to target/control using matching on ranger model score:
+       potential_target_and_control_group <- 
+                  MASS::mvrnorm( 
+                        n     = n_target_group + n_control_group,
+                        mu    = control_mu,
+                        Sigma = shared_sigma
+                       ) %>% 
+                  as_tibble()
+       fit_ranger <- ranger::ranger( formula = y ~ x1 + x2 + x3,
+                                        data = training_data  
+                                   )
+       potential_target_and_control_group$yhat <- 
+         predict( object = fit_ranger,
+                    data = potential_target_and_control_group   
+                )$predictions
+       
+       target_control_ratio <- round(  n_target_group / n_control_group  )
+       assign_groups_ranger_score <- 
+         potential_target_and_control_group %>% 
+            arrange( yhat ) %>% 
+            mutate( rownumber = row_number(),
+                    target_control = if_else( rownumber%%target_control_ratio == 0,
+                                              "control",
+                                              "target"
+                                            ) 
+                  ) %>% 
+            mutate( y = if_else( target_control == "target",
+                                 y + effect_size,
+                                 y
+                                )
+                  )
+       
+       # assign to test/holdout by nearest-neighbour regression -------------------------------------------------------
+       potential_target_and_control_group <- 
+            MASS::mvrnorm( 
+                  n     = n_target_group + n_control_group,
+                  mu    = control_mu,
+                  Sigma = shared_sigma
+                 ) %>% 
+            as_tibble()
+       
+       target_control_ratio <- round(  n_target_group / n_control_group  )
+       
+       potential_target_and_control_group$yhat_nearest_neighbour <- as.numeric(NA)     # initialize column
+       
+       # calculate estimate of y as response value (y) of nearest neighbour in training data:
+       for( customer_i in 1:nrow(potential_target_and_control_group) ){
+          customer_i_X <- potential_target_and_control_group[ customer_i, c("x1","x2","x3") ] %>% unlist()
+          nearest_training_neighbour_index <- 
+            which.min( 
+                        # euclidean distance of customer_i to each customer in the training data:
+                         sapply(
+                                 1:nrow(training_data),
+                                 function(i){ sum( 
+                                                   ( customer_i_X - 
+                                                     unlist(training_data[i,c("x1","x2","x3")])
+                                                   )^2
+                                                 )
+                                            }  
+                               )
+            )
+          potential_target_and_control_group$yhat_nearest_neighbour[customer_i] <- training_data$y[nearest_training_neighbour_index]
+       }
+       
+       assign_groups_nearest_neighbour <- 
+         potential_target_and_control_group %>% 
+            arrange( yhat_nearest_neighbour ) %>% 
+            mutate( rownumber = row_number(),
+                    target_control = if_else( rownumber%%target_control_ratio == 0,
+                                              "control",
+                                              "target"
+                                            ) 
+                  ) %>% 
+            mutate( y = if_else( target_control == "target",
+                                 y + effect_size,
+                                 y
+                                )
+                  )
+       
+       # # assign to test/holdout by nearest-neighbour matching -------------------------------------------------------
+       # potential_target_and_control_group <- 
+       #      MASS::mvrnorm( 
+       #            n     = n_target_group + n_control_group,
+       #            mu    = control_mu,
+       #            Sigma = shared_sigma
+       #           ) %>% 
+       #      as_tibble() %>% 
+       #      arrange( runif( n() ) ) %>%            # put rows in random order
+       #      mutate( subject_id = row_number() )    # give each row (subject) an id number
+       # 
+       # target_control_ratio <- round(  n_target_group / n_control_group  )    # I'm assuming that n_target_group >= n_control_group
+       # 
+       # final_treatment_group <- potential_target_and_control_group %>% slice(0) # create empty table with correct column structure
+       # final_control_group <- potential_target_and_control_group %>% slice(0)   # create empty table with correct column structure
+       # 
+       # while( nrow(potential_target_and_control_group) > (target_control_ratio+1) ){
+       #   
+       #   # sample a random subject (subject_i):
+       #   subject_i <- potential_target_and_control_group %>% sample_n(1)
+       #   # remove subject_i from the pool of subjects:
+       #   potential_target_and_control_group <- 
+       #        potential_target_and_control_group %>% 
+       #          filter( subject_id != subject_i$subject_id )
+       #   # get closest [target_control_ratio] neighbours of subject_i:
+       #   distances_to_subject_i <- 
+       #     sapply(
+       #            1:nrow(potential_target_and_control_group),
+       #            function(row_k){ sum( 
+       #                                  ( 
+       #                                    unlist( potential_target_and_control_group[ row_k, c("x1","x2","x3") ] ) -
+       #                                    c(subject_i$x1, subject_i$x2, subject_i$x3) 
+       #                                   )^2 
+       #                                )
+       #                           }
+       #          )
+       #   closest_neighbour_locations <- rank(distances_to_subject_i) < target_control_ratio
+       #   closest_neighbour_data <- potential_target_and_control_group %>% slice( which(closest_neighbour_locations) )
+       # 
+       #   # add subject_i to the control group:
+       #   final_control_group <- bind_rows( 
+       #                                      final_control_group,
+       #                                      subject_i %>% select( y, x1, x2, x3 )
+       #     )
+       #   # add subject_i's closest [target_control_ratio] neighbours to the treatment group:
+         
+   } else if( population_sim_method == "linear_model_with_interactions" ){
+    
+      x1_effect <- runif( n=1, min=-0.5, max=0.5)
+      x2_effect <- runif( n=1, min=-0.5, max=0.5)
+      x3_effect <- runif( n=1, min=-0.5, max=0.5)
+      x1_x2_effect <- runif( n=1, min=-0.5, max=0.5)
+      x1_x3_effect <- runif( n=1, min=-0.5, max=0.5)
+      x2_x3_effect <- runif( n=1, min=-0.5, max=0.5)
+      x1_x2_x3_effect <- runif( n=1, min=-0.5, max=0.5)
+      
+      control_group <- tibble( x1 = runif( n=n_control_group, min=-5, max=5 ),
+                               x2 = runif( n=n_control_group, min=-5, max=5 ),
+                               x3 = runif( n=n_control_group, min=-5, max=5 )
+                             ) 
+      control_group$y <- 
+            x1_effect*control_group$x1 + 
+            x2_effect*control_group$x2 + 
+            x3_effect*control_group$x3 +
+            x1_x2_effect*control_group$x1*control_group$x2 +
+            x1_x3_effect*control_group$x1*control_group$x3 +
+            x2_x3_effect*control_group$x2*control_group$x3 +
+            x1_x2_x3_effect*control_group$x1*control_group$x2*control_group$x3 +
+            rnorm( nrow(control_group), mean=0, sd=1 )
+      control_group <- control_group %>% dplyr::select(y, x1, x2, x3)
+      target_group <- tibble( x1 = runif( n=n_target_group, min=-5, max=5 ),
+                               x2 = runif( n=n_target_group, min=-5, max=5 ),
+                               x3 = runif( n=n_target_group, min=-5, max=5 )
+                             ) 
+      target_group$y <- 
+            effect_size +
+            x1_effect*target_group$x1 + 
+            x2_effect*target_group$x2 + 
+            x3_effect*target_group$x3 +
+            x1_x2_effect*target_group$x1*target_group$x2 +
+            x1_x3_effect*target_group$x1*target_group$x3 +
+            x2_x3_effect*target_group$x2*target_group$x3 +
+            x1_x2_x3_effect*target_group$x1*target_group$x2*target_group$x3 +
+            rnorm( nrow(target_group), mean=0, sd=1 )  
+      target_group <- target_group %>% dplyr::select(y, x1, x2, x3)
+      training_data <- tibble( x1 = runif( n=n_training_group, min=-5, max=5 ),
+                               x2 = runif( n=n_training_group, min=-5, max=5 ),
+                               x3 = runif( n=n_training_group, min=-5, max=5 )
+                             ) 
+      training_data$y <- 
+            x1_effect*training_data$x1 + 
+            x2_effect*training_data$x2 + 
+            x3_effect*training_data$x3 +
+            x1_x2_effect*training_data$x1*training_data$x2 +
+            x1_x3_effect*training_data$x1*training_data$x3 +
+            x2_x3_effect*training_data$x2*training_data$x3 +
+            x1_x2_x3_effect*training_data$x1*training_data$x2*training_data$x3 +
+            rnorm( nrow(training_data), mean=0, sd=1 )     
+      training_data <- training_data %>% dplyr::select(y, x1, x2, x3) 
+      
+      # choose target/control using matching on ranger model score -----------------------------------------------------------
+      potential_target_and_control_group <- 
+                  tibble( x1 = runif( n=n_control_group+n_target_group, min=-5, max=5 ),
+                          x2 = runif( n=n_control_group+n_target_group, min=-5, max=5 ),
+                          x3 = runif( n=n_control_group+n_target_group, min=-5, max=5 )
+                        )
+      potential_target_and_control_group$y <- 
+            x1_effect*potential_target_and_control_group$x1 + 
+            x2_effect*potential_target_and_control_group$x2 + 
+            x3_effect*potential_target_and_control_group$x3 +
+            x1_x2_effect*potential_target_and_control_group$x1*potential_target_and_control_group$x2 +
+            x1_x3_effect*potential_target_and_control_group$x1*potential_target_and_control_group$x3 +
+            x2_x3_effect*potential_target_and_control_group$x2*potential_target_and_control_group$x3 +
+            x1_x2_x3_effect*potential_target_and_control_group$x1*potential_target_and_control_group$x2*potential_target_and_control_group$x3 +
+            rnorm( nrow(control_group), mean=0, sd=1 )
+      
+       fit_ranger <- ranger::ranger( formula = y ~ x1 + x2 + x3,
+                                        data = training_data  
+                                   )
+       potential_target_and_control_group$yhat <- 
+         predict( object = fit_ranger,
+                    data = potential_target_and_control_group   
+                )$predictions
+       
+       target_control_ratio <- round(  n_target_group / n_control_group  )
+       assign_groups_ranger_score <- 
+         potential_target_and_control_group %>% 
+            arrange( yhat ) %>% 
+            mutate( rownumber = row_number(),
+                    target_control = if_else( rownumber%%target_control_ratio == 0,
+                                              "control",
+                                              "target"
+                                            ) 
+                  ) %>% 
+            mutate( y = if_else( target_control == "target",
+                                 y + effect_size,
+                                 y
+                                )
+                  )
+       
+      # assign to test/holdout by nearest-neighbour matching -------------------------------------------------------
+      potential_target_and_control_group <- 
+                  tibble( x1 = runif( n=n_control_group+n_target_group, min=-5, max=5 ),
+                          x2 = runif( n=n_control_group+n_target_group, min=-5, max=5 ),
+                          x3 = runif( n=n_control_group+n_target_group, min=-5, max=5 )
+                        )
+      potential_target_and_control_group$y <- 
+            x1_effect*potential_target_and_control_group$x1 + 
+            x2_effect*potential_target_and_control_group$x2 + 
+            x3_effect*potential_target_and_control_group$x3 +
+            x1_x2_effect*potential_target_and_control_group$x1*potential_target_and_control_group$x2 +
+            x1_x3_effect*potential_target_and_control_group$x1*potential_target_and_control_group$x3 +
+            x2_x3_effect*potential_target_and_control_group$x2*potential_target_and_control_group$x3 +
+            x1_x2_x3_effect*potential_target_and_control_group$x1*potential_target_and_control_group$x2*potential_target_and_control_group$x3 +
+            rnorm( nrow(control_group), mean=0, sd=1 )
+      
+      target_control_ratio <- round(  n_target_group / n_control_group  )
+       
+      potential_target_and_control_group$yhat_nearest_neighbour <- as.numeric(NA)     # initialize column
+       
+      # calculate estimate of y as response value (y) of nearest neighbour in training data:
+      for( customer_i in 1:nrow(potential_target_and_control_group) ){
+          customer_i_X <- potential_target_and_control_group[ customer_i, c("x1","x2","x3") ] %>% unlist()
+          nearest_training_neighbour_index <- 
+          which.min( 
+                        # euclidean distance of customer_i to each customer in the training data:
+                         sapply(
+                                 1:nrow(training_data),
+                                 function(i){ sum( 
+                                                   ( customer_i_X - 
+                                                     unlist(training_data[i,c("x1","x2","x3")])
+                                                   )^2
+                                                 )
+                                            }  
+                               )
+          )
+          potential_target_and_control_group$yhat_nearest_neighbour[customer_i] <- training_data$y[nearest_training_neighbour_index]
+       }
+       
+       assign_groups_nearest_neighbour <- 
+         potential_target_and_control_group %>% 
+            arrange( yhat_nearest_neighbour ) %>% 
+            mutate( rownumber = row_number(),
+                    target_control = if_else( rownumber%%target_control_ratio == 0,
+                                              "control",
+                                              "target"
+                                            ) 
+                  ) %>% 
+            mutate( y = if_else( target_control == "target",
+                                 y + effect_size,
+                                 y
+                                )
+                  )
+      
+      
+   } else if( population_sim_method == "feature_partition" ){
+    
+        x1_split_points <- sort( runif(n=2, min=-5, max=5) )
+        x2_split_points <- sort( runif(n=2, min=-5, max=5) )
+        x3_split_points <- sort( runif(n=2, min=-5, max=5) )
+        
+        partition_means <- 
+            # 1=below both split points, 2=between the two split points, 3=above both split points  
+            expand_grid( 
+                         x1_partition = 1:3,
+                         x2_partition = 1:3,
+                         x3_partition = 1:3
+                        ) %>% 
+            mutate( partition_mean = sample(0:10, size=n(), replace=TRUE) )
+        
+        control_group <- tibble( 
+                                 x1 = runif( n=n_control_group, min=-5, max=5 ),
+                                 x2 = runif( n=n_control_group, min=-5, max=5 ),
+                                 x3 = runif( n=n_control_group, min=-5, max=5 )
+                               ) %>% 
+                          mutate( x1_partition = case_when( x1 < min(x1_split_points) ~ 1,
+                                                            x1 > max(x1_split_points) ~ 3,
+                                                            TRUE ~ 2
+                                                          ),
+                                  x2_partition = case_when( x2 < min(x2_split_points) ~ 1,
+                                                            x2 > max(x2_split_points) ~ 3,
+                                                            TRUE ~ 2
+                                                          ),
+                                  x3_partition = case_when( x3 < min(x3_split_points) ~ 1,
+                                                            x3 > max(x3_split_points) ~ 3,
+                                                            TRUE ~ 2
+                                                          )
+                                  ) %>% 
+                          left_join( partition_means,
+                                     by = c("x1_partition", "x2_partition", "x3_partition")  
+                                   ) %>%          # get the mean of each partition
+                          mutate( y = rnorm( n(),
+                                             mean = partition_mean,
+                                             sd = 2
+                                           )
+                                ) %>% 
+                          select( y, x1, x2, x3)
+                                  
+        target_group <- tibble( x1 = runif( n=n_target_group, min=-5, max=5 ),
+                                x2 = runif( n=n_target_group, min=-5, max=5 ),
+                                x3 = runif( n=n_target_group, min=-5, max=5 )
+                              ) %>% 
+                          mutate( x1_partition = case_when( x1 < min(x1_split_points) ~ 1,
+                                                            x1 > max(x1_split_points) ~ 3,
+                                                            TRUE ~ 2
+                                                          ),
+                                  x2_partition = case_when( x2 < min(x2_split_points) ~ 1,
+                                                            x2 > max(x2_split_points) ~ 3,
+                                                            TRUE ~ 2
+                                                          ),
+                                  x3_partition = case_when( x3 < min(x3_split_points) ~ 1,
+                                                            x3 > max(x3_split_points) ~ 3,
+                                                            TRUE ~ 2
+                                                          )
+                                  ) %>% 
+                          # get the mean of each partition                
+                          left_join( partition_means,
+                                     by = c("x1_partition", "x2_partition", "x3_partition")  
+                                   ) %>%    
+                          mutate( partition_mean = partition_mean + effect_size ) %>% 
+                          mutate( y = rnorm( n(),
+                                             mean = partition_mean,
+                                             sd = 2
+                                           )
+                                ) %>% 
+                          select( y, x1, x2, x3)
+          
+        training_data <- tibble( x1 = runif( n=n_training_group, min=-5, max=5 ),
+                                 x2 = runif( n=n_training_group, min=-5, max=5 ),
+                                 x3 = runif( n=n_training_group, min=-5, max=5 )
+                               ) %>% 
+                          mutate( x1_partition = case_when( x1 < min(x1_split_points) ~ 1,
+                                                            x1 > max(x1_split_points) ~ 3,
+                                                            TRUE ~ 2
+                                                          ),
+                                  x2_partition = case_when( x2 < min(x2_split_points) ~ 1,
+                                                            x2 > max(x2_split_points) ~ 3,
+                                                            TRUE ~ 2
+                                                          ),
+                                  x3_partition = case_when( x3 < min(x3_split_points) ~ 1,
+                                                            x3 > max(x3_split_points) ~ 3,
+                                                            TRUE ~ 2
+                                                          )
+                                ) %>% 
+                          left_join( partition_means,
+                                     by = c("x1_partition", "x2_partition", "x3_partition")  
+                                   ) %>%          # get the mean of each partition
+                          mutate( y = rnorm( n(),
+                                             mean = partition_mean,
+                                             sd = 2
+                                           )
+                                ) %>% 
+                          select( y, x1, x2, x3)
+        
+      # choose target/control using matching on ranger model score -----------------------------------------
+      potential_target_and_control_group <- 
+                  tibble( x1 = runif( n=n_target_group+n_control_group, min=-5, max=5 ),
+                          x2 = runif( n=n_target_group+n_control_group, min=-5, max=5 ),
+                          x3 = runif( n=n_target_group+n_control_group, min=-5, max=5 )
+                        ) %>% 
+                    mutate( x1_partition = case_when( x1 < min(x1_split_points) ~ 1,
+                                                      x1 > max(x1_split_points) ~ 3,
+                                                      TRUE ~ 2
+                                                    ),
+                            x2_partition = case_when( x2 < min(x2_split_points) ~ 1,
+                                                      x2 > max(x2_split_points) ~ 3,
+                                                      TRUE ~ 2
+                                                    ),
+                            x3_partition = case_when( x3 < min(x3_split_points) ~ 1,
+                                                      x3 > max(x3_split_points) ~ 3,
+                                                      TRUE ~ 2
+                                                    )
+                            ) %>% 
+                    # get the mean of each partition                
+                    left_join( partition_means,
+                               by = c("x1_partition", "x2_partition", "x3_partition")  
+                             )
+      
+       fit_ranger <- ranger::ranger( formula = y ~ x1 + x2 + x3,
+                                        data = training_data  
+                                   )
+       potential_target_and_control_group$yhat <- 
+         predict( object = fit_ranger,
+                    data = potential_target_and_control_group   
+                )$predictions
+       
+       target_control_ratio <- round(  n_target_group / n_control_group  )
+       assign_groups_ranger_score <- 
+         potential_target_and_control_group %>% 
+            arrange( yhat ) %>% 
+            mutate( rownumber = row_number(),
+                    target_control = if_else( rownumber%%target_control_ratio == 0,
+                                              "control",
+                                              "target"
+                                            ) 
+                  ) %>% 
+            mutate( y = rnorm( 
+                               n(),
+                               mean = partition_mean,
+                               sd = 2
+                             )
+                  ) %>%
+            mutate( y = if_else( target_control == "target",
+                                 y + effect_size,
+                                 y
+                                )
+                  )
+       
+       # assign to test/holdout by nearest-neighbour matching -------------------------------------------------------
+       potential_target_and_control_group <- 
+                  tibble( x1 = runif( n=n_target_group+n_control_group, min=-5, max=5 ),
+                          x2 = runif( n=n_target_group+n_control_group, min=-5, max=5 ),
+                          x3 = runif( n=n_target_group+n_control_group, min=-5, max=5 )
+                        ) %>% 
+                    mutate( x1_partition = case_when( x1 < min(x1_split_points) ~ 1,
+                                                      x1 > max(x1_split_points) ~ 3,
+                                                      TRUE ~ 2
+                                                    ),
+                            x2_partition = case_when( x2 < min(x2_split_points) ~ 1,
+                                                      x2 > max(x2_split_points) ~ 3,
+                                                      TRUE ~ 2
+                                                    ),
+                            x3_partition = case_when( x3 < min(x3_split_points) ~ 1,
+                                                      x3 > max(x3_split_points) ~ 3,
+                                                      TRUE ~ 2
+                                                    )
+                            ) %>% 
+                    # get the mean of each partition                
+                    left_join( partition_means,
+                               by = c("x1_partition", "x2_partition", "x3_partition")  
+                             )
+       
+       
+       
+      target_control_ratio <- round(  n_target_group / n_control_group  )
+       
+      potential_target_and_control_group$yhat_nearest_neighbour <- as.numeric(NA)     # initialize column
+       
+      # calculate estimate of y as response value (y) of nearest neighbour in training data:
+      for( customer_i in 1:nrow(potential_target_and_control_group) ){
+          customer_i_X <- potential_target_and_control_group[ customer_i, c("x1","x2","x3") ] %>% unlist()
+          nearest_training_neighbour_index <- 
+          which.min( 
+                        # euclidean distance of customer_i to each customer in the training data:
+                         sapply(
+                                 1:nrow(training_data),
+                                 function(i){ sum( 
+                                                   ( customer_i_X - 
+                                                     unlist(training_data[i,c("x1","x2","x3")])
+                                                   )^2
+                                                 )
+                                            }  
+                               )
+          )
+          potential_target_and_control_group$yhat_nearest_neighbour[customer_i] <- training_data$y[nearest_training_neighbour_index]
+       }
+       
+       assign_groups_nearest_neighbour <- 
+         potential_target_and_control_group %>% 
+            arrange( yhat_nearest_neighbour ) %>% 
+            mutate( rownumber = row_number(),
+                    target_control = if_else( rownumber%%target_control_ratio == 0,
+                                              "control",
+                                              "target"
+                                            ) 
+                  ) %>% 
+            mutate( y = rnorm( 
+                               n(),
+                               mean = partition_mean,
+                               sd = 2
+                             )
+                  ) %>%
+            mutate( y = if_else( target_control == "target",
+                                 y + effect_size,
+                                 y
+                                )
+                  )
+   } else if ( population_sim_method == "knn_reps" ){
+     
+      nreps <- 10
+      reps <- tibble( 
+                      x1 = runif( n=nreps, min=-5, max=5),
+                      x2 = runif( n=nreps, min=-5, max=5),   
+                      x3 = runif( n=nreps, min=-5, max=5)   
+                    ) %>% 
+              mutate( y = runif(n=n(), min=0, max=100) )
+      
+      reps_list_X <- lapply( 
+                             1:nrow(reps),
+                             function(rw){ reps[ rw,c("x1","x2","x3") ] %>% unlist() }
+                           )
+      reps_vec_y <- reps$y
+      
+      control_group <- tibble( 
+                                x1 = runif( n=n_control_group, min=-5, max=5 ),
+                                x2 = runif( n=n_control_group, min=-5, max=5 ),
+                                x3 = runif( n=n_control_group, min=-5, max=5 )
+                             )
+      target_group <- tibble( 
+                                x1 = runif( n=n_target_group, min=-5, max=5 ),
+                                x2 = runif( n=n_target_group, min=-5, max=5 ),
+                                x3 = runif( n=n_target_group, min=-5, max=5 )
+                             )
+      training_data <- tibble( 
+                                x1 = runif( n=n_training_group, min=-5, max=5 ),
+                                x2 = runif( n=n_training_group, min=-5, max=5 ),
+                                x3 = runif( n=n_training_group, min=-5, max=5 )
+                             )
+      
+      cosine_sim <- function( vec1, vec2 ){
+            sum( vec1*vec2 ) / 
+            sqrt( sum(vec1^2)*sum(vec2^2) )
+      }
+      
+      get_y <- function(df){
+        return( 
+                sapply( 1:nrow(df),
+                         function(subject_i){ subject_i_X <- df[ subject_i,c("x1","x2","x3") ] %>% unlist()
+                                              similarity_to_each_rep <- sapply( 1:nreps,
+                                                                          function(rep_i){ cosine_sim( subject_i_X, reps_list_X[[rep_i]] ) }  
+                                                                        ) +1
+                                              return( 
+                                                      sum(reps_vec_y * similarity_to_each_rep) / sum(similarity_to_each_rep)  
+                                                    )
+                                            }  
+                      )
+              )  
+      }
+
+     control_group$y <- get_y(control_group)
+     target_group$y <- get_y(target_group) + effect_size
+     training_data$y <- get_y(training_data) 
+     
+      # choose target/control using matching on ranger model score -----------------------------------------
+      potential_target_and_control_group <- 
+                       tibble( 
+                                x1 = runif( n=n_control_group+n_target_group, min=-5, max=5 ),
+                                x2 = runif( n=n_control_group+n_target_group, min=-5, max=5 ),
+                                x3 = runif( n=n_control_group+n_target_group, min=-5, max=5 )
+                             )
+      
+       fit_ranger <- ranger::ranger( 
+                                     formula = y ~ x1 + x2 + x3,
+                                        data = training_data  
+                                   )
+       potential_target_and_control_group$yhat <- 
+         predict( object = fit_ranger,
+                    data = potential_target_and_control_group   
+                )$predictions
+       
+       target_control_ratio <- round(  n_target_group / n_control_group  )
+       assign_groups_ranger_score <- 
+         potential_target_and_control_group %>% 
+            arrange( yhat ) %>% 
+            mutate( rownumber = row_number(),
+                    target_control = if_else( rownumber%%target_control_ratio == 0,
+                                              "control",
+                                              "target"
+                                            ) 
+                  ) 
+       
+       assign_groups_ranger_score$y <- get_y(assign_groups_ranger_score)
+       assign_groups_ranger_score$y[assign_groups_ranger_score$target_control=="target"] <- 
+          assign_groups_ranger_score$y[assign_groups_ranger_score$target_control=="target"] + effect_size
+     
+       # assign to test/holdout by nearest-neighbour matching -------------------------------------------------------
+       potential_target_and_control_group <- 
+                  tibble( x1 = runif( n=n_target_group+n_control_group, min=-5, max=5 ),
+                          x2 = runif( n=n_target_group+n_control_group, min=-5, max=5 ),
+                          x3 = runif( n=n_target_group+n_control_group, min=-5, max=5 )
+                        ) 
+       
+      target_control_ratio <- round(  n_target_group / n_control_group  )
+       
+      potential_target_and_control_group$yhat_nearest_neighbour <- as.numeric(NA)     # initialize column
+       
+      # calculate estimate of y as response value (y) of nearest neighbour in training data:
+      for( customer_i in 1:nrow(potential_target_and_control_group) ){
+          customer_i_X <- potential_target_and_control_group[ customer_i, c("x1","x2","x3") ] %>% unlist()
+          nearest_training_neighbour_index <- 
+          which.min( 
+                        # euclidean distance of customer_i to each customer in the training data:
+                         sapply(
+                                 1:nrow(training_data),
+                                 function(i){ sum( 
+                                                   ( customer_i_X - 
+                                                     unlist(training_data[i,c("x1","x2","x3")])
+                                                   )^2
+                                                 )
+                                            }  
+                               )
+          )
+          potential_target_and_control_group$yhat_nearest_neighbour[customer_i] <- training_data$y[nearest_training_neighbour_index]
+       }
+       
+       assign_groups_nearest_neighbour <- 
+         potential_target_and_control_group %>% 
+            arrange( yhat_nearest_neighbour ) %>% 
+            mutate( rownumber = row_number(),
+                    target_control = if_else( rownumber%%target_control_ratio == 0,
+                                              "control",
+                                              "target"
+                                            ) 
+                  ) 
+       
+       assign_groups_nearest_neighbour$y <- get_y(assign_groups_nearest_neighbour)
+       assign_groups_nearest_neighbour$y[assign_groups_nearest_neighbour$target_control=="target"] <- 
+         assign_groups_nearest_neighbour$y[assign_groups_nearest_neighbour$target_control=="target"] + effect_size
+       
+   } # end of else if ( population_sim_method == "knn_reps" ){
+   
+   
+   
+  # calculate estimators of E[Y|target] - E[Y|control] --------------------------------------------------
+   
+  # calculate simple difference mean(target y) - mean(control y):
+  results_this_experiment["simple_difference"] <- mean(target_group$y) - mean(control_group$y)
+   
+  # CUPAC ranger (random forest):
+  training_data_for_model <- data.frame( y  = training_data$y,
+                                         x1 = training_data$x1,
+                                         x2 = training_data$x2,
+                                         x3 = training_data$x3
+                                       )
+  fit_ranger <- ranger::ranger( 
+                                  formula = y ~ x1 + x2 + x3, 
+                                     data = training_data_for_model,
+                                num.trees = 500
+                              )
+  yhat_control <- predict(  
+                            object = fit_ranger,
+                              data = control_group
+                         )$predictions
+  yhat_target <- predict(  
+                            object = fit_ranger,
+                              data = target_group
+                        )$predictions
+  pooled_y <- c( control_group$y, target_group$y ) 
+  pooled_yhat <- c( yhat_control, yhat_target ) 
+  # estimate theta:
+  theta <- cov( pooled_y, pooled_yhat ) /
+           var( pooled_yhat )
+  results_this_experiment["cupac_ranger"] <- 
+             mean(target_group$y) -
+             mean(control_group$y) -    
+             ( theta * mean(yhat_target) ) + 
+             ( theta * mean(yhat_control) ) 
+  
+  # create matched control group:
+  # (sample with replacement)
+  combined_target_control <- 
+    bind_rows( target_group %>% dplyr::select(x1, x2, x3) %>% dplyr::mutate(test_control="test")
+               ,
+               control_group %>% dplyr::select(x1, x2, x3) %>% dplyr::mutate(test_control="control")  
+            )
+  distmat <- dist(      x = combined_target_control[, c("x1","x2","x3")],
+                   method = "euclidean"
+                 ) %>% 
+              as.matrix()
+  target_indices <- which(combined_target_control$test_control=="test")
+  control_indices <- which(combined_target_control$test_control=="control")
+  distmat <- distmat[ target_indices, control_indices ] # rows as only target, columns as only control 
+  closest_control_indices <- apply(      X = distmat,
+                                    MARGIN = 1,                       # apply function to each row
+                                       FUN = function(row){ which.min(row) }
+                                    )
+  matched_control_group <- control_group[closest_control_indices, ]
+  results_this_experiment["matched_control"] <- mean(target_group$y) - mean(matched_control_group$y)
+  
+  # CUPAC linear model
+  training_data_for_model <- data.frame( 
+                                         y  = training_data$y,
+                                         x1 = training_data$x1,
+                                         x2 = training_data$x2,
+                                         x3 = training_data$x3
+                                       )
+  fit_lm <- lm( y ~ x1 + x2 + x3 + .*., data=training_data_for_model  )      # including all degree-2 interactions too
+  yhat_control <- predict(  
+                            object = fit_lm,
+                           newdata = control_group
+                         )
+  yhat_target <- predict(  
+                           object = fit_lm,
+                          newdata = target_group
+                        )
+  pooled_y <- c( control_group$y, target_group$y ) 
+  pooled_yhat <- c( yhat_control, yhat_target ) 
+  # estimate theta:
+  theta <- cov( pooled_y, pooled_yhat ) /
+           var( pooled_yhat )
+  results_this_experiment["cupac_lm"] <- 
+             mean(target_group$y) -
+             mean(control_group$y) -    
+             ( theta * mean(yhat_target) ) + 
+             ( theta * mean(yhat_control) ) 
+  
+  # stratify y based on quantiles of X:
+  combined_target_control <- 
+      bind_rows( target_group %>% dplyr::mutate(test_control="test")
+                 ,
+                 control_group %>% dplyr::mutate(test_control="control")  
+              ) %>% 
+      mutate( x1_median = median(x1),
+              x2_median = median(x2),
+              x3_median = median(x3)
+            ) %>% 
+      mutate( stratum = paste0( as.numeric(x1>x1_median),
+                                as.numeric(x2>x2_median),
+                                as.numeric(x3>x3_median)
+                              )
+            ) 
+  within_strata_calc <- 
+    combined_target_control %>% 
+        group_by( stratum ) %>% 
+        summarise( n_test_in_stratum = sum( if_else(test_control=="test",1,0) ),
+                   n_control_in_stratum = sum( if_else(test_control=="control",1,0) ),
+                   sum_test_y_in_stratum = sum( if_else(test_control=="test",y,0) ),
+                   sum_control_y_in_stratum = sum( if_else(test_control=="control",y,0) ),
+                   .groups = "drop"     # drop grouping after summarise
+                 ) %>% 
+        filter( n_test_in_stratum > 0 & n_control_in_stratum > 0 ) %>%     # discard strata without both test & control
+        mutate( # estimate treatment effect on y in each stratum:
+                y_diff_est_in_stratum = sum_test_y_in_stratum/n_test_in_stratum - 
+                                        sum_control_y_in_stratum/n_control_in_stratum
+              ) 
+  within_strata_calc$stratum_weight <- 
+    ( within_strata_calc$n_test_in_stratum + within_strata_calc$n_control_in_stratum ) /
+    ( sum(within_strata_calc$n_test_in_stratum) + sum(within_strata_calc$n_control_in_stratum) )
+  
+  results_this_experiment["y_stratified"] <- sum( within_strata_calc$y_diff_est_in_stratum * within_strata_calc$stratum_weight )
+  
+  # propensity score matching & propensity score weighting ----------------------------------------------------------------
+  combined_target_control <- 
+      bind_rows( target_group %>% dplyr::mutate(test_control="test")
+                 ,
+                 control_group %>% dplyr::mutate(test_control="control")  
+              ) 
+  propensity_model_logreg <- glm( formula = test_control ~ x1+x2+x3,
+                                     data = combined_target_control %>% mutate( test_control = if_else(test_control=="test",1,0) ),
+                                   family = binomial(link="logit") 
+                                )
+  target_group_propensity_scores <- predict(  object = propensity_model_logreg,
+                                             newdata = target_group,
+                                                type = "response"                # i.e. return predicted probability that y=1
+                                    )
+  holdout_group_propensity_scores <- predict(  object = propensity_model_logreg,
+                                              newdata = control_group,
+                                                 type = "response"                # i.e. return predicted probability that y=1 
+                                    )
+  target_y_vec <- target_group$y
+  matched_control_y_vec <- target_y_vec * NA
+  for( target_customer_i in 1:n_target_group ){
+      this_target_customer_propensity_score <- target_group_propensity_scores[ target_customer_i ]
+      this_target_customer_y <- target_group$y[target_customer_i]
+      closest_holdout_propensity_score_loc <- which.min( abs(this_target_customer_propensity_score-holdout_group_propensity_scores) )
+      matched_control_y_vec[ target_customer_i ] <- control_group$y[ closest_holdout_propensity_score_loc ] 
+  }
+  results_this_experiment["y_matched_propensity_score"] <- mean(target_y_vec) - mean(matched_control_y_vec)
+  
+  # technique from "http://www.math.umd.edu/~slud/s818M-MissingData/PropensityScoreWeightingR.pdf"
+  target_propensity_score_weights <- 1 / target_group_propensity_scores
+  target_mean_y_propensity_score_weighted <- sum( target_group$y * target_propensity_score_weights ) / sum(target_propensity_score_weights)
+  control_propensity_score_weights <- 1 / (1-holdout_group_propensity_scores)
+  control_mean_y_propensity_score_weighted <- sum( control_group$y * control_propensity_score_weights ) / sum(control_propensity_score_weights)
+  
+  results_this_experiment["propensity_score_weighting"] <- target_mean_y_propensity_score_weighted - control_mean_y_propensity_score_weighted
+  
+  # reduce variance with linear regression model:
+  combined_target_control <- 
+    bind_rows( target_group %>% dplyr::mutate(test_control="test")
+               ,
+               control_group %>% dplyr::mutate(test_control="control")  
+             ) %>% 
+    mutate( test_control = factor(test_control, levels=c("control","test")) )
+  fit_lm <- lm( formula = y ~ x1 + x2 + x3 + test_control,
+                   data = combined_target_control    
+              )
+  results_this_experiment["reduce_variance_by_lm"] <- coef(fit_lm)["test_controltest"] 
+  
+  # matching using y_hat from lm
+  # (future idea: could alternatively only include covariates X passing a chosen correlation threshold with Y)
+  predict_y_lm <- lm( 
+                      formula = y ~ x1 + x2 + x3, 
+                         data = training_data
+                    )
+  yhat_control <- predict(  
+                            object = predict_y_lm,
+                           newdata = control_group   
+                         )
+  yhat_target <- predict(  
+                            object = predict_y_lm,
+                           newdata = target_group   
+                         )  
+  matched_y_vec <- rep( as.numeric(NA), n_target_group)     # vector to store yhat value of matched control samples
+  for( target_customer_i in 1:n_target_group ){
+    yhat_target_customer_i <- yhat_target[target_customer_i] 
+    matched_y_vec[target_customer_i] <- 
+      # compare this target customer to every control customer, and save the closest one 
+      control_group$y[ which.min( abs(yhat_target_customer_i - yhat_control) ) ]
+  }
+  results_this_experiment["match_on_yhat_lm"] <- mean(target_group$y) - mean(matched_y_vec)
+  
+  # matching using y_hat from ranger (random forest):
+  fit_y_ranger <- ranger::ranger( 
+                      formula = y ~ x1 + x2 + x3, 
+                         data = training_data
+                    )
+  yhat_control <- predict(  
+                            object = fit_y_ranger,
+                              data = control_group   
+                          )$predictions
+  yhat_target <- predict(  
+                            object = fit_y_ranger,
+                              data = target_group   
+                        )$predictions  
+  matched_y_vec <- rep( as.numeric(NA), n_target_group)     # vector to store yhat value of matched control samples
+  for( target_customer_i in 1:n_target_group ){
+    yhat_target_customer_i <- yhat_target[target_customer_i] 
+    matched_y_vec[target_customer_i] <- 
+      # compare this target customer to every control customer, and save the closest one 
+      control_group$y[ which.min( abs(yhat_target_customer_i - yhat_control) ) ]
+  }
+  results_this_experiment["match_on_yhat_ranger"] <- mean(target_group$y) - mean(matched_y_vec)
+  
+  # pre-matching on ranger score
+  results_this_experiment["group_assign_on_yhat_ranger"] <- 
+    mean( assign_groups_ranger_score$y[ assign_groups_ranger_score$target_control=="target" ] ) -
+    mean( assign_groups_ranger_score$y[ assign_groups_ranger_score$target_control=="control" ] )
+      
+  # propensity matching using "MatchIt" --------------------------
+  combined_target_control <- 
+    bind_rows( target_group %>% dplyr::mutate(test_control=1)
+               ,
+               control_group %>% dplyr::mutate(test_control=0)  
+             )
+  suppressWarnings(
+    run_matchit <- matchit( formula = test_control ~ x1 + x2 + x3,
+                               data = combined_target_control,
+                             method = "nearest",
+                            replace = TRUE
+                          )
+  )
+  #plot(run_matchit, type="hist")
+  matchit_result_data <- match.data( run_matchit )
+  matchit_result_data_test <- matchit_result_data %>% filter(test_control==1) 
+  matchit_result_data_control <- matchit_result_data %>% filter(test_control==0)    
+  results_this_experiment["matchit_propensity_score"] <- 
+    mean( matchit_result_data_test$y ) -   # mean of y in test group                                           
+    (
+      # weighted mean of y in matched control group    
+      sum( matchit_result_data_control$y * matchit_result_data_control$weights) /                        
+      sum( matchit_result_data_control$weights )  
+    )
+   
+  # control_var CCA ----------------------------
+  combined_target_control <- 
+    bind_rows( target_group %>% dplyr::mutate(test_control="test")
+               ,
+               control_group %>% dplyr::mutate(test_control="control")  
+             )
+  # scale the columns in the training data:
+  training_data$scaled_y <- ( training_data$y - mean(training_data$y) ) /
+                                      sd( training_data$y )
+  training_data$scaled_x1 <- ( training_data$x1 - mean(training_data$x1) ) /
+                                      sd( training_data$x1 )
+  training_data$scaled_x2 <- ( training_data$x2 - mean(training_data$x2) ) /
+                                      sd( training_data$x2 )
+  training_data$scaled_x3 <- ( training_data$x3 - mean(training_data$x3) ) /
+                                      sd( training_data$x3 )
+    
+  run_cca <- CCA::cc( 
+                      X = training_data %>% dplyr::select(scaled_x1, scaled_x2, scaled_x3) %>% as.matrix(),
+                      Y = training_data %>% dplyr::select(scaled_y) %>% as.matrix()  
+                    )
+  cca_weights <- c( run_cca$xcoef )
+  names(cca_weights) <- c("x1","x2","x3")
+  combined_target_control$cca_xvar <- cca_weights[1] * c(scale(combined_target_control$x1)) +
+                                      cca_weights[2] * c(scale(combined_target_control$x2)) +
+                                      cca_weights[3] * c(scale(combined_target_control$x3))
+  target_cca_xvar <- combined_target_control %>% filter(test_control=="test") %>% pull(cca_xvar) 
+  control_cca_xvar <- combined_target_control %>% filter(test_control=="control") %>% pull(cca_xvar)
+  # estimate theta:
+  theta <- cov( combined_target_control$y, combined_target_control$cca_xvar ) /
+           var( combined_target_control$cca_xvar )
+  results_this_experiment["cca_control_var"] <- 
+             mean(target_group$y) -
+             mean(control_group$y) -    
+             ( theta * mean(target_cca_xvar) ) + 
+             ( theta * mean(control_cca_xvar) )
+   
+  # control_var CCA naughty ----------------------------
+  combined_target_control <- 
+    bind_rows( target_group %>% dplyr::mutate(test_control="test")
+               ,
+               control_group %>% dplyr::mutate(test_control="control")  
+             )
+  # scale the columns:
+  combined_target_control$scaled_y <- ( combined_target_control$y - mean(combined_target_control$y) ) /
+                                      sd( combined_target_control$y )
+  combined_target_control$scaled_x1 <- ( combined_target_control$x1 - mean(combined_target_control$x1) ) /
+                                      sd( combined_target_control$x1 )
+  combined_target_control$scaled_x2 <- ( combined_target_control$x2 - mean(combined_target_control$x2) ) /
+                                      sd( combined_target_control$x2 )
+  combined_target_control$scaled_x3 <- ( combined_target_control$x3 - mean(combined_target_control$x3) ) /
+                                      sd( combined_target_control$x3 )
+    
+  run_cca <- CCA::cc( 
+                      X = combined_target_control %>% select(scaled_x1, scaled_x2, scaled_x3) %>% as.matrix(),
+                      Y = combined_target_control %>% select(scaled_y) %>% as.matrix()  
+                    )
+  cca_weights <- c( run_cca$xcoef )
+  names(cca_weights) <- c("x1","x2","x3")
+  combined_target_control$cca_xvar <- cca_weights[1] * combined_target_control$scaled_x1 +
+                                      cca_weights[2] * combined_target_control$scaled_x2 +
+                                      cca_weights[3] * combined_target_control$scaled_x3
+  target_cca_xvar <- combined_target_control %>% filter(test_control=="test") %>% pull(cca_xvar) 
+  control_cca_xvar <- combined_target_control %>% filter(test_control=="control") %>% pull(cca_xvar)
+  # estimate theta:
+  theta <- cov( combined_target_control$y, combined_target_control$cca_xvar ) /
+           var( combined_target_control$cca_xvar )
+  results_this_experiment["cca_naughty"] <- 
+             mean(target_group$y) -
+             mean(control_group$y) -    
+             ( theta * mean(target_cca_xvar) ) + 
+             ( theta * mean(control_cca_xvar) ) 
+
+  
+  # pre-matching on nearest-neighbour y estimate:
+  results_this_experiment["group_assign_on_yhat_knn"] <- 
+    mean( assign_groups_nearest_neighbour$y[ assign_groups_nearest_neighbour$target_control=="target" ] ) -
+    mean( assign_groups_nearest_neighbour$y[ assign_groups_nearest_neighbour$target_control=="control" ] )
+  
+  
+  # multivariate control_var using PCA -------------------------------------
+  combined_target_control <- 
+    bind_rows( target_group %>% dplyr::mutate(test_control="test")
+               ,
+               control_group %>% dplyr::mutate(test_control="control")  
+             )
+  principal_components <- 
+    stats::prcomp( 
+                   x = combined_target_control %>% select(x1,x2,x3) %>% as.matrix(),
+                   scale = TRUE
+                 )$x
+  theta1 <- cov( combined_target_control$y, principal_components[,"PC1"] ) /
+            var( principal_components[,"PC1"] )
+  theta2 <- cov( combined_target_control$y, principal_components[,"PC2"] ) /
+            var( principal_components[,"PC2"] )
+  theta3 <- cov( combined_target_control$y, principal_components[,"PC3"] ) /
+            var( principal_components[,"PC2"] )
+  results_this_experiment["multivar_PCA_control_var"] <- 
+    mean( combined_target_control$y[combined_target_control$test_control=="test"] ) -
+    mean( combined_target_control$y[combined_target_control$test_control=="control"] ) -
+    theta1 * ( mean( principal_components[combined_target_control$test_control=="test","PC1"] ) -
+               mean( principal_components[combined_target_control$test_control=="control","PC1"] )
+             ) -
+    theta2 * ( mean( principal_components[combined_target_control$test_control=="test","PC2"] ) -
+               mean( principal_components[combined_target_control$test_control=="control","PC2"] )
+             ) -    
+    theta3 * ( mean( principal_components[combined_target_control$test_control=="test","PC3"] ) -
+               mean( principal_components[combined_target_control$test_control=="control","PC3"] )
+             )         
+  
+  return( results_this_experiment )                   
+}
+```
+
+# Simulation 1: Multivariate Normal Y 
+
+For my first simulation, I generate features $\mathbf{x}$ and response $y$ using the following multivariate normal distributions:
+
+$$\begin{array}{lcl}
+\begin{bmatrix} y \\ x_1 \\ x_2 \\ x_3 \end{bmatrix}_{treatment \space group} 
+&\sim& Multivariate \space Normal\Bigg(\mu=\begin{bmatrix}5+2\\2\\-1\\0\end{bmatrix}, \Sigma=\begin{bmatrix}1&0.2&0.5&0.3\\0.2&1&0.7&0.1\\0.5&0.7&1&0.6\\0.3&0.1&0.6&1\end{bmatrix}\Bigg) \\
+\begin{bmatrix} y \\ x_1 \\ x_2 \\ x_3 \end{bmatrix}_{control \space group} 
+&\sim& Multivariate \space Normal\Bigg(\mu=\begin{bmatrix}5\\2\\-1\\0\end{bmatrix}, \Sigma=\begin{bmatrix}1&0.2&0.5&0.3\\0.2&1&0.7&0.1\\0.5&0.7&1&0.6\\0.3&0.1&0.6&1\end{bmatrix}\Bigg) \\
+\end{array}$$
+
+I run 1000 simulations, in each simulation generating a 'training' dataset and an 'experimental' dataset (from the same distribution), then calculating each of the treatment effect estimators on each of these 1000 datasets.  
+
+```{r}
+
+# user inputs ------------------------------------------
+n_experiments_to_run <- 1000
+n_control_group <- 50
+n_target_group <- 200
+n_training_group <- 200
+population_simulation_method <- "multivariate_normal" 
+true_effect_size <- 2
+# ------------------------------------------------------
+
+# store_experiment_results_matrix <- matrix( 
+#                                            rep( as.numeric(NA), 17 * n_experiments_to_run ),
+#                                            ncol = 17
+#                                         )
+# colnames( store_experiment_results_matrix ) <- 
+#   c( 
+#      "true_difference", 
+#      "simple_difference",
+#      "cupac_ranger",
+#      "matched_control",
+#      "cupac_lm",
+#      "y_stratified",
+#      "y_matched_propensity_score",
+#      "propensity_score_weighting",
+#      "reduce_variance_by_lm",
+#      "match_on_yhat_lm",
+#      "match_on_yhat_ranger",
+#      "group_assign_on_yhat_ranger",
+#      "matchit_propensity_score",
+#      "cca_control_var",                 
+#      "cca_naughty",
+#      "group_assign_on_yhat_knn",
+#      "multivar_PCA_control_var"
+#     )
+# rownames( store_experiment_results_matrix ) <- 
+#   paste( "experiment", 1:n_experiments_to_run ) 
+
+# run the simulation (in parallel) --------------------------------------------------------------------
+ncores <- detectCores()           # check number of parallel cores available 
+cl <- makeCluster( ncores[1] -1 ) # not to overload your computer
+registerDoParallel(cl)            # register cluster for parallel computation 
+store_experiment_results_matrix <- foreach(         i = 1:n_experiments_to_run, 
+                                             .combine = rbind, 
+                                            .packages = c(
+                                                          "MASS",
+                                                          "tidyverse",
+                                                          "ranger",
+                                                          "MatchIt",
+                                                          "knitr",
+                                                          "CCA",
+                                                          "splines",
+                                                          "stats"
+                                                          )
+                                           ) %dopar% {
+        run_1_experiment(
+                                n_control_group = n_control_group,
+                                 n_target_group = n_target_group,
+                               n_training_group = n_training_group,
+                          population_sim_method = population_simulation_method,
+                                    effect_size = true_effect_size
+                        )
+   
+}
+stopCluster(cl)          # stop cluster
+
+# for( i in 1:n_experiments_to_run ){
+#   
+#   store_experiment_results_matrix[i,] <-  
+#         run_1_experiment(       
+#                                 n_control_group = n_control_group,
+#                                  n_target_group = n_target_group,
+#                                n_training_group = n_training_group,
+#                           population_sim_method = population_simulation_method,
+#                                     effect_size = true_effect_size
+#                         )  
+# }
+
+mean_estimate_each_method <- 
+  store_experiment_results_matrix %>% 
+    as_tibble() %>% 
+    summarise_all( mean ) %>% 
+    pivot_longer( cols = everything(),
+                  names_to = "estimator",
+                  values_to = "mean"
+                )
+
+rank_on_multivariate_normal <- 
+  store_experiment_results_matrix %>% 
+    as_tibble() %>% 
+    summarise_all( sd ) %>% 
+    pivot_longer( cols = everything(),
+                  names_to = "estimator",
+                  values_to = "standard_deviation"
+                ) %>%
+    left_join( mean_estimate_each_method,
+               by = "estimator"  
+             ) %>% 
+    select( estimator, mean, standard_deviation ) %>% 
+    arrange( standard_deviation ) %>% 
+    mutate( sd_rank = row_number() ) %>% 
+    mutate( data_simulation_method = "multivariate_normal" )
+```
+
+The distributions of the different estimators over the 1000 simulations are as follows:
+(it's quite difficult to see which estimator is which in the density plot but the estimators clearly have different variance, and most have lower variance than the simple difference estimator $\overline{y}_{(treated)}-\overline{y}_{(control)}$)
+
+```{r fig.width=12, fig.height=8}
+
+data_for_plot <- 
+  tibble(            estimator = "simple_difference",
+          estimated_difference = store_experiment_results_matrix[,"simple_difference"]  
+        )
+for( col_j in 3:ncol(store_experiment_results_matrix) ){
+  
+  estimator_name <- colnames(store_experiment_results_matrix)[col_j]
+  data_for_plot <- bind_rows(
+                              data_for_plot
+                              ,
+                              tibble(            estimator = estimator_name,
+                                      estimated_difference = store_experiment_results_matrix[,estimator_name]
+                                     )
+                   )
+}
+ 
+
+ggplot( data = data_for_plot,
+        aes(  
+                    x = estimated_difference,
+             group    = estimator,
+             fill     = estimator,
+             colour   = estimator
+           )  
+      ) + 
+  geom_density( alpha=0.1 ) +
+  labs( title = "Distribution of Estimators Around the True Effect (+2) in 1000 Simulated Experiments. Multivariate Normal Data.",
+        subtitle = "Simple Difference Drawn as Dashed Black Line"  
+      ) +
+  geom_vline( xintercept = 2 ) +
+  stat_density( data = data_for_plot %>% dplyr::filter(estimator=="simple_difference"),
+                geom = "line",
+                position = "identity",
+                show.legend = FALSE,
+                colour = "black",
+                linetype = "dashed"
+              )
+
+```
+
+The estimators rank as follows across the 1000 simulations (ranked in descending order of estimator variance)
+
+```{r fig.width=12}
+rank_on_multivariate_normal %>% 
+  knitr::kable()                    # print as a nice-looking table 
+
+ggplot( data = rank_on_multivariate_normal,
+        aes( x = reorder(estimator,-sd_rank) , y = standard_deviation )
+) + 
+  geom_bar( stat="identity" ) + 
+  labs( x = "Estimator", 
+        y = "Standard Deviation",
+        title = "Rank of Estimators in Terms of Their Variability over 1000 Simulated Experiments. Multivariate Normal Data."  
+      ) +
+  geom_text( colour="red", aes(label=round(standard_deviation,4)) ) +
+  coord_flip()
+```
+
+# Data Simulated by Linear Model
+
+For my second simulation, each observation $i$ is generated as follows:
+
+$$\begin{array}{lcl} 
+x_{i1} &\sim& uniform(-5,5) \\
+x_{i2} &\sim& uniform(-5,5) \\
+x_{i3} &\sim& uniform(-5,5) \\
+\epsilon_i &\sim& Normal(0,1) \\
+y_i &=& T_i + \beta_0 + \beta_1 x_{i1} + \beta_2 x_{i2} + \beta_3 x_{i3} + \beta_4 x_{i1}x_{i2} + \beta_5 x_{i1} x_{i3} + \beta_6 x_{i2} x_{i3} + \beta_7 x_{i1} x_{i2} x_{i3} + \epsilon_i \\
+T_i &=& \begin{cases} 2 \quad \text{if subject } i \text{ has received the treatment} \\ 0 \quad \text{if subject } i \text{ is in the control group} \end{cases} \\
+\end{array}$$
+
+Each $\beta_j$ coefficient is drawn from the distribution $\beta_j \sim uniform(-0.5,0.5)$. A unique set of coefficients is generated for each simulated experiment (i.e. 1000 different sets of coefficients).
+
+Again, I run 1000 simulations, each time generating datasets from this distribution and calculating each of the estimators on each of the 1000 datasets. 
+
+```{r}
+# user inputs ------------------------------------------
+n_experiments_to_run <- 1000
+n_control_group <- 50
+n_target_group <- 200
+n_training_group <- 200
+population_simulation_method <- "linear_model_with_interactions" 
+true_effect_size <- 2
+# ------------------------------------------------------
+
+# store_experiment_results_matrix <- matrix( 
+#                                            rep( as.numeric(NA), 17 * n_experiments_to_run ),
+#                                            ncol = 17
+#                                         )
+# colnames( store_experiment_results_matrix ) <- 
+#   c( 
+#      "true_difference", 
+#      "simple_difference",
+#      "cupac_ranger",
+#      "matched_control",
+#      "cupac_lm",
+#      "y_stratified",
+#      "y_matched_propensity_score",
+#      "propensity_score_weighting",
+#      "reduce_variance_by_lm",
+#      "match_on_yhat_lm",
+#      "match_on_yhat_ranger",
+#      "group_assign_on_yhat_ranger",
+#      "matchit_propensity_score",
+#      "cca_control_var",                 
+#      "cca_naughty",
+#      "group_assign_on_yhat_knn",
+#      "multivar_PCA_control_var"
+#     )
+# rownames( store_experiment_results_matrix ) <- 
+#   paste( "experiment", 1:n_experiments_to_run ) 
+
+# run the simulations (in parallel) --------------------------------------------------------------------
+ncores <- detectCores()           # check number of parallel cores available 
+cl <- makeCluster( ncores[1] -1 ) # not to overload your computer
+registerDoParallel(cl)            # register cluster for parallel computation 
+store_experiment_results_matrix <- foreach(         i = 1:n_experiments_to_run, 
+                                             .combine = rbind, 
+                                            .packages = c(
+                                                          "MASS",
+                                                          "tidyverse",
+                                                          "ranger",
+                                                          "MatchIt",
+                                                          "knitr",
+                                                          "CCA",
+                                                          "splines",
+                                                          "stats"
+                                                          )
+                                           ) %dopar% {
+        run_1_experiment(
+                                n_control_group = n_control_group,
+                                 n_target_group = n_target_group,
+                               n_training_group = n_training_group,
+                          population_sim_method = population_simulation_method,
+                                    effect_size = true_effect_size
+                        )
+   
+}
+stopCluster(cl)          # stop cluster
+
+# non-parallel version of the code:
+# for( i in 1:n_experiments_to_run ){
+#   
+#   store_experiment_results_matrix[i,] <-  
+#         run_1_experiment(       
+#                                 n_control_group = n_control_group,
+#                                  n_target_group = n_target_group,
+#                                n_training_group = n_training_group,
+#                           population_sim_method = population_simulation_method,
+#                                     effect_size = true_effect_size
+#                         )  
+# }
+
+mean_estimate_each_method <- 
+  store_experiment_results_matrix %>% 
+    as_tibble() %>% 
+    summarise_all( mean ) %>% 
+    pivot_longer( cols = everything(),
+                  names_to = "estimator",
+                  values_to = "mean"
+                )
+
+rank_on_linear_model_with_interactions <- 
+  store_experiment_results_matrix %>% 
+    as_tibble() %>% 
+    summarise_all( sd ) %>% 
+    pivot_longer( cols = everything(),
+                  names_to = "estimator",
+                  values_to = "standard_deviation"
+                ) %>%
+    left_join( mean_estimate_each_method,
+               by = "estimator"  
+             ) %>% 
+    select( estimator, mean, standard_deviation ) %>% 
+    arrange( standard_deviation ) %>% 
+    mutate( sd_rank = row_number() ) %>% 
+    mutate( data_simulation_method = "linear_model_with_interactions" )
+
+```
+
+Here is a density plot of the distributions of the different estimators across all of the 1000 simulations:
+
+```{r fig.width=12, fig.height=8}
+data_for_plot <- 
+  tibble(            estimator = "simple_difference",
+          estimated_difference = store_experiment_results_matrix[,"simple_difference"]  
+        )
+for( col_j in 3:ncol(store_experiment_results_matrix) ){
+  
+  estimator_name <- colnames(store_experiment_results_matrix)[col_j]
+  data_for_plot <- bind_rows(
+                              data_for_plot
+                              ,
+                              tibble(            estimator = estimator_name,
+                                      estimated_difference = store_experiment_results_matrix[,estimator_name]
+                                     )
+                   )
+}
+ 
+ggplot( data = data_for_plot,
+        aes(        x = estimated_difference,
+               group  = estimator,
+               fill   = estimator,
+               colour = estimator
+           )  
+      ) + 
+  geom_density( alpha=0.1 ) +
+  labs( title = "Distribution of Estimators Around the True Effect (+2) over 1000 Simulated Experiments. Data Simulated with a Linear Model.",
+        subtitle = "Simple Difference Drawn as Dashed Black Line"  
+      ) +
+  geom_vline( xintercept = 2 ) +
+  stat_density( data = data_for_plot %>% dplyr::filter(estimator=="simple_difference"),
+                geom = "line",
+                position = "identity",
+                show.legend = FALSE,
+                colour = "black",
+                linetype = "dashed"
+              )
+
+
+```
+
+Again, most estimators (a lot of the same ones as the previous simulation) have lower variance than the **simple difference** between group means estimator $\overline{y}_{(treated)}-\overline{y}_{(control)}$. Some estimators perform a bit too well, but this is probably due to the very simplistic (easy for a model to understand) data generation process for this simulation. 
+
+Here is how the estimators rank (in terms of estimator variability) over the 1000 simulations:
+
+```{r fig.width=12}
+rank_on_linear_model_with_interactions %>% 
+  knitr::kable()               # print a nice-looking table
+
+ggplot( data = rank_on_linear_model_with_interactions,
+        aes( x = reorder(estimator,-sd_rank) , y = standard_deviation )
+) + 
+  geom_bar( stat="identity" ) + 
+  labs( x = "Estimator", 
+        y = "Standard Deviation",
+        title = "Rank of Estimators in Terms of Their Variability over 1000 Simulated Experiments. \nData Simulated by a Linear Model."  
+      ) +
+  geom_text( colour="red", aes(label=round(standard_deviation,digits=4)) ) +
+  coord_flip()
+
+```
+
+# Data Simulated by Feature Partition
+
+For my third simulation, I roughly partition the feature space $\{X_1,X_2,X_3\}$ into 27 non-overlapping partitions (defining the partitions using random split points like a [decision tree](https://en.wikipedia.org/wiki/Decision_tree)), then let the response variable $Y$ be normally distributed $\hspace{3mm} Y\sim N(\mu_j, \sigma=2) \hspace{3mm}$ within each partition. 
+
+Each feature partition $j$ has mean $\mu_j$, where $\mu_j$ is randomly sampled from the discrete set $\{0,1,2,3,4,5,6,7,8,9,10\}$.  
+
+Again I run 1000 simulations, calculating the value of each estimator in each simulation. 
+
+A new set of random split points, and new set of partition means $\mu_j$, are generated for each simulation.     
+
+```{r}
+# user inputs ------------------------------------------
+n_experiments_to_run <- 1000
+n_control_group <- 50
+n_target_group <- 200
+n_training_group <- 200
+population_simulation_method <- "feature_partition" 
+true_effect_size <- 2
+# ------------------------------------------------------
+
+# store_experiment_results_matrix <- matrix( 
+#                                            rep( as.numeric(NA), 17 * n_experiments_to_run ),
+#                                            ncol = 17
+#                                         )
+# colnames( store_experiment_results_matrix ) <- 
+#   c( 
+#      "true_difference", 
+#      "simple_difference",
+#      "cupac_ranger",
+#      "matched_control",
+#      "cupac_lm",
+#      "y_stratified",
+#      "y_matched_propensity_score",
+#      "propensity_score_weighting",
+#      "reduce_variance_by_lm",
+#      "match_on_yhat_lm",
+#      "match_on_yhat_ranger",
+#      "group_assign_on_yhat_ranger",
+#      "matchit_propensity_score",
+#      "cca_control_var",                 
+#      "cca_naughty",
+#      "group_assign_on_yhat_knn",
+#      "multivar_PCA_control_var"
+#     )
+# rownames( store_experiment_results_matrix ) <- 
+#   paste( "experiment", 1:n_experiments_to_run ) 
+
+# run the simulation (in parallel) --------------------------------------------------------------------
+ncores <- detectCores()           # check number of parallel cores available 
+cl <- makeCluster( ncores[1] -1 ) # not to overload your computer
+registerDoParallel(cl)            # register cluster for parallel computation 
+store_experiment_results_matrix <- foreach(         i = 1:n_experiments_to_run, 
+                                             .combine = rbind, 
+                                            .packages = c(
+                                                          "MASS",
+                                                          "tidyverse",
+                                                          "ranger",
+                                                          "MatchIt",
+                                                          "knitr",
+                                                          "CCA",
+                                                          "splines",
+                                                          "stats"
+                                                          )
+                                           ) %dopar% {
+        run_1_experiment(
+                                n_control_group = n_control_group,
+                                 n_target_group = n_target_group,
+                               n_training_group = n_training_group,
+                          population_sim_method = population_simulation_method,
+                                    effect_size = true_effect_size
+                        )
+   
+}
+stopCluster(cl)          # stop cluster
+
+# for( i in 1:n_experiments_to_run ){
+#   
+#   store_experiment_results_matrix[i,] <-  
+#         run_1_experiment(       
+#                                 n_control_group = n_control_group,
+#                                  n_target_group = n_target_group,
+#                                n_training_group = n_training_group,
+#                           population_sim_method = population_simulation_method,
+#                                     effect_size = true_effect_size
+#                         )  
+# }
+
+mean_estimate_each_method <- 
+  store_experiment_results_matrix %>% 
+    as_tibble() %>% 
+    summarise_all( mean ) %>% 
+    pivot_longer( cols = everything(),
+                  names_to = "estimator",
+                  values_to = "mean"
+                )
+
+rank_on_feature_partition <- 
+  store_experiment_results_matrix %>% 
+    as_tibble() %>% 
+    summarise_all( sd ) %>% 
+    pivot_longer( cols = everything(),
+                  names_to = "estimator",
+                  values_to = "standard_deviation"
+                ) %>%
+    left_join( mean_estimate_each_method,
+               by = "estimator"  
+             ) %>% 
+    select( estimator, mean, standard_deviation ) %>% 
+    arrange( standard_deviation ) %>% 
+    mutate( sd_rank = row_number() ) %>% 
+    mutate( data_simulation_method = "feature_partition" )
+
+```
+
+Here is a density plot of the distributions of the estimators across the 1000 simulations: 
+
+```{r fig.width=12, fig.height=8}
+
+data_for_plot <- 
+  tibble(            estimator = "simple_difference",
+          estimated_difference = store_experiment_results_matrix[,"simple_difference"]  
+        )
+for( col_j in 3:ncol(store_experiment_results_matrix) ){
+  
+  estimator_name <- colnames(store_experiment_results_matrix)[col_j]
+  data_for_plot <- bind_rows(
+                              data_for_plot
+                              ,
+                              tibble(            estimator = estimator_name,
+                                      estimated_difference = store_experiment_results_matrix[,estimator_name]
+                                     )
+                   )
+}
+ 
+ggplot( data = data_for_plot,      # make the simple difference line thicker
+        aes(  
+                    x = estimated_difference,
+             group    = estimator,
+             fill     = estimator,
+             colour   = estimator
+           )  
+      ) + 
+  geom_density( alpha=0.1 ) +
+  labs( title = "Distribution of Estimators Around the True Effect (+2) over 1000 Simulated Experiments. Gaussian Y within each Feature Partition",
+        subtitle = "Simple Difference Drawn as Dashed Black Line"  
+      ) +
+  geom_vline( xintercept = 2 ) +
+  stat_density( data = data_for_plot %>% dplyr::filter(estimator=="simple_difference"),
+                geom = "line",
+                position = "identity",
+                show.legend = FALSE,
+                colour = "black",
+                linetype = "dashed"
+              )
+
+  
+```
+
+For this simulation method, most of the estimators appear to offer only marginal improvement over the **simple difference** method, with the exception of the model-based group assignment methods, and **cupac_ranger**. The partition-based **cupac_ranger** model is presumably well-suited to data simulated by a feature-partitioning process.  
+
+Here is how the estimators rank (in terms of estimator variability) over the 1000 simulations:
+
+```{r width=10}
+rank_on_feature_partition %>% 
+  knitr::kable()                    # print a nice-looking table
+
+ggplot( data = rank_on_feature_partition,
+        aes( x = reorder(estimator,-sd_rank) , y = standard_deviation )
+) + 
+  geom_bar( stat="identity" ) + 
+  labs( x = "Estimator", 
+        y = "Standard Deviation",
+        title = "Rank of Estimators in Terms of Their Variability. \nData Simulated by a Feature Partitioning."  
+      ) +
+  geom_text( colour="red", aes(label=round(standard_deviation,digits=4)) ) +
+  coord_flip()
+```
+
+# Data Simulated by Nearest-Neighbour Distance Weighting
+
+For my fourth simulation, I generate each simulated dataset as follows:
+
+1. 10 random subjects are created, each with their own features drawn from $X_j \sim uniform(-5,5) \text{ for } j=1,2,3$ and response $Y\sim uniform(0,100)$
+
+2. Each subject $i$ in the 'training' and 'experimental' datasets also have random features $\{x_1,x_2,x_3\}_i$ drawn from $x_j \sim uniform(-5,5)$. The response $Y_i$ of each subject $i$ (in the 'training' or 'experimental' dataset) is a weighted average of the responses $Y_k$ of the 10 random subjects (generated in step 1), where the weights used are the cosine similarities (cosine of the angle) between the feature vector $\{x_1,x_2,x_3\}_i$ of subject $i$ and the feature vectors $\{x_1,x_2,x_3\}_k$ of the 10 random subjects (the cosine similarities are scaled to the non-negative range [0,2] before being used as weights).    
+
+```{r}
+
+# user inputs ------------------------------------------
+n_experiments_to_run <- 1000
+n_control_group <- 50
+n_target_group <- 200
+n_training_group <- 200
+population_simulation_method <- "knn_reps" 
+true_effect_size <- 2
+# ------------------------------------------------------
+
+# store_experiment_results_matrix <- matrix( 
+#                                            rep( as.numeric(NA), 17 * n_experiments_to_run ),
+#                                            ncol = 17
+#                                         )
+# colnames( store_experiment_results_matrix ) <- 
+#   c( 
+#      "true_difference", 
+#      "simple_difference",
+#      "cupac_ranger",
+#      "matched_control",
+#      "cupac_lm",
+#      "y_stratified",
+#      "y_matched_propensity_score",
+#      "propensity_score_weighting",
+#      "reduce_variance_by_lm",
+#      "match_on_yhat_lm",
+#      "match_on_yhat_ranger",
+#      "group_assign_on_yhat_ranger",
+#      "matchit_propensity_score",
+#      "cca_control_var",                 
+#      "cca_naughty",
+#      "group_assign_on_yhat_knn",
+#      "multivar_PCA_control_var"
+#     )
+# rownames( store_experiment_results_matrix ) <- 
+#   paste( "experiment", 1:n_experiments_to_run ) 
+
+# run the simulation (in parallel) --------------------------------------------------------------------
+ncores <- detectCores()           # check number of parallel cores available 
+cl <- makeCluster( ncores[1] -1 ) # not to overload your computer
+registerDoParallel(cl)            # register cluster for parallel computation 
+store_experiment_results_matrix <- foreach(         i = 1:n_experiments_to_run, 
+                                             .combine = rbind, 
+                                            .packages = c(
+                                                          "MASS",
+                                                          "tidyverse",
+                                                          "ranger",
+                                                          "MatchIt",
+                                                          "knitr",
+                                                          "CCA",
+                                                          "splines",
+                                                          "stats"
+                                                          )
+                                           ) %dopar% {
+        run_1_experiment(
+                                n_control_group = n_control_group,
+                                 n_target_group = n_target_group,
+                               n_training_group = n_training_group,
+                          population_sim_method = population_simulation_method,
+                                    effect_size = true_effect_size
+                        )
+   
+}
+stopCluster(cl)          # stop cluster
+
+# for( i in 1:n_experiments_to_run ){
+#   
+#   store_experiment_results_matrix[i,] <-  
+#         run_1_experiment(       
+#                                 n_control_group = n_control_group,
+#                                  n_target_group = n_target_group,
+#                                n_training_group = n_training_group,
+#                           population_sim_method = population_simulation_method,
+#                                     effect_size = true_effect_size
+#                         )  
+# }
+
+mean_estimate_each_method <- 
+  store_experiment_results_matrix %>% 
+    as_tibble() %>% 
+    summarise_all( mean ) %>% 
+    pivot_longer( cols = everything(),
+                  names_to = "estimator",
+                  values_to = "mean"
+                )
+
+rank_on_knn_reps <- 
+  store_experiment_results_matrix %>% 
+    as_tibble() %>% 
+    summarise_all( sd ) %>% 
+    pivot_longer( cols = everything(),
+                  names_to = "estimator",
+                  values_to = "standard_deviation"
+                ) %>%
+    left_join( mean_estimate_each_method,
+               by = "estimator"  
+             ) %>% 
+    select( estimator, mean, standard_deviation ) %>% 
+    arrange( standard_deviation ) %>% 
+    mutate( sd_rank = row_number() ) %>% 
+    mutate( data_simulation_method = "weighted_sum_of_neighbours" )
+
+```
+
+Here is a density plot of the distributions of the estimators across the 1000 simulations: 
+
+```{r fig.width=12, fig.height=8}
+
+data_for_plot <- 
+  tibble(            estimator = "simple_difference",
+          estimated_difference = store_experiment_results_matrix[,"simple_difference"]  
+        )
+for( col_j in 3:ncol(store_experiment_results_matrix) ){
+  
+  estimator_name <- colnames(store_experiment_results_matrix)[col_j]
+  data_for_plot <- bind_rows(
+                              data_for_plot
+                              ,
+                              tibble(            estimator = estimator_name,
+                                      estimated_difference = store_experiment_results_matrix[,estimator_name]
+                                     )
+                   )
+}
+
+ggplot( data = data_for_plot,      # make the simple difference line thicker
+        aes(  
+                    x = estimated_difference,
+             group    = estimator,
+             fill     = estimator,
+             colour   = estimator
+           )  
+      ) + 
+  geom_density( alpha=0.1 ) +
+  labs( title = "Y as Weighted Sum of Nearest Neighbours",
+        subtitle = "Simple Difference Drawn as Dashed Black Line"  
+      ) +
+  geom_vline( xintercept = 2 ) +
+  stat_density( data = data_for_plot %>% dplyr::filter(estimator=="simple_difference"),
+                geom = "line",
+                position = "identity",
+                show.legend = FALSE,
+                colour = "black",
+                linetype = "dashed"
+              )
+
+
+```
+
+Interestingly, all methods convincingly outperform the **simple difference** estimator $\hspace{3mm} \overline{y}_{(treated)}-\overline{y}_{(control)} \hspace{3mm}$ for this simulation method.
+
+```{r width=10}
+rank_on_knn_reps %>% 
+  knitr::kable()                    # print a nice-looking table
+
+ggplot( data = rank_on_knn_reps,
+        aes( x = reorder(estimator,-sd_rank) , y = standard_deviation )
+) + 
+  geom_bar( stat="identity" ) + 
+  labs( x = "Estimator", 
+        y = "Standard Deviation",
+        title = "Rank of Estimators in Terms of Their Variability. \nData Simulated by a Nearest-Neighbour Distance Weighting"  
+      ) +
+  geom_text( colour="red", aes(label=round(standard_deviation,digits=4)) ) + 
+  coord_flip()
+```
+
+# Summary of Results
+
+Here is a visualisation showing how the different estimators rank (in terms of minimizing variance) across all four simulation:
+
+```{r fig.width=12, fig.height=6}
+bind_rows( rank_on_multivariate_normal,
+           rank_on_linear_model_with_interactions,
+           rank_on_feature_partition,
+           rank_on_knn_reps
+         ) %>%
+  filter( estimator != "true_difference" ) %>% 
+  ggplot( data = .,
+          aes(      y = estimator,
+                    x = data_simulation_method,
+                label = sd_rank,
+               colour = sd_rank
+             )
+         ) +
+  geom_tile( aes(fill = sd_rank) ) +
+  geom_text( colour = "red" ) +
+  labs( title = "Performance Rank of Each Estimator Within each Simulation" )
+
+```
+
+My opinion is that an estimator which achieves consistently low variance across different data scenarios is more useful than an estimator which shows extremely low variance in some contexts but high variance in others. Having an estimator that one can trust to perform better than the **simple difference** between group means estimator $\hspace{3mm} \overline{y}_{(treated)}-\overline{y}_{(control)} \hspace{3mm}$ in any given experiment would be the ideal outcome. 
+
+Across all 4 different simulation methods, the pre-experiment group assignment methods appear the most consistent low-variance estimators of the treatment effect. The [CUPAC](https://doordash.engineering/2020/06/08/improving-experimental-power-through-control-using-predictions-as-covariate-cupac/) methods are also both performant and consistent across the different simulations.    
+
+Of course more experimentation is required, but the results of these simulations suggest that all of the assessed methods (aside from the matching methods which sample with replacement) produce an unbiased estimator of the treatment effect less variable than the standard *difference between group means* estimator $\hspace{3mm} \overline{y}_{(treated)}-\overline{y}_{(control)} \hspace{3mm}$ in all contexts. 
+
+# Control Variates {#controlvariates}
+$$\hat{Y}_{cv}=\overline{Y}-\theta\overline{X} + \theta E\Big[X\Big]$$
+
+is an unbiased estimator of $E\Big[Y\Big]$. 
+
+However, it requires us to know $E\Big[X\Big]$.
+
+The variance of $\hat{Y}_{cv}$ is minimized where $\hspace{3mm} \theta=\displaystyle\frac{COV(Y,X)}{VAR(X)}$. 
+
+Using this optimal $\theta$, the variance of the estimator is $\hspace{3mm} VAR\Big[\hat{Y}_{cv}\Big]=VAR[\overline{Y}](1-\rho^2)\hspace{3mm}$, where $\rho$ is the correlation between $Y$ and $X$.  
+
+Given that $\hspace{3mm}E\Big[X^{(t)}\Big]=E\Big[X^{(c)}\Big]\hspace{3mm}$, then $\hspace{3mm}\Delta_{cv}=\hat{Y}_{cv}^{(t)}-\hat{Y}_{cv}^{(c)}\hspace{3mm}$ is an unbiased estimator of $\delta=E\Big[\Delta\Big]=E\Big[\overline{Y}^{(t)}-\overline{Y}^{(c)}\Big]$. 
+
+The variance of this estimator is $\hspace{3mm}VAR\Big[\Delta_{cv}\Big]=VAR\Big[\Delta\Big](1-\rho^2)\hspace{3mm}$, where $\rho$ is the correlation between $Y$ and $X$. 
+
+In order for the estimate to be unbiased, the same $\theta$ must be used for both control and treatment - it can be estimated on both groups pooled together. 
+
+For further information, refer to [this paper](https://exp-platform.com/cuped/)
+
+# Extending Control Variates to Multiple Variates {#manycontrolvariates}
+
+The method of using *control variates* (features $X_j$ correlated with $Y$) to reduce the variance of an estimator, as described in [this paper](https://exp-platform.com/cuped/), naturally extends to the case of multiple control variates. I couldn't find this in the literature, but it seems like a natural extension of the technique, calculated using simple [variance](https://en.wikipedia.org/wiki/Variance#Properties)/[covariance](https://en.wikipedia.org/wiki/Covariance#Properties) algebra.
+
+The control-variate estimator $\hspace{3mm}\hat{Y}_{cv}\hspace{3mm}$, using $p$ control variates, is defined:
+
+$$\hat{Y}_{cv}=\overline{Y} - \theta_1\overline{X}_1 + \theta_1 E\Big[X_1\Big] - \theta_2\overline{X}_2 + \theta_2 E\Big[X_2\Big] - ... - \theta_p\overline{X}_p + \theta_p E\Big[X_p\Big]$$
+
+It is an unbiased estimator of $E\Big[Y\Big]$ (i.e. $E\Big[\hat{Y}_{cv}\Big]=E\Big[Y\Big]$), with potentially smaller variance than the unbiased estimator $\overline{Y}$.
+
+The variance of this estimator $\hat{Y}_{cv}$ is:
+
+$$\begin{array}{lcl}
+VAR\Big[\hat{Y}_{cv}\Big] &=& VAR\Big[\overline{Y}\Big] + \displaystyle\sum_{j=1}^p \theta_j^2VAR\Big[\overline{X}_j\Big] -2\displaystyle\sum_{j=1}^p\theta_j COV\Big[\overline{Y},\overline{X}_j\Big] + 2\displaystyle\sum_{1\leq i<j\leq p} \theta_i \theta_j COV\Big[\overline{X}_i,\overline{X}_j\Big] \\
+&=&
+\displaystyle\frac{1}{n} VAR\Big[Y\Big] + \frac{1}{n} \displaystyle\sum_{j=1}^p \theta_j^2 VAR\Big[X_j\Big] - \frac{2}{n}\displaystyle\sum_{j=1}^p \theta_j COV\Big[Y,X_j\Big] + \frac{1}{n}\sum_{1\leq i<j\leq p}\theta_i \theta_j COV\Big[X_i, X_j \Big] \\
+\end{array}$$
+
+We can then use this result to minimize the variance of the estimator $\hat{Y}_{cv}$ by choosing optimal values of $\theta_1,..,\theta_p$ (using estimates of the quantities $VAR[Y],COV[Y,X_j],COV[X_i,X_j]$ calculated from our sample data).
+
+If we can assume that $\space COV\Big[X_i, X_j \Big]=0 \quad \forall i\neq j$ (justification later), then the expression simplifies to:
+
+$$\begin{array}{lcl}
+VAR\Big[\hat{Y}_{cv}\Big] 
+&=& 
+\displaystyle\frac{1}{n} VAR\Big[Y\Big] + \frac{1}{n} \displaystyle\sum_{j=1}^p \theta_j^2 VAR\Big[X_j\Big] - \frac{2}{n}\displaystyle\sum_{j=1}^p \theta_j COV\Big[Y,X_j\Big] \\
+\end{array}$$
+
+We can maximise this expression separately for each $\theta_j$: taking the derivative in terms of $\theta_j$, and solving for where this expression is equal to 0. This gives the optimal solution: 
+
+$$\theta_j \quad=\quad \displaystyle\frac{COV\Big[Y, X_j\Big]}{VAR\Big[X_j\Big]}  \quad\quad \text{ for } j=1,..,p$$
+
+We can then use this result to define an unbiased reduced-variance estimator $\Delta_{cv}=\hat{Y}_{cv}^{(treated)}-\hat{Y}_{cv}^{(control)}$ of $\delta=E\Big[\Delta\Big]=E\Big[\overline{Y}^{(t)}-\overline{Y}^{(c)}\Big]$:
+
+$$\begin{array}{lcl} 
+\Delta_{cv} 
+&=&
+\hat{Y}_{cv}^{(treated)}-\hat{Y}_{cv}^{(control)} \\
+&=& 
+\Bigg(
+\overline{Y}^{(treated)} - \displaystyle\sum_{i=1}^p \Big\{ \theta_i \overline{X}_i^{(treated)} + \theta_i E\big[X_i^{(treated)}\big] \Big\} 
+\Bigg) 
+-
+\Bigg(
+\overline{Y}^{(control)} - \displaystyle\sum_{i=1}^p \Big\{ \theta_i \overline{X}_i^{(control)} + \theta_i E\big[X_i^{(control)}\big] \Big\} 
+\Bigg) \\
+&=& \overline{Y}^{(treated)} - \overline{Y}^{(control)} - \displaystyle\sum_{i=1}^p \theta_i \Big(\overline{X}_i^{(treated)}-\overline{X}_i^{(control)}\Big) \hspace{15mm} \text{..assuming that } E\Big[X_i^{(treated)}\Big]=E\Big[X_i^{(control)}\Big]
+\end{array}$$
+
+In my experiments here, I justify the assumption $\hspace{3mm} COV\Big[X_i, X_j \Big]=0 \quad \forall i\neq j\hspace{3mm}$ by performing [Principal Component Analysis](https://en.wikipedia.org/wiki/Principal_component_analysis) on the sample features $X_1,X_2,X_3$ prior to calculating the estimator $\Delta_{cv}$ (I'm assuming that this linear combination making the **sample** features uncorrelated also makes the **population** features uncorrelated, at least approximately). 
+
+# Some nice resources
+
+* [Modern Algorithms for Matching in Observational Studies](https://www.annualreviews.org/doi/pdf/10.1146/annurev-statistics-031219-041058)
+
+* [Unbiased Variance Reduction in Randomized Experiments](https://arxiv.org/pdf/1904.03817.pdf) 
+
+* [Improving the Sensitivity of Online Controlled Experiments by Utilizing Pre-Experiment Data (CUPED)](https://exp-platform.com/cuped/)
+
+* [Improving Experimental Power through Control Using Predictions as Covariate (CUPAC)](https://doordash.engineering/2020/06/08/improving-experimental-power-through-control-using-predictions-as-covariate-cupac/)
+
+* [MatchIt: Nonparametric Preprocessing forParametric Causal Inference](https://r.iq.harvard.edu/docs/matchit/2.4-20/matchit.pdf)
+
+* [Increasing the sensitivity of A/B tests by utilizing the variance estimates of experimental units](https://research.fb.com/blog/2020/10/increasing-the-sensitivity-of-a-b-tests-by-utilizing-the-variance-estimates-of-experimental-units/)
+
+* [Variance reduction in randomised trials by inverse probability weighting using the propensity score](https://onlinelibrary.wiley.com/doi/full/10.1002/sim.5991)
+
+* [A Practical Guide for Using Propensity Score Weighting in R](http://www.math.umd.edu/~slud/s818M-MissingData/PropensityScoreWeightingR.pdf)

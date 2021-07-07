@@ -1,0 +1,574 @@
+---
+title: "Exploring_GBM_package_in_R"
+author: "Joe"
+date: "25 August 2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(gbm)        # Generalized Boosted Regression Models
+library(mlbench)    # for the Boston Housing dataset
+library(caret)
+library(dplyr)
+library(rpart)
+
+```
+
+These notes explain the basic Gradient Boosting Machine algorithm, as used by the **gbm** package in R. 
+
+A detailed explanation of the algorithm is available in the 'gbm vignette' (find a link to this by running *help(gbm)* in the R console).
+
+The main idea behind a boosted model is that it fits many weak learners (simple models) one at a time, each added model improving upon the predictions of the previous models. Each subsequent model tries to find and correct or adjust/compensate for the errors of the models coming before it.  
+
+The gbm() package in R performs Stochastic Gradient Boosting. 'Stochastic' (i.e. random) refers to the fact that each tree is built on a different random subset of the data (a random subset of rows/observations, not a random subset of the features). 'Boosting' refers to the fact the final model is a composite of many separate models, each subsequent model attempting to build upon the shortfalls of the models fit prior to it. 'Gradient' refers to the fact that we use the gradient (rate of change) of the loss function in order to guide the training of the model.           
+
+We are going to use use a GBM to solve a regression regression problem: predict the median residential house value (a continuous variable) per town using the following features (predictors): 
+
+variable  | explanation
+----------|----------------------------------
+crim      |	per capita crime rate by town
+zn	      | proportion of residential land zoned for lots over 25,000 sq.ft
+indus     | proportion of non-retail business acres per town
+chas	    | Charles River dummy variable (= 1 if tract bounds river; 0 otherwise)
+nox	      | nitric oxides concentration (parts per 10 million)
+rm	      | average number of rooms per dwelling
+age	      | proportion of owner-occupied units built prior to 1940
+dis	      | weighted distances to five Boston employment centres
+rad	      | index of accessibility to radial highways
+tax	      | full-value property-tax rate per USD 10,000
+ptratio	  | pupil-teacher ratio by town
+b	        | 1000(B - 0.63)^2 where B is the proportion of blacks by town
+lstat	    | percentage of lower status of the population
+
+```{r load_data}
+
+data(BostonHousing)
+
+ncol(BostonHousing)    # 13 predictors and 1 response variable
+nrow(BostonHousing)    # 506 samples/observations
+head(BostonHousing)
+
+
+```
+
+We split our data into a training and a testing set:
+
+```{r train_test_split}
+
+set.seed(6035)
+  
+# define the indices of the training set:
+train_index <- sample( 1:nrow(BostonHousing), 
+                       size = round( nrow(BostonHousing)*0.8 )
+                     )
+trainset <- BostonHousing[train_index,]
+testset <- BostonHousing[-train_index,]
+
+# check for overlap: 
+intersect( trainset, testset )
+
+```
+
+Going forward, I'm going to call the response variable (median home value) $y$ and refer to the set of all features as $x$.
+
+The algorithm used by the R package gbm() works like this:
+
+1. We choose a loss function. Given a prediction $f(x_i)$ for a single sample/observation $i$, the loss function quantifies how bad the prediction is (how far the prediction is from the true response $y_i$. For example, the squared error loss function is $L\Big(y_i,f(x_i)\Big)=\frac{1}{2}\Big(y_i-f(x_i)\Big)^2$. So, if we predict a value of 45 for an observation and the true value is 41, then that is a loss of $\frac{1}{2}(41-45)^2=8$.
+Another possible loss function is absolute loss, which is $L\Big(y_i,f(x_i)\Big)=\Big|y_i-f(x_i)\Big|$. There are many other choices of loss function.
+
+Suppose going forward that we've chosen absolute loss $L\Big(y_i,f(x_i)\Big)=\Big|y_i-f(x_i)\Big|$.  
+
+2.  Build the initial model $f_0(x)=c$ (i.e. for every observation $y_i$ we just predict the same constant).         
+We choose the constant $c$ which minimises our loss function. Because we chose the absolute loss function, this is minimised by the median of $y$ (it'd be the mean of $y$ if we were using squared error loss).
+
+So, our initial model is $f_0(x_i) = median[y]$
+
+3. For each observation $i$, we calculate the negative gradient of our loss function $L\Big(y_i, f(x_i) \Big)$, in terms of our model prediction $f(x_i)$: 
+
+$$z_i = -\frac{\partial L}{\partial f(x_i)}$$
+
+For the absolute loss function, this is 
+
+$$z_i = sign \Big[ y_i - f_0(x_i) \Big]$$ 
+
+For a single observation $i$, here is what loss functions would look like at different predictions $f(x_i)$ of true value $y_i=10$:
+
+```{r gradient_explanation}
+par(mar=c(5,6,4,1)+.1)
+
+fx <- seq(0,20,0.001) 
+
+plot( x = fx,
+      y = 0.5*(10-fx)^2,
+      ylab = expression(plain(loss):0.5*(10-f(x[i]))^2),
+      type = "l",
+      xlab = expression(plain(prediction):f(x[i])),
+      main = "squared error loss function for different predictions \n (true value 10)"
+    )
+abline( v = 10, lty = 3 )
+
+plot( x = fx,
+      y = abs(10-fx),
+      ylab = expression(plain(loss):abs(10-f(x[i]))),
+      type = "l",
+      xlab = expression(plain(prediction):f(x[i])),
+      main = "absolute loss function for different predictions \n (true value 10)"
+    )
+abline( v = 10, lty = 3 )
+
+```
+
+Suppose we look at a single observation: if $y_3 = 10$ (the observed true value) and our initial model $f_0(x_i)$ predicts this value as $f_0(x_3)=5$, then the negative gradient at this point is $z_3 = sign \Big[10-5\Big]=1$. This means that at this point, a 1 unit increase in our prediction results in a 1 unit decrease in our absolute loss function (we can see that the gradient/derivative is always 1 or -1 for the absolute loss function). This is useful because it tells us that we need to increase the value of our prediction in order to get closer to the true value. If we'd predicted any value above 10, then the negative gradient would be -1 (which means that the predicted is higher than the true value which we're trying to predict).  
+
+The negative gradient for squared error loss, had we chosen it, would be $z_i = y_i - f_0(x_i)$, which is the residual of model $f_0(x_i)$. So, $z_3$ would be $z_3 = 10-5 = 5$, which means that the squared error loss function is changing at a rate of -5 for every unit increase in $f_0(x_3)$ at this point. We can use this to tell us that the adjustment which we need to improve our prediction of '5' is to increase it by +5 to reach the true value $y_i=10$.  
+
+The gradient gives the rate of change (derivative) of the loss function for a given prediction $f(x_i)$, which we can use to describe the places where our predictions are failing. 
+
+For each individual $i$, we have their true response $y_i$, a model prediction for their response from our intial model $f_0(x_i)$, and an indication $z_i$ of which direction (and possibly how much) to change our prediction $f_0(x_i)$ in order to get it closer to $y_i$. 
+
+Now we want a model which can take this information about where our initial model $f_0(x_i)$ went wrong, and make adjustments to it. 
+
+3. We fit a regression model $t_1$ to a random subset of our data (gbm() in R fits a binary splitting regression tree). Using a random subset instead of the full training set improves the model's performance by encouraging more diversity amongst the trees (it ensures that different trees do not all fit very similarly to each other).
+We build this model to predict the negative gradients $z_i$ for each individual $i$ using our features $x_i$. So, we are building a model which tries to predict, using our features/predictors, where our initial model $f_0(x_i)$ tends to make errors.     
+
+4. Still using the same random subset of our data, for each of the $K$ terminal nodes in our regression tree $t_1$, we compute **optimal terminal node predictions** $\rho_1$, $\rho_2$, $\rho_3$, ..., $\rho_k$ as 
+
+$$\rho_k \quad = \quad \underset{\rho}{ \text{arg min} } \sum_{\text{all } x_i \text{ in node } k} L\Big(y_i, \space f_0(x_i) + \rho \Big)$$
+
+i.e. for each terminal node $k$, $\rho_k$ is the correction/adjustment that we are going to apply to the our initial predictions $f_0(x_i)$, with the same correction applying to all observations within the same terminal node.  
+
+5. We now update our intial model $f_0(x_i)$, adding the corrections/adjustments $\rho_k$:
+
+$$f_1(x_i) \quad = \quad f_0(x_i) \quad + \quad \rho_k(x_i)  $$
+Usually, we apply a shrinkage parameter/learning rate $\lambda$ to this, updating our model as 
+
+$$f_1(x_i) \quad = \quad f_0(x_i) \quad + \quad \lambda\rho_k(x_i)$$
+
+The learning rate $\lambda$ causes the model to learn/update more slowly (it makes the effect of the corrections/adjustments smaller). This is desirable as large corrections/jumps within a single step could cause us to make corrections that overshoot our target (e.g. a prediction that was smaller than the true value could become a prediction that is bigger without getting any closer to the true value).  
+
+The documentation for gbm() in R suggests that a learning rate of between $\lambda=0.001$ and $\lambda = 0.1$ normally works well, with a preference for as slow learning as possible.
+
+We will see a very small boost in the accuracy/performance of the model in going from our initial model $f_0(x_i)$ to our boosted model $f_1(x_i)$
+
+6. We now proceed in the same manner, setting $f_1(x_i)$ as our new base model, quantifying the observations for which $f_1(x_i)$ predicts badly, and trying to adjust these predictions using another model.   
+
+*  We calculate the negative gradient $z_i$ for the model $f_1(x_i)$
+
+* To a new random subset of our training data, we fit a new regression tree $t_2$ to predict the $z_i$ of $f_1(x_i)$.
+
+* we calculate new optimal terminal node predictions $\rho_1$, $\rho_2$, $\rho_3$, ..., $\rho_k$ for our regression tree $t_2$
+
+* we update model $f_1(x_i)s$ using the optimal predictions of $t_2$: 
+
+$$f_2(x_i) \quad = \quad f_1(x_i) \quad + \quad \lambda \rho_k(x_i)$$
+
+7. We can continue in this fashion many, many times, creating many hundreds or thousands of trees. Each subsequent tree gives a small boost to the performance of the model.
+
+8. At a certain point, by adding more and more trees, we may begin to overfit to our training set. We can use cross-validation to decide at which number of trees we should stop.  
+
+Here is how this process is achieved in R:
+
+fit the GBM:
+```{r fit_gbm}
+
+set.seed(6969)
+
+# train the model on our training dataset: 
+gboost.fit <- gbm(
+    
+    # predict median home value using all of the features
+    medv ~ ., 
+    
+    # train on the training dataset
+    data = trainset,                       
+                     
+    # specify the loss function to use. 
+    # "laplace" is absolute error. 
+    #"gaussian" is squared error loss.     
+    distribution = "laplace",
+                     
+    # specify the number of trees to fit:
+    n.trees = 10,                       
+  
+    # specify the learning rate (can choose this by cross validation later)
+    shrinkage = 0.1,           
+    
+    # choose maximum allowed depth of each tree (can choose this by cross validation later)
+    # 1 is additive model, 2 is 2-way interaction, 3 is 3-way interaction etc.  
+    interaction.depth = 3,                
+                                          
+    # specify the subsampling rate
+    # 0.5 means that a different random subsample of 50% of the training data is used 
+    # to fit each tree
+    # the gbm() package documentation recommends 0.5
+    # this ensures that each tree is a bit different
+    # (1 would mean use the whole training set when building each tree)
+    bag.fraction = 0.5,        
+    
+    # 
+    keep.data = TRUE,
+                     
+    # another parameter controlling individual tree growth 
+    # (minimum observations allowed in a terminal node)
+    
+    # indication that cross-validation should be performed, with this number of folds
+    
+    # makes gbm() print out some performance information as it runs:
+    verbose = TRUE                         
+                  
+)
+  
+```
+
+Here is a breakdown of what the model is doing:
+
+First we build model $f_0(x_i)$ as
+
+$$f_0(x_i) \quad = \quad median\Big[y\Big]$$
+
+```{r f0}
+
+  y <- trainset$medv       # response variable on training set
+  
+  # initial value ( f0[xi] ): 
+  f0 <- rep( median(trainset$medv), nrow(trainset) )
+  unique(f0)
+  gboost.fit$initF # confirm that this is what R is doing
+  
+```
+
+Next, for each observation, we calculate the negative gradient of our loss function in terms of $f_0(x_i)$ 
+$$z_i = sign \Big[ y_i - f_0(x_i) \Big]$$
+
+```{r get_zi_f0}
+
+# negative gradient of f0:
+zi <- sign(y-f0)
+
+cbind( y, f0, zi )
+
+```
+
+Now, we build a regression tree (tree 1) using a random subset of our training set (of size 50%=202 of our training set of 405), to predict the $z_i$. 
+
+```{r tree1}
+
+pretty.gbm.tree( gboost.fit, i.tree = 1)                 # WEIGHT is num obs in node. 
+  # first column is node ID (0 is root)
+  # split variables are numbered 0,1,2,3,.... (where 3 is column 4 of the data, 5 is column 6 etc.)
+  # Each binary split gives the node IDs of the 2 child nodes
+  # Prediction gives predicted response before the split (terminal nodes adjusted by the shrinkage)
+  # SplitVar -1 indicates a terminal node, and Prediction is the fitted value for this node (after multiplying by the shrinkage constant)
+  
+# here is the numbering as used by pretty.gbm.tree:  
+  rbind( 0:(length(names(trainset))-1), names(trainset))   # node numbering used in pretty.gbm.tree
+
+```
+
+...which is the following tree: 
+
+![](C:\Users\Joe Bolton\Desktop\sync_to_google_drive\courses\trees\gbm pictures\tree1.PNG)
+
+We can work backwards from the model output to get the optimal terminal node predictions and the model updates $\rho_1, \rho_2, ..., \rho_k$:
+
+```{r tree1_terminal_nodes}
+
+trainset_tree1_nodes <- 
+   trainset %>% 
+     mutate( node = case_when( lstat < 13.34 & rm < 6.062 & indus < 9.795 ~ 3,
+                               lstat < 13.34 & rm < 6.062 & indus >= 9.795 ~ 4,
+                               lstat < 13.34 & rm >= 6.062 ~ 6,
+                               lstat >= 13.34 ~ 8,
+                               TRUE ~ as.numeric(NA)
+                               ) 
+           ) 
+
+get_rho_k_tree1 <- 
+   trainset_tree1_nodes %>% 
+     select( medv, node ) %>% 
+     mutate( f0 = f0) %>%            # add initial model f0(xi) predictions
+     mutate( f1 =                    # model f_1 predictions from gbm() output
+               predict( gboost.fit, trainset, n.trees = 1 )
+           ) %>%    
+     mutate( rho_k = (f1-f0)/0.1 )   # get rho_k for each terminal node  
+
+# see rho_k for each terminal node:
+get_rho_k_tree1 %>% 
+    distinct( node, f0, rho_k, f1 )
+
+```
+
+So, what we have now is an update/change/boost $\rho_k$ for each terminal node $k$. For example, all observations falling into terminal node 6 get the same prediction as before + 3.8.   
+
+We use the decision tree we just fit (tree 1) in order to ascertain which terminal node $k$ each of the 405 observations in our training set falls into. Then, all observations in the same node recieve the same boost/correction/adjustment $\rho_k$. 
+
+We add the adjustments like this: 
+$$f_1(x_i) = f_0(x_i) + 0.1\rho_k(x_i) \hspace{5cm} ( \text{using learning rate } \lambda=0.1)$$
+
+```{r f1}
+
+f1 <- f0 + 0.1*get_rho_k_tree1$rho_k
+  
+```
+
+We can see the improvement in fit to our data after boosting initial model $f_0(x_i)$ to model $f_1(x_i)$: 
+
+```{r improvment_in_absolute_loss_from_f0_to_f1}
+
+# sum of absolute loss in model f0:
+sum( abs(y-f0) )
+
+# sum of absolute loss in model f1:
+sum( abs(y-f1) )
+
+```
+
+Now, we can build a second tree. 
+
+We calculate the negative gradient $z_i$ at each observation for our updated model $f_1(x_i)$
+
+```{r get_zi_f1}
+
+# negative gradient of f0:
+zi <- sign(y-f1)
+cbind( y, f1, zi )
+
+```
+
+Now, we build regression tree (tree 2) to predict $z_i$, on a different random 50% subset of our training data: 
+
+```{r tree2}
+
+pretty.gbm.tree( gboost.fit, i.tree = 2)                 
+  
+# here is the numbering as used by pretty.gbm.tree:  
+rbind( 0:(length(names(trainset))-1), names(trainset))   # node numbering used in pretty.gbm.tree
+
+```
+
+This is the tree: 
+
+![](C:\Users\Joe Bolton\Desktop\sync_to_google_drive\courses\trees\gbm pictures\tree2.PNG)
+
+We can work backwards from the model output to get the optimal terminal node predictions and the model updates $\rho_1, \rho_2, ..., \rho_k$:
+
+```{r tree2_terminal_nodes}
+
+trainset_tree2_nodes <- 
+   trainset %>% 
+     mutate( node = case_when( lstat < 9.675 ~ 1,
+                               lstat >= 9.675 & lstat < 14.835 & ptratio < 17.6 ~ 4,
+                               lstat >= 9.675 & lstat < 14.835 & ptratio >= 17.6 ~ 5,
+                               lstat >= 9.675 & lstat >= 14.835 ~ 7,
+                               TRUE ~ as.numeric(NA)
+                               ) 
+           ) 
+
+get_rho_k_tree2 <- 
+   trainset_tree2_nodes %>% 
+     select( medv, node ) %>% 
+     mutate( f1 = f1) %>%            # add previous model f1(xi) predictions
+     mutate( f2 =                    # model f_2 predictions from gbm() output
+               predict( gboost.fit, trainset, n.trees = 2 )
+           ) %>%    
+     mutate( rho_k = (f2-f1)/0.1 )   # get rho_k for each terminal node  
+
+# see rho_k for each terminal node:
+get_rho_k_tree2 %>% 
+    distinct( node, rho_k )
+
+```
+
+We update our previous model $f_1(x_i)$ to get updated/boosted/improved model $f_2(x_i)$ by adding the updates/adjustments $\rho_k$ (using learning rate $\lambda=0.1$):
+
+```{r f2}
+
+f2 <- f1 + 0.1*get_rho_k_tree2$rho_k
+  
+```
+
+We can see the additional improvment in fit to our training data from boosting model $f_1(x_i)$ to model $f_2(x_i)$: 
+
+```{r improvment_in_absolute_loss_from_f1_to_f2}
+
+# sum of absolute loss in model f1:
+sum( abs(y-f1) )
+
+# sum of absolute loss in model f2:
+sum( abs(y-f2) )
+
+```
+
+We can continue this process as many times as we like, adding hundreds, or even thousands of additional trees. 
+
+# Improving the performance of the GBM using cross validation and parameter grid
+Within a single gbm() model fit, we can use cross validation to estimate the optimal number of trees. This is built into gbm(), controlled through the use of the 'cv.folds' parameter. Cross validation further splits the training data up further into a training and test partition, training the model on the training partition and validating/assessing its performance on the test partition (and it does this multiple times). This gives an estimate of out-of-sample performance of the model.    
+
+Additionally, we can fit many different gbm() models to find optimal values for the model hyperparameters (interaction depth, learning rate etc.) by fitting the gbm() multiple times with different combinations of parameters.     
+
+```{r model_performance}
+
+set.seed(987654321)
+
+hyper_grid <- 
+  expand.grid(
+               shrinkage = c(0.001, 0.05, 0.1),
+               interaction.depth = c(1, 3, 5),
+               n.minobsinnode = c(5, 10, 15),
+               bag.fraction = c(0.5, 0.75, 1), 
+               optimal_trees = 0,               # a place to dump results
+               min_RMSE = 0                     # a place to dump results
+             )
+
+# total number of combinations
+nrow(hyper_grid)
+head(hyper_grid)
+
+# fit the models across the parameter grid
+# note: this takes a little while (less than 10 minutes)
+system.time( 
+
+  for( i in 1:nrow(hyper_grid)
+   ){
+
+  print(i)
+  
+  fit_gbm <- 
+            gbm(
+                  formula = medv ~ .,
+                  distribution = "laplace",
+                  data = trainset,
+                  n.trees = 2000,
+                  cv.folds = 5,
+                  interaction.depth = hyper_grid$interaction.depth[i],
+                  shrinkage = hyper_grid$shrinkage[i],
+                  bag.fraction = hyper_grid$bag.fraction[i],
+                  n.cores = NULL, # will use all cores by default
+                  verbose = FALSE
+               )
+  
+  hyper_grid$optimal_trees[i] <- gbm.perf( fit_gbm, plot.it = FALSE )
+  hyper_grid$min_RMSE[i] <- sqrt( min(fit_gbm$cv.error) )
+
+  }
+
+)
+
+# look at the top 10 models by cross-validation RMSE: 
+hyper_grid %>% 
+  arrange( min_RMSE ) %>% 
+  head(10)                 # first 10 rows
+
+# the best model from our grid search was:
+best_model <- 
+   hyper_grid %>% 
+     arrange( min_RMSE ) %>% 
+     slice(1)
+
+best_model
+```
+
+We fit the final model to our training data:
+
+```{r final_model}
+set.seed(987654321)
+
+final_gbm_fit <- 
+            gbm(
+                  formula = medv ~ .,
+                  distribution = "laplace",
+                  data = trainset,
+                  n.trees = best_model$optimal_trees,
+                  interaction.depth = best_model$interaction.depth,
+                  shrinkage = best_model$shrinkage,
+                  bag.fraction = best_model$bag.fraction,
+                  n.cores = NULL, # will use all cores by default
+                  verbose = FALSE
+               )
+
+final_gbm_fit
+```
+
+Predict $y$ in the test/validation dataset using our final model:
+
+```{r test_predictions}
+
+final_gbm_pred <- predict( final_gbm_fit, 
+                           newdata = testset,
+                           n.trees = best_model$optimal_trees
+                          )
+
+bind_cols( true_y = testset$medv,
+           final_gbm_prediction = final_gbm_pred ) %>% 
+  mutate( difference = final_gbm_prediction - true_y )
+
+plot( testset$medv, pch=16, main = "comparing final GBM predictions to true y",
+      xlab = "observation ID",
+      ylab = "y (medv)")
+points( final_gbm_pred, col = 2, pch=16)
+segments( x0 = 1:nrow(testset),
+          y0 = testset$medv,
+          x1 = 1:nrow(testset),
+          y1 = final_gbm_pred
+        )
+legend("topleft", legend=c("observed", "predicted"),
+       col=c("black", "red"), pch=c(16,16), cex=0.8,
+       text.font=4, box.lty=0)
+
+# the RMSE root mean squared error (average error) is:
+sqrt(   sum( ( testset$medv - final_gbm_pred  )^2 ) / length(testset)   )
+
+```
+
+We can compare the performance of the final gbm() model to a linear model, and a single regression tree: 
+
+```{r other_poo_model_compare}
+
+# in contrast, a standard linear model achieves RMSE of  
+lm_pred <- predict(  lm( medv ~ ., data = trainset ),
+                     newdata = testset  
+                   )   
+sqrt(   sum( ( testset$medv - lm_pred  )^2 ) / length(testset)   )
+
+plot( testset$medv, 
+      pch=16, main = "comparing linear model predictions to true y",
+      ylim = c(5,50),
+      xlab = "observation ID",
+      ylab = "y (medv)"
+    )
+points( lm_pred, col = 2, pch=16)
+segments( x0 = 1:nrow(testset),
+          y0 = testset$medv,
+          x1 = 1:nrow(testset),
+          y1 = lm_pred
+        )
+legend("topright", legend=c("observed", "predicted"),
+       col=c("black", "red"), pch=c(16,16), cex=0.6,
+       text.font=4)
+
+
+# and a single regression tree achieves RMSE of:
+one_tree_pred <- predict(   rpart( medv ~ ., data = trainset, method="anova" ),
+                            newdata = testset  
+                        )   
+sqrt(   sum( ( testset$medv - one_tree_pred  )^2 ) / length(testset)   )
+plot( testset$medv, 
+      pch=16, main = "comparing regression tree predictions to true y",
+      ylim = c(5,50),
+      xlab = "observation ID",
+      ylab = "y (medv)"
+    )
+points( one_tree_pred, col = 2, pch=16)
+segments( x0 = 1:nrow(testset),
+          y0 = testset$medv,
+          x1 = 1:nrow(testset),
+          y1 = one_tree_pred
+        )
+legend("topright", legend=c("observed", "predicted"),
+       col=c("black", "red"), pch=c(16,16), cex=0.6,
+       text.font=4)
+
+```

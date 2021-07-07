@@ -1,0 +1,1274 @@
+---
+title: "Extending the R.F.M. Framework"
+author: "Joseph Bolton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    df_print: paged
+---
+
+This document explores the concept of converting longitudinal covariates, such as customer transaction data, into a set of single variable summaries. 
+
+# The "Classic" R.F.M. Metrics
+
+Recency:    A measure of how recently a customer has transacted. A common measure is "number of days since last transaction."
+
+Frequency:  A measure of how often a customer transacts. A common measure is "total number of transactions."
+
+Money:      Monetary value of a customer. A common measure is "total customer spend."  
+
+I propose the following extensions to (and interactions of) these concepts:
+
+Attribute                    | Description                                                                  | Possible Metric(s)
+-----------------------------|------------------------------------------------------------------------------|----------------------------------------------------
+Recent Money                 | How valuable has a customer been *lately*?                                   | Total spend in last $x$ transactions
+$\space$                     | $\space$                                                                     | Total spend in last $x$ months
+Recent Frequency             |  x                                                                           | x
+Frequency Trajectory         | How has frequency trended for a given customer?                              | x 
+$\space$                     | (e.g. is a customer shopping less often than they used to?)                  | $\space$
+Money Trajectory             | How has spending trended for a given customer?                               | x
+$\space$                     | (e.g. is a customer spending more than they used to?)                        | $\space$
+Frequency Consistency        | Does a given customer wait a similar amount of time between each transaction?| Standard Deviation of gap lengths
+$\space$                     | $\space$                                                                     | Difference between 25% and 75% quantile of gap lengths
+Recent Frequency Consistency |  x                                                                           | x
+Money Consistency            | Does the customer spend a similar amount in every transaction?               | Standard Deviation of transaction (currency) values 
+$\space$                     | $\space$                                                                     | Difference between 25% and 75% quantile of transaction value
+Recent money Consistency     | Has the customer been spending the same amount in every transaction *lately* | x
+Day-of-Week Preference       | x                                                                            | x
+Time-of-day Preference       | x                                                                            | x
+
+```{r echo=FALSE}
+# plot some examples  
+```
+
+# TO DO: ADD TRANSACTION DATETIMES TO CUSTOMER PLOTS! 
+
+load R libraries: 
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(lubridate)
+library(patchwork)
+library(reticulate)      # uses python version set in windows PATH variable, by default
+library(gridExtra)       # for including tables as ggplot objects
+```
+
+load python libraries: 
+```{python}
+import pandas as pd
+import numpy as np
+import datetime
+import dateutil
+import itertools
+from sklearn.linear_model import LinearRegression
+```
+
+```{r echo=FALSE}
+# function to generate a random time of day
+gen_random_timeofday <- function(){
+  hour <- sample( 8:16, size=1 ) %>% as.character()
+  minute <- sample( 0:59, size=1 ) %>% as.character()
+  hour <- str_pad( string=hour, width=2, side="left", pad="0")
+  minute <- str_pad( string=minute, width=2, side="left", pad="0")
+  return( paste0(hour, ":", minute) )
+}
+
+#gen_random_timeofday()
+#gen_random_timeofday()
+#gen_random_timeofday()
+
+# function to generate random date-times:
+# generates a random date-time, where transactions are between 8:00 and 17:00
+random_datetime <- function(n_sim=1, start="2018-01-01", end="2019-12-31") {
+  
+  random_dates <- paste( 
+                          sample( seq(as.Date(start), as.Date(end), by="day"), size=n_sim, replace=TRUE )
+                          ,
+                          " 00:00:00"
+                          ,
+                          sep = ""
+                       )
+                          
+  random_dates <- lubridate::as_datetime( random_dates )
+  random_times_in_seconds <- runif(   n = n_sim,
+                                    min = 60*60*8,    # 8am
+                                    max = 60*60*17    # 5pm 
+                                  )
+  # add random times to the random dates:
+  random_datetimes <- random_dates + random_times_in_seconds
+  
+  return( sort(random_datetimes) )
+}
+  
+# function to generate random customer transaction history:
+customer_sim_results <- function( n_customers ){
+  
+  # initialise empty table:
+  customer_sim_results <- tibble( customer_id = 0, transaction_datetime = as_datetime("1900-01-01 00:00:00") ) %>% slice(0)
+  
+  for( customer_i in 1:n_customers ){
+    num_transactions = sample(5:15, size=1)     # between 5 and 15 transactions
+    transaction_times <- random_datetime( num_transactions )
+    
+    # add this customer to the results table:
+    customer_sim_results <- 
+      bind_rows( customer_sim_results,
+                 tibble(          customer_id = customer_i,
+                         transaction_datetime = transaction_times
+                       )
+               )
+  }
+  
+  return( customer_sim_results )
+}
+  
+
+```
+ 
+```{r echo=FALSE}
+# function to visualise one particular customer transaction time-series, including day-of-week and time-of-day information:
+gen_customer_transaction_viz2 <- function( transaction_datetime_vec,
+                                     xlim = c( lubridate::as_datetime("2018-01-01 00:00:00"),
+                                               lubridate::as_datetime("2019-12-31 23:59:59")
+                                             ),
+                                     ylim = as.POSIXct( strptime(c("08:00",
+                                                                   "17:00"), format = "%H:%M")
+                                                      ),
+                                     plot_title = " "
+                                   ){
+  
+    transaction_datetime_vec <- lubridate::as_datetime( transaction_datetime_vec )
+    start_date_time <- xlim[1]
+    end_date_time <- xlim[2]
+    
+    plot_data <- tibble(      date = transaction_datetime_vec,
+                         timeofday = as.POSIXct( 
+                                          strftime(transaction_datetime_vec, format="%H:%M"),
+                                          format = "%H:%M"
+                                          ) - 2*60*60,
+                               grp = "customer"    # add this because geom_line compains otherwise
+                        ) %>% 
+             mutate( gaplength = difftime( date,lag(date), unit="days" ) ) %>% 
+             mutate( dayofweek = lubridate::wday(date) ) %>% 
+             mutate( period = case_when( lubridate::hour(date) < 11 ~ "8:00-10:59",
+                                         lubridate::hour(date) %in% c(11,12,13) ~ "11:00-13:59",
+                                         lubridate::hour(date) > 13 ~ "14:00-16:59",
+                                       ) 
+                   ) %>% 
+             mutate( period = factor(period, levels=c("8:00-10:59", "11:00-13:59", "14:00-16:59") ))
+             
+    
+    return( 
+             ggplot( data = plot_data,
+                     aes(     x = date,
+                              y = timeofday,
+                          group = grp,
+                          label = dayofweek,
+                          shape = period
+                        )
+                   ) + 
+             geom_vline( aes(xintercept = date), colour = "red" ) +
+             geom_hline( yintercept = c(as.POSIXct( strptime(c("08:00",
+                                                                 "11:00",
+                                                                 "14:00",
+                                                                 "17:00"), format = "%H:%M")
+                                                      )),
+                         alpha = 0.3
+                        ) +
+             geom_point( colour="black", size=5) +
+             geom_text( colour = "white" ) +
+             xlim( xlim ) + 
+             scale_y_datetime( limits = ylim,
+                               breaks = c(as.POSIXct( strptime(c("08:00",
+                                                                 "09:00",
+                                                                 "10:00",
+                                                                 "11:00",
+                                                                 "12:00",
+                                                                 "13:00",
+                                                                 "14:00",
+                                                                 "15:00",
+                                                                 "16:00",
+                                                                 "17:00"), format = "%H:%M")
+                                                      )),
+                               labels = c("08:00",
+                                                                 "09:00",
+                                                                 "10:00",
+                                                                 "11:00",
+                                                                 "12:00",
+                                                                 "13:00",
+                                                                 "14:00",
+                                                                 "15:00",
+                                                                 "16:00",
+                                                                 "17:00")
+                             ) + 
+               labs( title = plot_title )
+     )
+  
+  
+}
+
+```
+
+An individual customer's transaction journey might look something like this: 
+
+* Points indicate transactions. 
+
+* The x-axis indicates the date of the transaction.
+
+* The y-axis indicates the time of the transaction.
+
+* The shape of the point indicates the general time-period of the transaction (morning, midday, afternoon)
+
+* The number displayed on the point is the day of the week (1=Sunday, 2=Monday, 3=Tuesday, ...)
+
+```{r echo=FALSE}
+gen_customer_transaction_viz2( transaction_datetime_vec = c("2018-01-01 09:15:36", "2018-03-05 13:49:02", "2018-12-19 10:01:02", "2019-07-01 16:12:58") )
+```
+
+I would like to be able to describe the following different aspects (features) of a customer's transaction journey using a set of single variable summary statistics:
+
+Feature                | Description
+-----------------------|-----------------------------------------
+Recency                | How recently was the customer last active?
+Consistency            | How consistent/regular is the customer in their shopping behaviour?
+Trajectory             | Is the customer shopping with accelerating/decelerating frequency over time?
+Frequency              | How often does the customer shop? 
+Day-of-Week Preference | Does the customer prefer to shop on certain days of the week? (e.g. Mondays)  
+Time-of-Day Preference | Does the customer prefer to shop at certain times of day? (e.g. mornings)  
+Regime Change          | Has the customer shown a recent change in pattern of behaviour? (e.g. used to shop regularly, now shops erratically)
+
+In the rest of this document, I explore various metrics aimed at describing these features. 
+
+I have included python code for calculating these features at the very end. 
+
+# Recency
+**Recency** metrics measure how recently a customer was last active.  
+```{r echo=FALSE}
+(
+  gen_customer_transaction_viz2( transaction_datetime_vec = c("2018-01-01 12:15:00", "2019-01-01 13:30:02") ) /
+  gen_customer_transaction_viz2( transaction_datetime_vec = c("2018-01-01 12:15:00", "2019-11-01 13:30:02") )
+)
+```
+
+Features describing **recency**:
+
+1. Number of days since last transaction.
+
+2. Number of days since $x^{th}$-last transaction (e.g. how many days ago was their 5th most recent transaction?). If the customer does not have $x$ transactions, then we can calculate the mean number of days between their existing transactions, and multiply this by $x$.   
+
+3. Number of days since customer had $x$ close transactions (e.g. how many days ago did customer have 3 transactions, where those transactions were a maximum of 1 month apart). This is a stricter definition of an *active* customer, requiring a number of transactions in close proximity in time to define them as *active* - 1 or 2 transactions is not enough to free a customer of their *dormancy* label.
+
+```{python echo=FALSE}
+exampledata = pd.DataFrame({'customer_id':[1,1,2,2,2,2,3,3,3,3,3,4,5,5,5],
+                            'transaction_datetime':['2019-01-01 13:00:00', '2019-08-01 13:00:00',
+                                                    '2019-03-01 13:00:00', '2019-07-01 13:00:00', '2019-10-01 13:00:00', '2019-11-01 13:00:00',
+                                                    '2019-03-03 13:00:00', '2019-07-04 13:00:00', '2019-05-01 13:00:00', '2019-06-01 13:00:00', '2019-07-01 13:00:00',
+                                                    '2019-02-01 13:00:00',
+                                                    '2019-03-03 00:00:00', '2019-06-03 00:00:00', '2019-09-01 00:00:00'
+                                             ] 
+                          })
+       
+def num_days_since_xth_last_transaction( customerdata, period_end_datetime, x_transactions ):
+    
+    customerdata2 = customerdata.copy() 
+    
+    # make sure that datetime fields are in datetime format:
+    period_end_datetime = pd.to_datetime( period_end_datetime, utc=True )
+    customerdata2['transaction_datetime'] = pd.to_datetime( customerdata2['transaction_datetime'], utc=True )
+    
+    # throw away data on or after 'period_end_datetime':
+    customerdata2 = customerdata2.query(f'transaction_datetime < "{period_end_datetime}"')
+    
+    # count number of transactions per customer:
+    count_n_transactions_per_customer = customerdata2.groupby('customer_id').agg(n_transactions=('transaction_datetime','count')).reset_index()
+    
+    # separate customers by number of transactions:
+    # (the different groups will be dealt with separately)
+    single_transaction_customers = count_n_transactions_per_customer.query('n_transactions == 1')
+    customers_with_less_than_x_transactions = count_n_transactions_per_customer.query(f'n_transactions>1 & n_transactions<{x_transactions}').copy()
+    customers_with_x_or_more_transactions = pd.merge( customerdata2,
+                                                      count_n_transactions_per_customer.query(f'n_transactions>={x_transactions}'),
+                                                      on = 'customer_id'  
+                                                    )
+    
+    # give customers with a single transaction, make 'days_since_xth_last_transaction = 0':
+    single_transaction_customers = single_transaction_customers[['customer_id']]      # only select customer ID column
+    single_transaction_customers['days_since_xth_last_transaction'] = 0
+    
+    # for customers with x or more transactions, calculate number of days since their xth transaction:
+    # make sure that data is sorted by date-time within each customer:
+    # (put most recent date first)
+    customers_with_x_or_more_transactions = customers_with_x_or_more_transactions.sort_values(['customer_id','transaction_datetime'], ascending=False)
+    # number transactions for each customer:
+    customers_with_x_or_more_transactions['transaction_number'] = customers_with_x_or_more_transactions.groupby('customer_id').cumcount() + 1
+    # only keep xth transaction:
+    customers_with_x_or_more_transactions = customers_with_x_or_more_transactions.query(f'transaction_number=={x_transactions}').copy()
+    # calculate time since xth transaction: 
+    customers_with_x_or_more_transactions['days_since_xth_last_transaction'] = (period_end_datetime - customers_with_x_or_more_transactions['transaction_datetime']).dt.days  
+    
+    # for customers with between 2 and (x-1) transactions:
+    customers_with_less_than_x_transactions = pd.merge( customerdata2,
+                                                        customers_with_less_than_x_transactions,
+                                                        on = 'customer_id'
+                                                      )
+    
+    # calculate the distances between their transactions:
+    customers_with_less_than_x_transactions['lag_transaction_datetime'] = customers_with_less_than_x_transactions.groupby(['customer_id'])['transaction_datetime'].shift(1)
+    
+    
+    customers_with_less_than_x_transactions['diffdays'] = (customers_with_less_than_x_transactions['transaction_datetime'] - customers_with_less_than_x_transactions['lag_transaction_datetime']).dt.days
+    
+    # only keep relevant columns:
+    customers_with_less_than_x_transactions = customers_with_less_than_x_transactions[['customer_id','transaction_datetime','diffdays']]
+    # calculate mean transaction gap-length for each customer: 
+    # (note: by default, ignores NaN values in the calculation)
+    less_than_x_gapmeans = customers_with_less_than_x_transactions.groupby('customer_id').agg(mean_gaplength=('diffdays','mean')).reset_index()   
+    
+    # impute 'days_since_xth_last_transaction' as 'mean gaplength' * 'x_transactions' 
+    less_than_x_gapmeans['days_since_xth_last_transaction'] = less_than_x_gapmeans['mean_gaplength'] * x_transactions 
+    
+    # join everything together and return the final result:
+    result_to_return = pd.concat( [ single_transaction_customers[['customer_id','days_since_xth_last_transaction']],
+                                    customers_with_x_or_more_transactions[['customer_id','days_since_xth_last_transaction']],
+                                    less_than_x_gapmeans[['customer_id','days_since_xth_last_transaction']]
+                                  ]
+                                )
+    result_to_return['days_since_xth_last_transaction'] = result_to_return['days_since_xth_last_transaction'].astype(int)
+    
+    # rename columns for output:
+    result_to_return.columns = ['customer_id', f'days_since_{x_transactions}th_last_transaction']
+    
+    return result_to_return
+    
+## test function out:  
+#print(exampledata)
+#print('\n')
+#num_days_since_xth_last_transaction(              customerdata = exampledata,
+#                                           period_end_datetime = '2020-01-01 00:00:00',
+#                                                x_transactions = 4
+#                                   )
+```
+
+# Consistency
+How consistent is a customer in their transactions, in terms of amount of time between each transaction? Does the customer shop regularly and periodically, or intermittently?  
+
+```{r echo=FALSE}
+(
+  gen_customer_transaction_viz2( transaction_datetime_vec = c("2018-01-01 12:15:00", "2018-04-01 12:15:00","2018-07-01 12:15:00", "2018-10-01 12:15:00", "2019-01-01 12:15:00","2019-04-01 12:15:00", "2019-07-01 12:15:00","2019-10-01 12:15:00") ) /
+  gen_customer_transaction_viz2( transaction_datetime_vec = c("2018-01-01 12:15:00", "2018-02-01 12:15:00","2018-03-01 12:15:00", "2018-08-01 12:15:00", "2018-12-01 12:15:00","2019-12-01 12:15:00", "2019-07-01 12:15:00","2019-08-01 12:15:00") ) /
+    gen_customer_transaction_viz2( transaction_datetime_vec = c("2018-01-01 12:15:00", "2018-02-01 12:15:00","2018-07-01 12:15:00", "2018-08-01 12:15:00", "2019-01-01 12:15:00","2019-02-01 12:15:00", "2019-07-01 12:15:00","2019-08-01 12:15:00") )
+)
+```
+
+Meausures of consistency: 
+
+1. Standard Deviation of Gap Length (gap length=number of days between 2 transactions).
+
+2. Standard Deviation of gap length, where data is first binned into active weeks (week containing at least one transaction) and inactive weeks (week containing no transactions). *Gap length* is then defined as number of inactive weeks between two active weeks. Could also bin transactions into *active* and *inactive* *months*. 
+
+```{python echo=FALSE}
+exampledata = pd.DataFrame({'customer_id':[1,1,2,2,2,2,3,4,4,4],
+                            'transaction_datetime':['2019-01-01 13:00:00', '2019-08-01 13:00:00',
+                                                    '2019-03-01 13:00:00', '2019-07-01 13:00:00', '2019-10-01 13:00:00', '2019-11-01 13:00:00',
+                                                    '2019-02-01 13:00:00',
+                                                    '2019-02-01 00:00:00', '2019-04-01 00:00:00', '2019-07-13 00:00:00' 
+                                             ] 
+                          })
+
+def get_std_dev_gaplength_last_x_months( customerdata,
+                                         period_end_datetime,
+                                         x_months
+                                       ):
+
+    customerdata2 = customerdata.copy()                                       
+                                       
+    # make sure that datetime fields are in datetime format:
+    period_end_datetime = pd.to_datetime( period_end_datetime, utc=True )
+    customerdata2['transaction_datetime'] = pd.to_datetime( customerdata2['transaction_datetime'], utc=True )
+    
+    # make a list of all of the customer IDs:
+    customer_list = customerdata2[['customer_id']].drop_duplicates()
+    
+    # throw away data on or after 'period_end_datetime':
+    customerdata2 = customerdata2.query(f'transaction_datetime < "{period_end_datetime}"')
+    
+    # throw away all data older than x_months ago:
+    datetime_x_months_ago = period_end_datetime - dateutil.relativedelta.relativedelta(months=x_months)
+    customerdata2_last_x_months = customerdata2[ customerdata2['transaction_datetime'] >= datetime_x_months_ago ].copy() 
+    
+    # calculate gaps between transactions for each customer:
+    customerdata2_last_x_months['lag_transaction_datetime'] = customerdata2_last_x_months.groupby(['customer_id'])['transaction_datetime'].shift(1)
+    
+    # discard NA lags:
+    customerdata2_last_x_months = customerdata2_last_x_months.dropna()
+    
+    # calculate gap-lengths:
+    customerdata2_last_x_months['gaplength'] = customerdata2_last_x_months['transaction_datetime'] - customerdata2_last_x_months['lag_transaction_datetime']    
+    customerdata2_last_x_months['gaplength'] = customerdata2_last_x_months['gaplength'].dt.days
+
+    # calculate Standard Deviation of gap-lengths per customer:
+    calc_gaplen_stdev = customerdata2_last_x_months.groupby('customer_id').std().reset_index()
+    calc_gaplen_stdev.columns = ['customer_id','sdev_gaplength']
+    
+    # add back all customers (even ones could not calculate Std Dev. because less than 3 gaps):
+    calc_gaplen_stdev = pd.merge(  customer_list,
+                                   calc_gaplen_stdev,
+                                    on = 'customer_id',
+                                   how = 'left'
+                                 )
+                                 
+    # make NaN std dev. into '0':
+    calc_gaplen_stdev['sdev_gaplength'] = calc_gaplen_stdev['sdev_gaplength'].fillna(0)
+    
+    # rename columns:
+    calc_gaplen_stdev.columns = ['customer_id', f'sdev_gaplength_last_{x_months}_months']
+    
+    return(calc_gaplen_stdev)
+    
+# # test function out:
+#get_std_dev_gaplength_last_x_months(        customerdata = exampledata,
+#                                     period_end_datetime = '2020-01-01 00:00:00',
+#                                                x_months = 12
+#                                   )
+                          
+```
+
+# Trajectory
+```{r echo=FALSE}
+(
+  gen_customer_transaction_viz2( transaction_datetime_vec = c("2018-01-01 09:15:00", "2018-07-01 13:30:02", "2019-01-01 14:22:02", "2019-07-01 11:35:58", "2019-07-15 11:35:58", "2019-08-01 11:35:58", "2019-08-15 11:35:58", "2019-10-01 11:35:58", "2019-12-01 11:35:58") ) /
+  gen_customer_transaction_viz2( transaction_datetime_vec = c("2018-01-01 09:15:00", "2018-07-01 13:30:02", "2019-01-01 14:22:02", "2019-07-01 11:35:58", "2019-08-01 11:35:58", "2019-09-01 11:35:58", "2019-10-01 11:35:58", "2019-11-01 11:35:58", "2019-12-01 11:35:58") )  /
+  gen_customer_transaction_viz2( transaction_datetime_vec = c("2018-01-01 09:15:00", "2018-07-01 13:30:02", "2019-01-01 14:22:02", "2019-07-01 11:35:58", "2019-10-01 11:35:58", "2019-11-01 11:35:58", "2019-11-15 11:35:58", "2019-12-01 11:35:58", "2019-12x-15 11:35:58") )
+)
+```
+
+Measures of trajectory:
+
+1. *Trajectory in last $x$ weeks*: Count number of transactions per month in the last $x$ months. Regress number of transactions in month against time using a linear model. The slope parameter of the model is a measure of the trajectory over the last $x$ months.     
+
+2. *Trajectory in last $x$ weeks*: Count number of transactions per week in the last $x$ months. For each week, calculate the change in number of transactions (absolute or %) for this week compared to every subsequent week. Define the trajectory as the average of these changes. 
+
+3. *Trajectory in last $x$ weeks*: Calculate time between each transaction (gaplength) for all transactions in the last $x$ weeks. Regress transaction number against gap-length to estimate the trajectory. 
+
+```{python echo=FALSE}
+exampledata = pd.DataFrame({'customer_id':[1,1,2,2,2,2,3],
+                            'transaction_datetime':['2019-01-01 13:00:00', '2019-08-01 13:00:00',
+                                                    '2019-03-01 13:00:00', '2019-07-01 13:00:00', '2019-10-01 13:00:00', '2019-11-01 13:00:00',
+                                                    '2019-02-01 13:00:00'
+                                                   ]  
+                          })
+                          
+linear_model = LinearRegression()      # from package 'sklearn'
+def get_lm_slope(df):
+    y = df[['gaplength']]
+    X = df[['transaction_num']]
+    return float( LinearRegression().fit(X, y).coef_ )    # return the slope parameter
+                          
+
+def linear_gaplength_trajectory_last_x_months( customerdata,
+                                               period_end_datetime,
+                                               x_months
+                                             ):
+                                             
+    # make a copy of customerdata so that we don't change the original object:
+    customerdata2 = customerdata.copy()
+                                               
+    # make sure that datetime fields are in datetime format:
+    period_end_datetime = pd.to_datetime( period_end_datetime, utc=True )
+    customerdata2['transaction_datetime'] = pd.to_datetime( customerdata2['transaction_datetime'], utc=True )
+    
+    # throw away data on or after 'period_end_datetime':
+    customerdata2 = customerdata2.query(f'transaction_datetime < "{period_end_datetime}"')
+    
+    # throw away all data older than x_months ago:
+    datetime_x_months_ago = period_end_datetime - dateutil.relativedelta.relativedelta(months=x_months)
+    
+    customerdata2_last_x_months = customerdata2[ customerdata2['transaction_datetime'] >= datetime_x_months_ago ].copy() 
+    
+    # make sure that data is sorted by date-time within each customer:
+    customerdata2_last_x_months = customerdata2_last_x_months.sort_values(['customer_id','transaction_datetime'])
+    
+    # calculate gaps between transactions for each customer:
+    customerdata2_last_x_months['lag_transaction_datetime'] = customerdata2_last_x_months.groupby(['customer_id'])['transaction_datetime'].shift(1)
+    
+    # discard NA lags:
+    customerdata2_last_x_months = customerdata2_last_x_months.dropna()
+    
+    # calculate gap-lengths:
+    customerdata2_last_x_months['gaplength'] = customerdata2_last_x_months['transaction_datetime'] - customerdata2_last_x_months['lag_transaction_datetime']    
+    
+    customerdata2_last_x_months['gaplength'] = customerdata2_last_x_months['gaplength'].dt.days
+    
+    # add transaction number to each transaction within each customer:
+    customerdata2_last_x_months['transaction_num']=customerdata2_last_x_months.groupby('customer_id').cumcount()
+    
+    # fit linear model within each customer:
+    fit_lm_within_each_customer = customerdata2_last_x_months.groupby('customer_id').apply(get_lm_slope).reset_index()
+    fit_lm_within_each_customer.columns = ['customer_id', 'gaplength_trajectory']
+    
+    # rename columns for output:
+    fit_lm_within_each_customer.columns = ['customer_id', f'gaplength_trajectory_last{x_months}_months']
+    
+    return fit_lm_within_each_customer 
+    
+    
+#print( exampledata )    
+#print('\n')
+linear_gaplength_trajectory_last_x_months( customerdata = exampledata,
+                                           period_end_datetime = '2020-01-01 00:00:00',
+                                           x_months = 12
+                                         )
+```
+
+Example of trajectory of gap-lengths: consider the following customer:
+
+```{r echo=FALSE}
+example_cust_transactions <- c("2018-01-01 09:15:00", "2018-07-01 13:30:02", "2019-01-01 14:22:02", "2019-07-01 11:35:58", "2019-10-01 11:35:58", "2019-11-01 11:35:58", "2019-11-15 11:35:58", "2019-12-01 11:35:58", "2019-12-15 11:35:58")
+
+tibble( transaction_datetime = example_cust_transactions )
+
+gen_customer_transaction_viz2( transaction_datetime_vec = example_cust_transactions )
+```
+
+The gap lengths between the transactions (*days since previous transaction*) in the last 12 months for this customer are:
+
+```{r echo=FALSE}
+gaplen_calc <- 
+  tibble( transaction_id = 1:length(example_cust_transactions),
+          transaction_datetime = example_cust_transactions 
+        ) %>% 
+    filter( transaction_datetime >= "2019-01-01 00:00:00" ) %>% 
+    mutate( previous_transaction_datetime = lag(transaction_datetime) ) %>% 
+    mutate( days_since_previous_transaction = difftime(transaction_datetime, previous_transaction_datetime, units="days") %>% as.numeric() %>% floor() ) %>% 
+    select( transaction_id, transaction_datetime, days_since_previous_transaction ) %>% 
+    mutate( transaction_num = row_number()-2 ) %>% 
+    mutate( transaction_num = if_else(transaction_num<0, as.numeric(NA), transaction_num) )
+  
+gaplen_calc
+
+fit_gaplength_lm <- lm( days_since_previous_transaction ~ transaction_num,
+                        data = gaplen_calc %>% filter(!is.na(transaction_num))
+                      )
+
+#fit_gaplength_lm
+
+ggplot( data = gaplen_calc %>% filter(!is.na(transaction_num)),
+        aes( x = transaction_num,
+             y = days_since_previous_transaction
+           )  
+      ) + 
+  geom_point() +
+  labs( subtitle = paste0("linear intercept = ", fit_gaplength_lm$coefficients["(Intercept)"], ";   line slope = ", fit_gaplength_lm$coefficients["transaction_num"]) ) +
+  geom_abline( slope = fit_gaplength_lm$coefficients["transaction_num"], intercept = fit_gaplength_lm$coefficients["(Intercept)"], colour="red" )
+```
+
+There is a linearly decreasing trajectory of gap-lengths for this customer (times between transactions is decreasing in the past 12 months for this customer).  
+
+```{python echo=FALSE}
+thiscustomerdata = pd.DataFrame({'customer_id':[1,1,1,1,1,1,1,1,1],
+                                 'transaction_datetime':["2018-01-01 09:15:00", "2018-07-01 13:30:02", "2019-01-01 14:22:02", "2019-07-01 11:35:58", "2019-10-01 11:35:58", "2019-11-01 11:35:58", "2019-11-15 11:35:58", "2019-12-01 11:35:58", "2019-12-15 11:35:58"
+                                                   ]  
+                          })
+linear_gaplength_trajectory_last_x_months( customerdata = thiscustomerdata,
+                                           period_end_datetime = '2020-01-01 00:00:00',
+                                           x_months = 12
+                                         )
+```
+
+
+```{python echo=FALSE}
+
+# little experiment: how to get fit OLS and extract the slope:
+# ref: https://stackoverflow.com/questions/41511945/python-pandas-linear-regression-groupby
+#   linear_model = LinearRegression()      # from package 'sklearn'
+#test = pd.DataFrame({'month_num':[1,5,6,7,2,4,6,1],'n_transactions':[1,2,3,4,5,6,7,8]})
+#def get_lm_slope(df):
+#    y = df[['n_transactions']]
+#    X = df[['month_num']]
+#    return float( LinearRegression().fit(X, y).coef_ )
+#
+# get_lm_slope( test )
+
+# exampledata = pd.DataFrame({'customer_id':[1,1,2,2,2,2,3],
+#                             'transaction_datetime':['2019-01-01 13:00:00', '2019-08-01 13:00:00',
+#                                               '2019-03-01 13:00:00', '2019-07-01 13:00:00', '2019-10-01 13:00:00', '2019-11-01 13:00:00',
+#                                               '2019-02-01 13:00:00'
+#                                              ] 
+#                           })
+# 
+# def linear_trajectory_last_x_months( customerdata, x_months, period_end_datetime, return_calculation_details ):
+#   # input [transaction_data] must consist only of the columns 'customer_id' and 'transaction_datetime'
+#   
+#   # make a copy of customerdata so that we don't change the original object:
+#   customerdata2 = customerdata.copy()
+#   
+#   # make sure that datetime fields are in datetime format:
+#   period_end_datetime = pd.to_datetime( period_end_datetime, utc=True )
+#   customerdata2['transaction_datetime'] = pd.to_datetime( customerdata2['transaction_datetime'], utc=True ).copy()
+#     
+#   ## make a list of all of the customer IDs:
+#   #customer_list = customerdata2[['customer_id']].drop_duplicates()
+#      
+#   # throw away data on or after 'period_end_datetime':
+#   customerdata2 = customerdata2.query(f'transaction_datetime < "{period_end_datetime}"')
+#      
+#   # add transaction ID column:
+#   customerdata2['transaction_id'] = range(1,len(customerdata2['customer_id'])+1)
+#   
+#   # save period start date and period end date:
+#   period_end_date = pd.to_datetime( period_end_datetime, utc=True )
+#   period_start_date = period_end_date - dateutil.relativedelta.relativedelta( months = x_months )
+#   
+#   # define months in period, and number them:
+#   month_ref = pd.DataFrame({'start':pd.date_range(  start = period_start_date, 
+#                                                   periods = x_months,
+#                                                      freq = 'MS' 
+#                                                  ),
+#                               'end':pd.date_range(   start = period_start_date + dateutil.relativedelta.relativedelta(months=1),
+#                                                    periods = x_months,
+#                                                       freq = 'MS' 
+#                                                  ),
+#                              'month_num':range(x_months)                  
+#                            })
+#    
+#   # convert columns 'start' and 'end' to date-time in 'week_ref':
+#   month_ref['start'] = pd.to_datetime(month_ref['start'], utc=True)
+#   month_ref['end'] = pd.to_datetime(month_ref['end'], utc=True)
+#   
+#   # only keep transactions that are relevant:
+#   relevant_transaction_data = customerdata2.query( 'transaction_datetime >= "' + str(period_start_date) + '"' ).reset_index()
+#    
+#   relevant_transaction_data['month_num']=-1
+#   relevant_transaction_data['transaction_datetime'] = pd.to_datetime(relevant_transaction_data['transaction_datetime'])
+#    
+#   # assign each transaction a month-number:
+#   for month_num_i in range(len(month_ref)):
+#     start = month_ref.loc[ month_num_i, 'start' ].strftime('%Y-%m-%d %H:%M:%S')
+#     end = month_ref.loc[ month_num_i, 'end' ].strftime('%Y-%m-%d %H:%M:%S')
+#     relevant_transaction_data.loc[ (relevant_transaction_data['transaction_datetime'] >= start) & (relevant_transaction_data['transaction_datetime'] <= end), 'month_num' ] = month_ref.loc[ month_num_i, 'month_num' ]
+#    
+#   # count transactions per customer per week:
+#   count_transactions_per_month = relevant_transaction_data.groupby(['customer_id','month_num']).agg(n_transactions=('index','count')).reset_index()
+# 
+#   # fit a linear model, regressing number of transactions on month number, a separate model for each customer ID:
+#   linear_model = LinearRegression()      # from package 'sklearn'
+#    
+#   def get_lm_slope(df):
+#     y = df[['n_transactions']]
+#     X = df[['month_num']]
+#     return float( LinearRegression().fit(X, y).coef_ )
+#      
+#   get_slope_per_customer = count_transactions_per_month.groupby('customer_id').apply(get_lm_slope).reset_index()
+#   get_slope_per_customer.columns = ['customer_id','slope']
+#    
+#   if return_calculation_details == False:
+#     # just return calculated slope per customer:
+#     return get_slope_per_customer
+#   else: 
+#     # return all calculation steps (for debugging):
+#     result_to_return = customerdata2
+#     relevant_transaction_data['relevant'] = 1
+#     print(result_to_return)
+#     print(relevant_transaction_data)
+#     result_to_return = pd.merge( result_to_return,
+#                                   relevant_transaction_data,
+#                                   on = ['customer_id','transaction_id'],
+#                                   how = 'left'
+#                                 )
+#     result_to_return = pd.merge( result_to_return,
+#                                   relevant_transaction_data,
+#                                   on = ['customer_id','transaction_id'],
+#                                   how = 'left'
+#                                 )                                   
+#     return result_to_return
+#     
+# # test function out: 
+# linear_trajectory_last_x_months(                customerdata = exampledata,
+#                                                     x_months = 6,
+#                                          period_end_datetime = '2020-01-01 00:00:00',
+#                                   return_calculation_details = False
+#                               )
+```
+
+# Frequency
+```{r echo=FALSE}
+(
+  gen_customer_transaction_viz2( transaction_datetime_vec = c("2018-01-01 12:15:00", "2018-04-01 12:15:00","2018-07-01 12:15:00", "2018-10-01 12:15:00", "2019-01-01 12:15:00","2019-04-01 12:15:00", "2019-07-01 12:15:00","2019-10-01 12:15:00", "2019-12-31 12:15:00") ) /
+  gen_customer_transaction_viz2( transaction_datetime_vec = c("2018-01-01 12:15:00","2018-07-01 12:15:00", "2019-01-01 12:15:00", "2019-07-01 12:15:00", "2019-12-31 12:15:00") )
+)
+```
+
+Measures of frequency:
+
+1. Number of transactions in last $x$ weeks. Note: If customer's first transaction was less than $x$ weeks ago, then consider number of transactions since first transaction date.   
+
+2. Minimum and Maximum gap-length (time between any 2 transactions) in last $x$ months. 
+
+```{python echo=FALSE}
+exampledata = pd.DataFrame({'customer_id':[1,1,2,2,2,3],
+                            'transaction_datetime':['2019-01-01 13:00:00', '2019-08-01 13:00:00',
+                                              '2019-03-01 13:00:00', '2019-10-01 13:00:00', '2019-11-01 13:00:00',
+                                              '2019-01-01 13:00:00'
+                                             ] 
+                          })
+                          
+def count_transactions_last_x_months( customerdata, period_end_datetime, x_months ):
+    
+    # make sure that datetime fields are in datetime format:
+    period_end_datetime = pd.to_datetime( period_end_datetime )
+    customerdata['transaction_datetime'] = pd.to_datetime( customerdata['transaction_datetime'] )
+  
+    # throw away data on or after 'period_end_datetime':
+    customerdata = customerdata.query(f'transaction_datetime < "{period_end_datetime}"')
+    
+    # make a list of customer IDs: 
+    customer_ids = customerdata[['customer_id']].drop_duplicates()
+    
+    # throw away all data older than x_months ago:
+    datetime_x_months_ago = period_end_datetime - dateutil.relativedelta.relativedelta(months=x_months)
+    customerdata_last_x_months = customerdata[ customerdata['transaction_datetime'] >= datetime_x_months_ago ].copy()
+    
+    # count transactions per customer in last x months:
+    count_transactions_per_customer = customerdata_last_x_months.groupby('customer_id').agg(n_transactions=('transaction_datetime','count')).reset_index()
+    
+    # join transaction count to customer list so that we don't lose customers with 0 transactions:
+    count_transactions_per_customer = pd.merge( customer_ids,
+                                          count_transactions_per_customer,
+                                          on = 'customer_id',
+                                          how = 'left'
+                                        )
+                             
+    # turn NA count of transactions into '0 transactions':
+    count_transactions_per_customer['n_transactions'] = count_transactions_per_customer['n_transactions'].fillna(0)
+  
+    # make transaction count column an integer column:
+    count_transactions_per_customer['n_transactions'] = count_transactions_per_customer['n_transactions'].astype(int)
+    
+    # rename transaction count column:
+    count_transactions_per_customer.columns = ['customer_id', f'n_transactions_last_{str(x_months)}_months']                             
+    
+    return count_transactions_per_customer                                         
+    
+# test function out:   
+count_transactions_last_x_months(        customerdata = exampledata,
+                            period_end_datetime = '2020-01-01 00:00:00',
+                                       x_months = 6
+                          )
+```
+
+```{python echo=FALSE}
+def minmax_gaplength_last_x_months( customerdata,
+                                    period_end_datetime,
+                                    x_months
+                                  ):
+
+    customerdata2 = customerdata.copy()                                       
+                                        
+    # make sure that datetime fields are in datetime format:
+    period_end_datetime = pd.to_datetime( period_end_datetime, utc=True )
+    customerdata2['transaction_datetime'] = pd.to_datetime( customerdata2['transaction_datetime'], utc=True )
+     
+    # make a list of all of the customer IDs:
+    customer_list = customerdata2[['customer_id']].drop_duplicates()
+     
+    # throw away data on or after 'period_end_datetime':
+    customerdata2 = customerdata2.query(f'transaction_datetime < "{period_end_datetime}"')
+     
+    # throw away all data older than x_months ago:
+    datetime_x_months_ago = period_end_datetime - dateutil.relativedelta.relativedelta(months=x_months)
+    customerdata2_last_x_months = customerdata2[ customerdata2['transaction_datetime'] >= datetime_x_months_ago ].copy() 
+     
+    # calculate gaps between transactions for each customer:
+    customerdata2_last_x_months['lag_transaction_datetime'] = customerdata2_last_x_months.groupby(['customer_id'])['transaction_datetime'].shift(1)
+     
+    # discard NA lags:
+    customerdata2_last_x_months = customerdata2_last_x_months.dropna()
+     
+    # calculate gap-lengths:
+    customerdata2_last_x_months['gaplength'] = customerdata2_last_x_months['transaction_datetime'] - customerdata2_last_x_months['lag_transaction_datetime']    
+    customerdata2_last_x_months['gaplength'] = customerdata2_last_x_months['gaplength'].dt.days
+     
+    # calculate minimum and maximum gap-length per customer:
+    calc_gaplen_minmax = customerdata2_last_x_months.groupby('customer_id').agg( min_gaplen=('gaplength','min'), max_gaplen=('gaplength','max') ).reset_index()
+     
+    # add back all customers (even ones could not calculate min/max because too few transactions:
+    calc_gaplen_minmax = pd.merge(  customer_list,
+                                    calc_gaplen_minmax,
+                                    on = 'customer_id',
+                                    how = 'left'
+                                 )
+                                 
+    
+                                  
+    # rename columns:
+    calc_gaplen_minmax.columns = ['customer_id', f'min_gaplen_last_{x_months}_months', f'max_gaplen_last_{x_months}_months']
+     
+    return calc_gaplen_minmax                                
+     
+
+# test function out:
+#minmax_gaplength_last_x_months(        customerdata = exampledata,
+#                                period_end_datetime = '2020-01-01 00:00:00',
+#                                           x_months = 12
+#                              )
+                          
+```
+
+# Day-of-Week Preference
+```{r echo=FALSE}
+(
+  gen_customer_transaction_viz2( transaction_datetime_vec = c("2018-01-04 12:15:00", "2018-04-05 12:15:00","2018-07-05 12:15:00", "2018-10-04 12:15:00", "2019-01-03 12:15:00","2019-04-04 12:15:00", "2019-07-04 12:15:00","2019-10-03 12:15:00", "2019-12-26 12:15:00") ) /
+  gen_customer_transaction_viz2( transaction_datetime_vec = c("2018-01-01 12:15:00", "2018-04-01 12:15:00","2018-07-04 12:15:00", "2018-10-04 12:15:00", "2019-01-06 12:15:00","2019-04-01 12:15:00", "2019-07-06 12:15:00","2019-10-01 12:15:00", "2019-12-26 12:15:00") )
+)
+```
+
+Measures of *Day-of-Week Preference*: 
+1. Proportion of transactions at each each Day-of-Week (7 separate features).
+
+2. Gini coefficient for proportion of transactions at each each day-of-Week.
+
+```{python echo=FALSE}
+exampledata = pd.DataFrame({'customer_id':[1,1,2,2,2,2,3],
+                            'transaction_datetime':['2019-01-01 13:00:00', '2019-08-01 13:00:00',
+                                              '2019-03-01 13:00:00', '2019-07-01 13:00:00', '2019-10-01 13:00:00', '2019-11-01 13:00:00',
+                                              '2019-02-01 13:00:00'
+                                             ] 
+                          })
+       
+# function equivalent to R's expand_grid(): 
+# (note: requires library 'itertools')
+def expand_grid(data_dict):
+    # https://stackoverflow.com/questions/12130883/r-expand-grid-function-in-python
+    """Create a dataframe from every combination of given values."""
+    rows = itertools.product(*data_dict.values())
+    return pd.DataFrame.from_records(rows, columns=data_dict.keys())
+       
+def prop_by_dayofweek_last_x_months( customerdata, period_end_datetime, last_x_months ):
+    
+    # make copy of customerdata so as not to alter original object:
+    customerdata2 = customerdata.copy()
+    
+    # make sure that datetime fields are in datetime format:
+    period_end_datetime = pd.to_datetime( period_end_datetime, utc=True )
+    customerdata2['transaction_datetime'] = pd.to_datetime( customerdata2['transaction_datetime'], utc=True )
+    
+    # throw away data on or after 'period_end_datetime':
+    customerdata2 = customerdata2.query(f'transaction_datetime < "{period_end_datetime}"')
+    
+    # throw away all data older than x_months ago:
+    datetime_x_months_ago = period_end_datetime - dateutil.relativedelta.relativedelta(months=last_x_months)
+    customerdata2_last_x_months = customerdata2[ customerdata2['transaction_datetime'] >= datetime_x_months_ago ].copy()
+    
+    
+    # store all customer_id/day_of_week combinations: 
+    customer_weekday_combinations = expand_grid({'customer_id':customerdata2[['customer_id']].drop_duplicates().customer_id,
+                     'day_of_week':['Mon_prop',        
+                                    'Tue_prop',
+                                    'Wed_prop',
+                                    'Thu_prop',
+                                    'Fri_prop',
+                                    'Sat_prop',
+                                    'Sun_prop'
+                                    ]  
+                        } )
+    
+    # add column showing DayofWeek for each transaction:
+    customerdata2_last_x_months['day_of_week'] = customerdata2['transaction_datetime'].dt.weekday
+    customerdata2_last_x_months['day_of_week'] = np.select(
+      condlist = [ customerdata2_last_x_months['day_of_week'] == 0,
+                   customerdata2_last_x_months['day_of_week'] == 1,  
+                   customerdata2_last_x_months['day_of_week'] == 2,  
+                   customerdata2_last_x_months['day_of_week'] == 3,  
+                   customerdata2_last_x_months['day_of_week'] == 4,  
+                   customerdata2_last_x_months['day_of_week'] == 5,  
+                   customerdata2_last_x_months['day_of_week'] == 6  
+      ],
+      choicelist = ['Mon_prop',        
+                    'Tue_prop',
+                    'Wed_prop',
+                    'Thu_prop',
+                    'Fri_prop',
+                    'Sat_prop',
+                    'Sun_prop'
+                   ],
+      default = 'ERROR'
+    )
+    
+    # count transactions per customer/weekday combination:
+    count_transactions_per_customer_weekday = customerdata2_last_x_months.groupby(['customer_id','day_of_week']).agg(n_transactions=('transaction_datetime','count')).reset_index()
+    
+    # count total number of transactions per customer: 
+    count_total_transactions_per_customer = customerdata2_last_x_months.groupby(['customer_id']).agg(customer_n_transactions_total=('transaction_datetime','count')).reset_index()
+    
+    # calculate proportion of transactions per weekday for each customer:
+    count_transactions_per_customer_weekday = pd.merge( count_transactions_per_customer_weekday,
+                                                  count_total_transactions_per_customer,
+                                                  on = 'customer_id'
+                                                )
+    count_transactions_per_customer_weekday['weekday_proportion_of_total'] = count_transactions_per_customer_weekday['n_transactions'] / count_transactions_per_customer_weekday['customer_n_transactions_total']                                            
+    
+    # remove calculation columns: 
+    count_transactions_per_customer_weekday = count_transactions_per_customer_weekday[['customer_id','day_of_week','weekday_proportion_of_total']]
+    
+    # add days that customer did not shop on:
+    count_transactions_per_customer_weekday = pd.merge( customer_weekday_combinations,
+                                                  count_transactions_per_customer_weekday,
+                                                  on = ['customer_id', 'day_of_week'],
+                                                  how = 'left'
+                                                )
+                                                
+    # make count of transactions on weekdays not shopped on into '0' rather than NaN:
+    count_transactions_per_customer_weekday['weekday_proportion_of_total'] = count_transactions_per_customer_weekday['weekday_proportion_of_total'].fillna(0)
+
+    # make data wide (one row per customer, one column per day_of_week) and export:                                                
+    return count_transactions_per_customer_weekday.pivot(index='customer_id', columns='day_of_week', values='weekday_proportion_of_total')
+    
+# test function out:  
+#print(exampledata)
+#print('\n')
+#prop_by_dayofweek_last_x_months(        customerdata = exampledata,
+#                                 period_end_datetime = '2020-01-01 00:00:00',
+#                                      last_x_months = 24
+#                               )
+ 
+```
+
+# Time-of-Day Preference
+```{r echo=FALSE}
+(
+  gen_customer_transaction_viz2( transaction_datetime_vec = 
+            c(paste0( "2018-01-01 ", gen_random_timeofday(), ":00"),
+              paste0( "2018-04-01 ", gen_random_timeofday(), ":00"),
+              paste0( "2018-07-04 ", gen_random_timeofday(), ":00"),
+              paste0( "2018-10-04 ", gen_random_timeofday(), ":00"),
+              paste0( "2019-01-06 ", gen_random_timeofday(), ":00"),
+              paste0( "2019-04-01 ", gen_random_timeofday(), ":00"),
+              paste0( "2019-07-06 ", gen_random_timeofday(), ":00"),
+              paste0( "2019-10-01 ", gen_random_timeofday(), ":00"),
+              paste0( "2019-12-26 ", gen_random_timeofday(), ":00")
+             )
+    )/
+  gen_customer_transaction_viz2( transaction_datetime_vec = c("2018-01-01 12:15:00", "2018-04-01 12:15:00","2018-07-04 12:15:00", "2018-10-04 12:15:00", "2019-01-06 12:15:00","2019-04-01 12:15:00", "2019-07-06 12:15:00","2019-10-01 12:15:00", "2019-12-26 12:15:00") )
+)
+```
+
+1. Proportion of transactions at each each time-of-day (3 separate features).
+
+2. Gini coefficient for proportion of transactions at each time-of-day. 
+
+# Change in behaviour regime
+Compare change in various metrics over 2 consecutive periods. 
+
+# Simulate 1000 random customers:
+```{r}
+sim_customers <- 
+  customer_sim_results(n_customers = 1000) %>% 
+    rename( transaction_datetime = transaction_datetime )
+
+nrow(sim_customers)
+```
+Here are the first 20 rows of this dataset
+```{r}
+sim_customers %>% head(20)
+```
+
+```{r echo=FALSE}
+# write this data to CSV:
+write_csv( sim_customers,
+           "C:/Users/Joe/Desktop/temp.csv"
+         )
+```
+
+```{python}
+# read in the CSV:
+transactiondata = pd.read_csv( 'C:/Users/Joe/Desktop/temp.csv' )
+ 
+# get number of days since last transaction:
+num_days_since_last_transaction = num_days_since_xth_last_transaction( customerdata = transactiondata,
+                                                                       period_end_datetime = '2020-01-01 00:00:00',
+                                                                       x_transactions = 1
+                                                                     )
+
+
+# get number of days since 5th last transaction:
+num_days_since_5th_last_transaction = num_days_since_xth_last_transaction(         customerdata = transactiondata,
+                                                                            period_end_datetime = '2020-01-01 00:00:00',
+                                                                                 x_transactions = 5
+                                                                          )
+                                    
+# get std dev of gap-length in last year:                                                                     
+std_dev_gaplength_last_12_months = get_std_dev_gaplength_last_x_months(        customerdata = transactiondata,
+                                                                        period_end_datetime = '2020-01-01 00:00:00',
+                                                                                   x_months = 12
+                                                                   )
+                                                                   
+# get std dev of gap-length in last 6 months:                                                                     
+std_dev_gaplength_last_06_months = get_std_dev_gaplength_last_x_months(        customerdata = transactiondata,
+                                                                        period_end_datetime = '2020-01-01 00:00:00',
+                                                                                   x_months = 6
+                                                                   )                                                                   
+                                    
+# get min and max gap-length in last 6 months:
+minmax_gaplen_last_06_months = minmax_gaplength_last_x_months(        customerdata = transactiondata,
+                                                               period_end_datetime = '2020-01-01 00:00:00',
+                                                                          x_months = 6
+                                                             )
+
+
+# get linear trajectory of gap-lengths in last 6 months:
+linear_gaplength_trajectory_last_06_months = linear_gaplength_trajectory_last_x_months( 
+                                                                                          customerdata = transactiondata,
+                                                                                   period_end_datetime = '2020-01-01 00:00:00',
+                                                                                              x_months = 6
+                                                                                       )
+
+# get linear trajectory of gap-lengths in last 12 months:
+linear_gaplength_trajectory_last_12_months = linear_gaplength_trajectory_last_x_months( 
+                                                                                          customerdata = transactiondata,
+                                                                                   period_end_datetime = '2020-01-01 00:00:00',
+                                                                                              x_months = 12
+                                                                                       )
+
+# get proportion of transactions by weekday:
+transaction_dayofweek_proportions_last_24_months = prop_by_dayofweek_last_x_months(        customerdata = transactiondata,
+                                                                                    period_end_datetime = '2020-01-01 00:00:00',
+                                                                                          last_x_months = 24
+                                                             )
+
+
+# join all results into one dataframe:
+final_features = transactiondata[['customer_id']].drop_duplicates()       # list of all unique customer IDs
+
+final_features = pd.merge( final_features,
+                           num_days_since_last_transaction,
+                           on = 'customer_id',
+                           how = 'left'
+                        )
+
+final_features = pd.merge( final_features,
+                           num_days_since_5th_last_transaction,
+                           on = 'customer_id',
+                           how = 'left'
+                        )  
+                        
+final_features = pd.merge( final_features,
+                           std_dev_gaplength_last_06_months,
+                           on = 'customer_id',
+                           how = 'left'
+                        )                          
+
+final_features = pd.merge( final_features,
+                           std_dev_gaplength_last_12_months,
+                           on = 'customer_id',
+                           how = 'left'
+                        ) 
+                        
+final_features = pd.merge( final_features,
+                           minmax_gaplen_last_06_months,
+                           on = 'customer_id',
+                           how = 'left'
+                        )                         
+                        
+final_features = pd.merge( final_features,
+                           linear_gaplength_trajectory_last_06_months,
+                           on = 'customer_id',
+                           how = 'left'
+                        )        
+                        
+final_features = pd.merge( final_features,
+                           linear_gaplength_trajectory_last_12_months,
+                           on = 'customer_id',
+                           how = 'left'
+                        )     
+                        
+final_features = pd.merge( final_features,
+                           transaction_dayofweek_proportions_last_24_months,
+                           on = 'customer_id',
+                           how = 'left'
+                        )                             
+                        
+# export to csv:   
+# (overwriting previous file)
+final_features.to_csv('C:/Users/Joe/Desktop/temp.csv') 
+```
+
+Look at a few random customers, with their calculated features: 
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
+customer_feature_data <- read_csv("C:/Users/Joe/Desktop/temp.csv") %>% mutate_if(is.numeric, round, digits=5)
+ 
+for( i in 1:20 ){
+   
+   random_customer_id = sample( customer_feature_data$customer_id, size=1 )
+   print( "Customer ID:" )
+   print( random_customer_id )
+   
+  # plot this customers transactions in time:
+  customer_transaction_plot <-
+    gen_customer_transaction_viz2( transaction_datetime_vec = sim_customers %>% filter(customer_id==random_customer_id) %>% pull(transaction_datetime),
+                                     plot_title = paste0("Customer ID: ", random_customer_id )
+                           )
+
+  customer_transactions_table <- 
+    sim_customers %>% 
+      filter(customer_id == random_customer_id)
+  customer_transactions_table_plot <-
+    customer_transactions_table %>% 
+      tableGrob(theme = ttheme_minimal(), rows = NULL)
+  
+  customer_feature_table <-
+    customer_feature_data %>%
+      select( -X1 ) %>%
+      filter( customer_id == random_customer_id ) %>%
+      t() %>%
+      as.data.frame() %>%
+      rownames_to_column()
+
+  colnames(customer_feature_table) <- c("feature", "value")
+
+  customer_feature_table_plot <- customer_feature_table %>% tableGrob(theme = ttheme_minimal(), rows = NULL)
+
+  gridExtra::grid.arrange( arrangeGrob( customer_transactions_table_plot, customer_feature_table_plot, ncol=2 ),
+                           customer_transaction_plot,
+                           nrow = 2,
+                           as.table = TRUE
+                         ) 
+  
+}
+
+
+```
+
+```{r echo=FALSE}
+# delete these rubbish temp files cluttering up my computer:
+file.remove( "C:/Users/Joe/Desktop/temp.csv" )
+```
+
+Calculate Euclidean distances between all of the simulated customers:
+
+```{r}
+euclidean_distmat <- 
+  customer_feature_data %>% 
+    select(-X1, -customer_id) %>%   # select all covariate/feature columns
+    mutate_all( scale ) %>%              # scale all columns
+    as.matrix() %>%                         # make the table into a numeric matrix
+    dist( x = .,                      # make distance matrix
+          method = "euclidean"
+        ) %>% 
+    as.matrix()
+```
+Now, we can take a random customer: 
+
+```{r}
+# select a random customer, using row-number in customer feature data:
+random_customer_index <- sample( 1:nrow(customer_feature_data), size=1 )
+random_customer_index
+
+# print the customer ID of this customer:
+print("Customer ID: ")
+customer_feature_data$customer_id[random_customer_index]
+
+# extract row of distance matrix corresponding to this customer:
+distrow_this_customer <- euclidean_distmat[random_customer_index,]      # row of Euclidean distance matrix corresponding to this customer
+
+# get 3 closest customers to this customer:
+closest_neighbours_indices <- sort(distrow_this_customer, decreasing=FALSE, index.return = TRUE)$ix[2:4]    # first index is the customer themself ;D
+closest_neighbours_indices
+
+# get 3 furthest customers from this customer:
+furthest_neighbours_indices <- sort(distrow_this_customer, decreasing=TRUE, index.return = TRUE)$ix[2:4]               
+furthest_neighbours_indices
+
+```
+
+plot the customer and their closest neighbours: 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
+for( i in c(random_customer_index, closest_neighbours_indices) ){
+   
+   this_customer_id <- customer_feature_data$customer_id[i]
+   print( "Customer ID:" )
+   print( this_customer_id )
+   
+  # plot this customers transactions in time:
+  customer_transaction_plot <-
+    gen_customer_transaction_viz2( transaction_datetime_vec = sim_customers %>% filter(customer_id==this_customer_id) %>% pull(transaction_datetime),
+                                     plot_title = paste0("Customer ID: ", this_customer_id )
+                           )
+
+  customer_transactions_table <- 
+    sim_customers %>% 
+      filter(customer_id == this_customer_id)
+  customer_transactions_table_plot <-
+    customer_transactions_table %>% 
+      tableGrob(theme = ttheme_minimal(), rows = NULL)
+  
+  customer_feature_table <-
+    customer_feature_data %>%
+      select( -X1 ) %>%
+      filter( customer_id == this_customer_id ) %>%
+      t() %>%
+      as.data.frame() %>%
+      rownames_to_column()
+
+  colnames(customer_feature_table) <- c("feature", "value")
+
+  customer_feature_table_plot <- customer_feature_table %>% tableGrob(theme = ttheme_minimal(), rows = NULL)
+
+  gridExtra::grid.arrange( arrangeGrob( customer_transactions_table_plot, customer_feature_table_plot, ncol=2 ),
+                           customer_transaction_plot,
+                           nrow = 2,
+                           as.table = TRUE
+                         ) 
+  
+}
+```
+
+plot the customer and their furthest 'neighbours': 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=10}
+for( i in c(random_customer_index, furthest_neighbours_indices) ){
+   
+   this_customer_id <- customer_feature_data$customer_id[i]
+   print( "Customer ID:" )
+   print( this_customer_id )
+   
+  # plot this customers transactions in time:
+  customer_transaction_plot <-
+    gen_customer_transaction_viz2( transaction_datetime_vec = sim_customers %>% filter(customer_id==this_customer_id) %>% pull(transaction_datetime),
+                                     plot_title = paste0("Customer ID: ", this_customer_id )
+                           )
+
+  customer_transactions_table <- 
+    sim_customers %>% 
+      filter(customer_id == this_customer_id)
+  customer_transactions_table_plot <-
+    customer_transactions_table %>% 
+      tableGrob(theme = ttheme_minimal(), rows = NULL)
+  
+  customer_feature_table <-
+    customer_feature_data %>%
+      select( -X1 ) %>%
+      filter( customer_id == this_customer_id ) %>%
+      t() %>%
+      as.data.frame() %>%
+      rownames_to_column()
+
+  colnames(customer_feature_table) <- c("feature", "value")
+
+  customer_feature_table_plot <- customer_feature_table %>% tableGrob(theme = ttheme_minimal(), rows = NULL)
+
+  gridExtra::grid.arrange( arrangeGrob( customer_transactions_table_plot, customer_feature_table_plot, ncol=2 ),
+                           customer_transaction_plot,
+                           nrow = 2,
+                           as.table = TRUE
+                         ) 
+  
+}
+```
+
+
+
+
+
+
+
+

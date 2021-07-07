@@ -1,0 +1,635 @@
+---
+title: "Catalogue of Revenue Uplift Models"
+author: "Joseph Bolton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    df_print: paged
+    theme: darkly
+    highlight: espresso
+---
+
+This page is a working catalogue of uplift models, with priority given to models capable of handling continuous outcomes.  
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+```
+
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 7px;
+text-align: center;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+<pre style="font-size: 13px; font-family: &quot;Ubuntu Mono&quot;; background-color: rgb(0,0,0); color: rgb(255,255,255); line-height: 11px;">....................................................................................................
+....................................................................................................
+....................................................................................................
+....................................................................................................
+...................................7236000647....160009517..........................................
+...................................7390088006...4000000067..........................................
+......................................75888087.700000057............................................
+.................71244217......774327...58008545000061..774217.....772217..........777..............
+.................4600000057...1000004....208888800647...40000057...6800061.....1500088063...........
+....................3900003.75000627......155555531......7300003777000095....28888888000051.........
+.....................7600000000067..........................750000000091....2088888888000937........
+.......................5000000097..7400800000000000000027....7000000007.....38888888000001..........
+..................7147.700000087...20000000000000000000007...780000003......4888880665317...........
+..............77490882.200000087....160005555555555600003....780000007..736008888807................
+...........75088888882.200000081......7.....7................788800807.790000888889.................
+.........740888888883..200000085...........7000009...........780800007..10088888886.................
+........108888888057...408000085...........7000008...........780000807...0008888085.................
+.......768888888027....400000085...........7000008...........700000802...7466990994.................
+.......758888080027....746805352...........7088808...........756655002..........7...................
+.......748888888800621.....................7888808.....7777.........................................
+.........29888888888888008055555590000087..7888888..70088888888880999880932177......................
+..........7300888888888888888888888888887..7088888..1880888888888888888888099655417.................
+............74560088888888888888888888887..7888888..1880888888888888888888888888888027..............
+................7726088888888888888888887..7088888..188088888888888888888008888888888067............
+.....................77111233333665688887..7008888..7333344222222221124590088888888888057...........
+.......................77..................7888888............77777........77160888888880...........
+..............777.7....288880885...........7888888...........780080897.........15008888807..........
+............7300069957..58888886...........7088888...........780008882.........2368888896...........
+............79888888881.28888886............288888...........780088882.....77266088880647...........
+............76888888807.28888883............488880...........788888887..1339888888880647............
+............769883......50088887...................777........88888887.488888888809317..............
+............180884.....700088887..08888888888888888888802.....88888887.288888806317.................
+......714569008882.....700000087..988888888888888888888884...788888807.73553217.....................
+.....7900008000002.....300000082...74565555551112555555537...788888801..............................
+.....7000000000001.....500000086.............................788888804..............................
+.....790000000005.....79000000007..........7555534...........3088888067.............................
+.......7243553427.....300008000067.........70000087.........200888800057............................
+....................740000639000057........70000087.......759000635000057...........................
+..................776800002..4000057.....7710000004.....716000051770000007..........................
+................7360088947....73000061..7600000000951..760800957...1500080637.......................
+....................777..........77....1600005350008627..7777.........777...........................
+......................................20880087.700088067............................................
+...................................7250000000...6000000627..........................................
+...................................1560000067...7300000957..........................................
+....................................................................................................
+....................................................................................................
+....................................................................................................
+....................................................................................................
+....................................................................................................</pre>
+
+<!-- set style back to normal -->
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 14px;
+text-align: left;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+
+# Uplift Modelling
+Typically, when an experiment is set up to measure the effect of a **treatment**, the average outcome of units exposed to a treatment (*intervention group*) is compared to the average outcome of units not exposed to the treatment (*control group*). 
+
+However, this does not take into account the possibility that different treated units might respond heterogeneously to the treatment (in magnitude, and perhaps even in sign).
+
+The goal of *uplift* (*incremental value*, *heterogeneous treatment effect*) modelling is to estimate the incremental effect of a treatment, on an individual (sample) level. For example, to estimate for each type of customer the additional spend caused by a marketing campaign. 
+
+*Uplift* models are typically interested in the average treatment effect, **conditional on a unit's features**. 
+
+Some models only aim to rank individuals according to their expected incremental response to the treatment, rather than trying to estimate the incremental response itself (e.g. ranking customers according to the size of their behaviour change elicited by the marketing campaign, rather than estimating the size of the behaviour change itself). 
+
+# Conceptual Framework & Notation 
+This conceptual framework is based on the *Ruben Causal Model* [8][40].
+
+The framework is introduced here in the context of retail (customer) data.  
+
+$\quad$
+
+$n$ customers are observed, indexed $i=1,2,...,n$. This numbering is random. 
+
+$n_T \subset n$ of the customers are in the *treatment group*. They are exposed to the treatment.
+
+$n_C \subset n$ of the customers are in the *control group*. They are **not** exposed to the treatment.
+
+$n_T+n_C=n$.
+
+$X_i$ is a vector of attributes (features/covariates) describing customer $i$. The values of $X_i$ are known to not be affected by the treatment [40]. 
+
+$Y$ is a response variable of interest. Each customer $i$ has a recorded response $Y_i$. 
+
+When the outcome under consideration is specifically revenue, $R_i$ is used to denote the spend of customer $i$ in the period under consideration. It is assumed that $R_i\geq0$. 
+
+Each customer has 2 potential outcomes: $\Big( Y_i(1), \space Y_i(0) \Big)$. 
+
+$Y_i(1)$ is the response of customer $i$ should they be exposed to the *treatment*. 
+
+$Y_i(0)$ is the response of customer $i$ should they be exposed to the *control* (i.e. **not** exposed to the *treatment*).
+
+Only one of $Y_i(1)$ and $Y_i(0)$ will be observed, and the other will be forever unknown. This is *The Fundamental Problem of Causal Inference* [8].
+
+The (unobservable) **unit-level causal effect** of the treatment on customer $i$ is $\tau_i = Y_i(1)-Y_i(0)$. 
+
+The *unit-level causal effect* could be defined as some other function of $Y_i(1)$ and $Y_i(0)$, such as $\frac{Y_i(1)}{Y_i(0)}$ [40], but I will use $\tau_i = Y_i(1)-Y_i(0)$.
+
+$W_i$ denotes the treatment to which customer $i$ was subjected to in the period of interest.
+    
+  * $W_i = 1$ if customer $i$ received the active treatment (intervention).
+    
+  * $W_i = 0$ if customer $i$ **did not** receive the active treatment (*control group*).
+  
+Each of the $n$ observations $(Y_i, W_i, X_i)$ is considered an independent sample from the same identical unknown population distribution.    
+
+The **S**table **U**nit **T**reatment **V**alue **A**ssumption (SUTVA) [41] is assumed to hold:
+
+  * $Y_i = W_i\cdot Y_i(1) + (1-W_i)\cdot Y_i(0)$ $\hspace{50mm}$ [25] 
+
+  * $Y_i(1)$ and $Y_i(0)$ for customer $i$ are not affected by any action or intervention performed on any other customer $j$ [40]. 
+   
+  * The values of $Y_i(1)$ and $Y_i(0)$ are the same regardless of how customer $i$ receives the treatment. $\hspace{50mm}$ [40] 
+  
+A further assumption made is that the exercise of measurement (e.g. method of administering treatments, or of assigning customers to groups) does not affect $X$,$Y_i(1)$ or $Y_i(0)$ [40].
+  
+The population *Average Treatment Effect* is $E\Big[Y_i(1)-Y_i(0)\Big]$. This quantity can be estimated from data.
+
+The *Conditional Average Treatment Effect* (CATE) is 
+
+$$\begin{array}{lcl} \tau(x) &=& E\Big[Y_i(1)-Y_i(0) \space\Bigl|\space X_i=x\Big] \hspace{30mm} [10] \\
+\end{array}$$
+
+This CATE can also be estimated. Many *uplift* models aim to directly estimate $\tau(x)$ [20]. 
+
+**Unconfoundedness**: 
+
+  * In a randomised experiment, it is assumed that $\quad$ $W_i \quad \perp \!\!\! \perp \quad \Big(Y_i(1),Y_i(0), X_i\Big)$ $\quad$[10]. $\quad$ This means that customer (potential) outcomes and features are independent of treatment assignment. 
+  
+  * In the case where assignment of treatment $W_i$ is not random, it is assumed that $\quad$ $\quad W_i \Bigl| X_i \quad \perp \!\!\! \perp \quad  \Big(Y_i(1),Y_i(0)\Big) \quad [30]$. $\quad$ This means that  although treatment assignment was not random, any biases in treatment assignment that affect the potential treatment effects $Y_i(1)$ and $Y_i(0)$ can be fully explained by the available covariates $X_i$. 
+  
+Given that the **unconfoundedness** assumption holds, $\tau(x)$ can be estimated from observed data as follows: 
+  
+$$\begin{array}{lcl}
+\tau(x) 
+&=&
+\mathbf{E}\Big[\space Y_i(1)\space \Bigl|\space X_i=x\Big] \quad-\quad  
+\mathbf{E}\Big[\space Y_i(0)\space \Bigl|\space X_i=x\Big] \hspace{20mm} ..definition
+\\
+&=& 
+\mathbf{E}\Big[\space Y_i(1)\space \Bigl|\space X_i=x, \space W_i=1\Big] \quad-\quad  
+\mathbf{E}\Big[\space Y_i(0)\space \Bigl|\space X_i=x, \space W_i=0\Big] \hspace{20mm} ..unconfoundedness
+\\
+&=& 
+\mathbf{E}\Big[\space Y_i\space \Bigl|\space X_i=x, \space W_i=1\Big] \quad-\quad  
+\mathbf{E}\Big[\space Y_i\space \Bigl|\space X_i=x, \space W_i=0\Big] \hspace{20mm} [43]
+\\
+\end{array}$$  
+  
+$e(x) = Pr\Big[W_i=1 \space\Bigl|X_i=x\Big]$ is the *propensity score* for individuals with features $X_i$. It is the likelihood of a customer being in the *treatment* ($W_i=1$) group, given their features. In a randomized experiment, $e(x)$ is a constant, independent of $x$.     
+  
+$\mu_0(x) = E\Big[Y_i \space\Bigl|W_i=0,X_i=x\Big]$
+
+$\mu_1(x) = E\Big[Y_i \space\Bigl|W_i=1,X_i=x\Big]$
+
+$\mu(w,x) = E\Big[Y_i\Bigl|W_i=w,X_i=x\Big]$ 
+
+# Uplift Models
+
+Cells marked with $?$ are fields that I still need to verify. 
+
+```{r echo=FALSE}
+bind_rows( 
+  
+  tibble(                              ` `  = "1.",         
+                                 model_name = "Response Model",
+                                 #model_type = "standard regression or classification model",
+                            binary_response = "x",
+                        continuous_response = "x",
+          software = "[any]",
+     handles_nonrandom_treatment_assignment = "?", 
+                                  reference = "[1][3][25]"
+        )
+  ,
+  tibble(                              ` `  = "2.",
+                                 model_name = "T-Learner ('Double Model')",
+                                 #model_type = "combines predictions of standard models",
+                            binary_response = "x",
+                        continuous_response = "x",
+          software = "[any]",
+                                
+     handles_nonrandom_treatment_assignment = "?",
+                                  reference = "[1],[7],[18],[19],[20]"
+        )
+    ,
+  tibble(                              ` `  = "3.",
+                                 model_name = "S-Learner",
+                                 #model_type = "?",
+                            binary_response = "x",
+                        continuous_response = "x",
+          software = "[any]",
+                                
+     handles_nonrandom_treatment_assignment = "?",
+                                  reference = "[19][20]"
+        )
+    ,
+  tibble(                              ` `  = "4.",
+                                 model_name = "X-Learner",
+                                 #model_type = "combines predictions of standard models",
+                            binary_response = "x",
+                        continuous_response = "x",
+          software = "[any]",
+                                
+     handles_nonrandom_treatment_assignment = "x",
+                                  reference = "[19][20]"
+        )
+    ,
+  tibble(                              ` `  = "5.",
+                                 model_name = "Causal Tree/Forest",
+                                 #model_type = "Modified CART & Modified Random Forest",
+                            binary_response = "?",
+                        continuous_response = "x",
+          software = "R",
+                                
+     handles_nonrandom_treatment_assignment = "?",
+                                  reference = "[10],[11],[38],[39]"
+        )
+  ,
+    tibble(                        
+                                       ` `  = "6.",
+                                 model_name = "Generalised Random Forest",
+                                 #model_type = "Modified Random Forest",
+                            binary_response = "?",
+                        continuous_response = "x",
+          software = "R",
+                                
+     handles_nonrandom_treatment_assignment = "?",
+                                  reference = "[21]"
+        )
+  ,
+      tibble(                          ` `  = "7.",
+                                 model_name = "Causal K-Nearest Neighbours",
+                                 #model_type = "Modified KNN",
+                            binary_response = "x",
+                        continuous_response = "x",
+          software = "-",
+                                
+     handles_nonrandom_treatment_assignment = "?",
+                                  reference = "[17],[18],[22],[23][59]"
+        )
+  ,
+  
+    tibble(                            ` `  = "8.",
+                                 model_name = "Continuous Response Variable Transformation with Weightings (CRVTW)",
+                                 #model_type = "standard model(s) with transformed response",
+                            binary_response = "-",
+                        continuous_response = "x",
+          software = "[any]",
+                                
+     handles_nonrandom_treatment_assignment = "x",
+                                  reference = "[5],[7],[25],[27],[35]"
+        )
+  ,
+      tibble(                          ` `  = "9.",
+                                 model_name = "Doubly Robust CRVTW",
+                                 #model_type = "standard model(s) with transformed response",
+                            binary_response = "-",
+                        continuous_response = "x",
+          software = "[any]",
+                                
+     handles_nonrandom_treatment_assignment = "x",
+                                  reference = "[25]"
+        )
+  ,
+      tibble(                          ` `  = "10.",
+                                 model_name = "Revenue Discretization Transformation (RDT)",
+                                 #model_type = "Modified classification model",
+                            binary_response = "",
+                        continuous_response = "x",
+          software = "[any]",
+                                
+     handles_nonrandom_treatment_assignment = "x",
+                                  reference = "[5],[16]"
+        )    
+  ,
+      tibble(                          ` `  = "11.",
+                                 model_name = "Significance-based Uplift Trees",
+                                 #model_type = "Modified CART with bagging",
+                            binary_response = "x",
+                        continuous_response = "x",
+          software = "?",
+                                
+     handles_nonrandom_treatment_assignment = "?",
+                                  reference = "[1]"
+        )    
+  ,  
+      tibble(                          ` `  = "12.",
+      model_name = "Treatment-covariates Interaction Approach (TCIA) & Interaction-term Method (ITM)",
+                                 #model_type = "standard model(s) with transformed covariates",
+                            binary_response = "x",
+                        continuous_response = "x",
+          software = "",
+                                
+     handles_nonrandom_treatment_assignment = "?",
+                                  reference = "[16],[24],[45]"
+        )
+  ,
+      tibble(                          ` `  = "13.",
+      model_name = "Causal Bayesian Tree/Forest",
+                                 #model_type = "?",
+                            binary_response = "?",
+                        continuous_response = "?",
+          software = "?",
+                                
+     handles_nonrandom_treatment_assignment = "?",
+                                  reference = "[30][36][44]"
+        )
+  ,
+      tibble(                          ` `  = "14.",
+      model_name = "Modified Covariate Method (MCM)",
+                                 #model_type = "?",
+                            binary_response = "?",
+                        continuous_response = "?",
+          software = "?",
+                                
+     handles_nonrandom_treatment_assignment = "x",
+                                  reference = "[24],[25],[29]"
+        )
+  ,
+  tibble(                              ` `  = "15.",
+      model_name = "Pollinated Transformed Outcome (PTO) Forest",
+                                 #model_type = "transformed outcome with modified random forest",
+                            binary_response = "?",
+                        continuous_response = "x",
+          software = "No",
+                                
+     handles_nonrandom_treatment_assignment = "x",
+                                  reference = "[35]"
+        )
+  ,
+    tibble(                            ` `  = "16.",
+                                 model_name = "Cross-Validated Causal Boosting",
+                                 #model_type = "GBM using Causal-Tree as base-learner, with modified CV",
+                            binary_response = "?",
+                        continuous_response = "x",
+          software = "?",
+                                
+     handles_nonrandom_treatment_assignment = "x",
+                                  reference = "[35]"
+        )
+  ,
+      tibble(                          ` `  = "17.",
+      model_name = "Causal MARS (Multivariate Adaptive Regression Splines)",
+                                 #model_type = "?",
+                            binary_response = "?",
+                        continuous_response = "?",
+          software = "?",
+                                
+     handles_nonrandom_treatment_assignment = "?",
+                                  reference = "[35]"
+        )
+  ,
+        tibble(                          ` `  = "18.",
+      model_name = "LASSOplus",
+                                 #model_type = "?",
+                            binary_response = "?",
+                        continuous_response = "?",
+          software = "?",
+                                
+     handles_nonrandom_treatment_assignment = "?",
+                                  reference = "[47]"
+        )
+  
+  
+  ) %>% 
+  knitr::kable(   ., 
+                  caption = "Revenue Uplift Models",
+                   format = "latex" # ,
+                # booktabs = TRUE, 
+                #    align = "c"
+              ) %>%
+  kableExtra::kable_styling(latex_options = c("striped", 
+                                              "scale_down",
+                                              "hold_position" #
+                                              # "condensed"
+                                             )
+                           )
+```
+
+# Short Model Descriptions
+
+$\space$| model_name               | description
+--------|--------------------------|---------------------------------------
+1.      | Response Model           | A *Response Model* is a model estimating the outcome $f(x)=E\Big[Y_i\Bigl|W_i=1,X_i=x\Big]$. A *Response Model* is not an uplift model. Using it to target customers results in the selection customers who spend a lot when treated, although not necessarily as a result of the treatment. 
+$\space$|$\space$                  | $\space$
+2.      | T-learner (double model) | $\hat\mu_0(x)$ is a model estimate of $\mu_0(x) = E\Big[Y_i \space\Bigl|W_i=0,X_i=x\Big]$ built on the untreated (control) units in the training data
+$\space$| $\space$                 | $\hat\mu_1(x)$ is a model estimate of $\mu_1(x) = E\Big[Y_i \space\Bigl|W_i=1,X_i=x\Big]$ built on the treated units in the training data
+$\space$| $\space$                 | ($\hat\mu_0(x)$ and $\hat\mu_1(x)$ are estimated with 2 independent models)
+$\space$| $\space$                 | The CATE $\tau(x)$ is then estimated as $\hat\tau(x)=\hat\mu_1(x)-\hat\mu_0(x)$ $\quad$ [20]
+$\space$| $\space$                 | $\space$                 
+3.      | S-learner                | The treatment indicator $W_i$ is included in the covariates $X_i$.
+$\space$| $\space$                 | A model $\hat\mu(w,x)$ is built to estimate $\mu(w,x)=E\Big[Y_i\Bigl|W_i=w,X_i=x\Big]$
+$\space$| $\space$                 | The CATE is then estimated using the model as $\hat\tau(x)=\hat\mu(X=x,W=1)-\hat\mu(X=x,W=0)$
+$\space$| $\space$                 | If a Random Forest is used to model $\hat\mu$, then in order to place greater weight on the treatment covariate than on the other covariates, the model can be allowed to consider the treatment covariate at every possible split point in the tree-growing process (whereas a random subset of the other covariates are available at each split). This functionality is available in some random forest implementations (for example the **ranger** package in **R** [28])                  
+$\space$| $\space$                 | $\space$                 
+4.      | X-learner                | The **X-learner** is a weighted combination of information provided by the treated and control groups, meaning that it can adjust it's estimates in unbalanced experimental designs [20] (i.e. when one of the groups is much larger than the other)
+$\space$| $\space$                 | $\mu_1(x)=E\Big[Y_i\Bigl|W_i=1,X_i=x \Big]$                 
+$\space$| $\space$                 | $\mu_0(x)=E\Big[Y_i\Bigl|W_i=0,X_i=x \Big]$                 
+$\space$| $\space$                 | define $D_i=\begin{cases}Y_i-\mu_0(X_i) \quad \text{if }W_i=1\\\mu_1(X_i)-Y_i \quad \text{if }W_i=0\end{cases}$                 
+$\space$| $\space$                 | then, $E\Big[D_i\Bigl|W_i=1,X_i=x\Big]=\underset{\tau(x)}{\underbrace{E\Big[Y_i\Bigl|W_i=1,X_i=x\Big]-E\Big[Y_i\Bigl|W_i=0,X_i=x\Big]}}$                 
+$\space$| $\space$                 | and, $E\Big[D_i\Bigl|W_i=0,X_i=x\Big]=\underset{\tau(x)}{\underbrace{E\Big[Y_i\Bigl|W_i=1,X_i=x\Big]-E\Big[Y_i\Bigl|W_i=0,X_i=x\Big]}}$                 
+$\space$| $\space$                 | So, we build a model $\hat\mu_1(x)$ (on the treated portion of the training sample) estimating $\mu_1(x)$                 
+$\space$| $\space$                 | We build a model $\hat\mu_0(x)$ (on the **un**treated [control] portion of the training sample) estimating $\mu_0(x)$                 
+$\space$| $\space$                 | We define $\hat\tau_1(x)$ as the average (mean) value of $\tilde{D}^{[1]}=Y_i^{[1]}-\hat\mu_0(X_i^{[1]})$ over the treated $[1]$ units in the training sample      
+$\space$| $\space$                 | We define $\hat\tau_0(x)$ as the average (mean) value of $\tilde{D}^{[0]}=\hat\mu_1(X_i^{[0]})-Y_i^{[0]}$ over the **un**treated $[0]$ (control) units in the training sample        
+$\space$| $\space$                 | The **X-learner** estimate of $\tau(x)$ is then: 
+$\space$| $\space$                 | $\hat\tau(x)=g(x)\cdot\hat\tau_0(x)+\Big[1-g(x)\Big]\cdot\hat\tau_1(x) \quad\quad\quad\quad g(x)\in[0,1]$
+$\space$| $\space$                 | $\hat\tau_0(x)$ and $\hat\tau_1(x)$ are both estimators of the CATE $\tau(x)$. $g$ is a weighted combination of these 2 estimates. 
+$\space$| $\space$                 | [20] $\quad$ says that an estimate of the propensity score $e(x)$ is a good choice for $g \quad$ i.e. $g(x)=\hat e(x)$  
+$\space$| $\space$                 | Alternatively, $g(x)$ can be viewed as a model hyperparameter to be selected by the modeller
+$\space$| $\space$                 | $\space$                 
+5.      | Causal Tree & Causal Forest | Whereas decision trees calculate the mean outcome within each leaf - using this as the working prediction - causal trees calculate the average treatment effect ($y_{treated}-y_{control}$) in each leaf [35], using this as an estimate of $\tau(x)$. 
+$\space$| $\space$                 | At each split decision, whereas a standard regression tree chooses the split for which the average outcome $y$ between the left and right sides of the split is most different, a causal tree will choose the split for which the average treatment effect $\tau$ between the left and right sides of the split is most different [35]                
+$\space$| $\space$                 | $\space$                 
+6.      | Generalised Random Forest | xxxx                 
+$\space$| $\space$                 | $\space$                 
+7.      | Causal K-Nearest Neighbours (KNN) | xxxx                 
+$\space$| $\space$                 | $\space$                 
+8.      | Continuous Response Variable Transformation with Weightings (CRVTW) | Define:
+$\space$| $\space$                 | $\begin{array}{lcl}Z_i &=& W_i \cdot \displaystyle\frac{Y}{e(X_i)} \quad-\quad \Big(1-W_i\Big)\cdot\frac{Y}{1-e(X_i)}  \\ &=& \begin{cases} \hspace{5mm} y_i \cdot \frac{1}{e(X_i)} \quad \text{if } W_i=1\\ -y_i\cdot \frac{1}{1-e(X_i)}\quad \text{if } W_i=0 \end{cases}\end{array}$               
+$\space$| $\space$                 | In a controlled experiment (in which units are randomly assigned to treatment and control groups in fixed proportions), then this simplifies to: $Z_i=\begin{cases} \displaystyle\frac{n}{n_T}\cdot y_i \quad \text{if } W_i=1 \text{ and } y_i>0\\ -\displaystyle\frac{n}{n_C}\cdot y_i \quad \text{if } W_i=0 \text{ and } y_i>0\\ 0 \hspace{28mm} \text{otherwise} \end{cases}$     $\quad\quad\quad$
+$\space$| $\space$                 | The motivation behind using $Z_i$ is that 
+$\space$| $\space$                 | $\begin{array}{lcl} E\Big[Z_i\Bigl|X_i=x\Big] &=& E\Big[Y_i\Bigl|W_i=1,X_i=x\Big]-E\Big[Y_i\Bigl|W_i=0,X_i=x\Big]\\ &=& \tau(x) \\ \end{array}$
+$\space$| $\space$                 | Outcome $Z_i$ can be predicted/modelled using any standard regression model.
+$\space$| $\space$                 | $\space$                 
+9.      | Doubly Robust CRVTW      | Define:
+$\space$| $\space$                 | $\begin{array}{lcl} Z_i^{[DR]} &=& \mu(W_i=1,X_i)-\mu(W_i=0,X_i)+\displaystyle\frac{W_i\Big(Y_i-\mu(W_i=1,X_i)\Big)}{e(X_i)}-\frac{\Big(1-W_i\Big)\Big(Y_i-\mu(W_i=0,X_i)\Big)}{\Big(1-e(X_i)\Big)} \\ &=& \begin{cases} \mu(W_i=1,X_i)-\mu(W_i=0,X_i)+\displaystyle\frac{\Big(Y_i-\mu(W_i=1,X_i)\Big)}{e(X_i)} \quad \text{if } W_i=1 \\ \mu(W_i=1,X_i)-\mu(W_i=0,X_i)-\displaystyle\frac{\Big(Y_i-\mu(W_i=0,X_i)\Big)}{\Big(1-e(X_i)\Big)} \quad \text{if } W_i=0 \end{cases}\end{array}$
+$\space$| $\space$                 | In case of random treatment assignment (e.g. a random experiment), this simplifies to:
+$\space$| $\space$                 | $\begin{array}{lcl} Z_i^{[DR]} &=& \begin{cases} \mu(W_i=1,X_i)-\mu(W_i=0,X_i)+\displaystyle\frac{n}{n_T}\cdot \Big(Y_i-\mu(W_i=1,X_i)\Big) \quad \text{if } W_i=1 \\ \mu(W_i=1,X_i)-\mu(W_i=0,X_i)-\displaystyle\frac{n}{n_T}\cdot\Big(Y_i-\mu(W_i=0,X_i)\Big) \quad \text{if } W_i=0 \end{cases}\end{array}$
+$\space$| $\space$                 | As with the CRVTW discussed above,
+$\space$| $\space$                 | $\begin{array}{lcl} E\Big[Z_i^{[DR]}\Bigl|X_i=x\Big] &=& E\Big[Y_i\Bigl|W_i=1,X_i=x\Big]-E\Big[Y_i\Bigl|W_i=0,X_i=x\Big]\\ &=& \tau(x) \\ \end{array}$
+$\space$| $\space$                 | The true values of the quantities $\mu(w,x)$ and $e(x)$ are unknown, and must be estimated in a separate modelling step                  
+$\space$| $\space$                 | $\space$                 
+10.     | causal BART              | xxxx                 
+$\space$| $\space$                 | $\space$                 
+15.     | PTO                      | Algorithm from [35]:                 
+$\space$| $\space$                 | 1. Calculate transformed CRVTW outcome                 
+$\space$| $\space$                 | $\begin{array}{lcl}Z_i &=& W_i \cdot \displaystyle\frac{Y}{e(X_i)} \quad-\quad \Big(1-W_i\Big)\cdot\frac{Y}{1-e(X_i)}  \\ &=& \begin{cases} \hspace{5mm} y_i \cdot \frac{1}{e(X_i)} \quad \text{if } W_i=1\\ -y_i\cdot \frac{1}{1-e(X_i)}\quad \text{if } W_i=0 \end{cases}\end{array}$
+$\space$| $\space$                 | 2. Build a random forest to predict $Z$
+$\space$| $\space$                 | 3. Replace the leaf estimates $\overline Z$ with $\overline{Y_1}-\overline{Y_0}$ (mean difference in outcome in each node between treatment and control groups). $\overline{Y_1}-\overline{Y_0}=\hat{\tau}_i$.
+$\space$| $\space$                 | (4) (optional) Build a random forest to predict $\hat{\tau}_i$.
+10.     | CV Causal Boosting       | The **Causal Tree** (model 5. in this list) is the base learner used for this model. 
+$\space$| $\space$                 | The estimate in each leaf of the **Causal Tree** is $\overline y_1-\overline y_0$ (difference in mean outcome between treatment and control customers in leaf)
+$\space$| $\space$                 | hmm
+$\space$| $\space$                 | Algorithm from [35]:                 
+$\space$| $\space$                 | Initialise $R_i=Y_i$ and $$                 
+$\space$| $\space$                 | x
+$\space$| $\space$                 | $\space$
+  
+```{r echo=FALSE}
+ 
+  #   tibble(                        model_name = "",
+  #                               description = ""
+  #       )
+  # ,
+  #     tibble(                    model_name = "",
+  #                               description = "locally estimates uplift with k nearest treated and k nearest control samples"
+  #           )
+  # ,
+  # 
+  #   tibble(       model_name = "",
+  #                description = "transformed response [y] can be predicted by any regression model"
+  #       )
+  # ,
+  #     tibble(                    model_name = "Revenue Discretization Transformation (RDT)",
+  #                               description = "a discretized version of the CRVTW model (immediately preceding)"
+  #       )    
+  # ,
+  #     tibble(                    model_name = "Siginificance-based Uplift Trees",
+  #                               description = ""
+  #       )    
+  # ,  
+  #     tibble( 
+  #     model_name = "Treatment-covariates Interaction Approach (TCIA) & Interaction-term Method (ITM)",
+  #                               description = ""
+  #       )
+  # ) %>% 
+  # kable( align = "l")
+```
+
+# References
+
+[1] Real-World Uplift Modelling with Significance-Based Uplift Trees. Radcliffe, Surry. 2011
+
+[2] Estimating Causal Effects of Treatments in Randomized and Non-Randomized Studies. Rubin. 1974.
+
+[3] Response Modeling With Support Vector Regression. Cho, Kim. 2006. 
+
+[4] Using Control Groups to Target on Predicted Lift: Building and Assessing Uplift Models. Radcliffe. 2007. 
+
+[5] Response Transformation and Profit Decomposition for Revenue Uplift Modeling. Gubela, Lessmann, Jaroszewicz. 2019. 
+
+[6] A literature survey and experimental evaluation of the state-of-the-art in uplift modeling: A stepping stone toward the development of prescriptive analytics. Devriendt, Moldovan, Verbeke. 2018. 
+
+[7] Linear Regression for Uplift Modelling. Rudas, Jaroszewicz. 2018.  
+
+[8] Statistics and Causal Inference. Holland. 1986. 
+
+[9] An Introduction to Recursive Partitioning for Heterogeneous Causal Effects Estimation Using causalTree package. Athey, Imbens. 2016. 
+
+[10] Recursive partitioning for heterogeneous causal effects. Athey, Imbens. 2016.
+
+[11] An Introduction to Recursive Partitioning for Heterogeneous Causal Effects Estimation Using causalTree package. Athey, Imbens. 2016.
+
+[12] http://www2.cs.uregina.ca/~dbd/cs831/notes/lift_chart/lift_chart.html
+
+[13] Uplift Regression: The R Package tools4uplift. Belbahri, Murua, Gandouet, Nia. 2019.
+
+[14] Estimation and Inference of Heterogeneous Treatment Effects using Random Forests. Stefan Wager & Susan Athey. 2018. 
+
+[15] Assessing the Performance of Direct Marketing Scoring Models. Malthouse. 2001. 
+
+[16] Revenue Uplift Modelling. Gubella, Haupt, Lessman, Bauman. 2017.  
+
+[17] https://humboldt-wi.github.io/blog/research/applied_predictive_modeling_19/01marketing_campaign_optimization/. Kricke, Psechenz. 2019.
+
+[18] Heterogeneous Treatment Effect & Optimal Targeting Policy Evaluation. Hitch, Misra. 2018. 
+
+[19] https://johaupt.github.io/causal%20machine%20learning/Uplift_ITE_summary.html
+
+[20] Metalearners for estimating heterogeneous treatment effects using machine learning. Künzel, Sekhon, Bickel, Yu. 2019. 
+
+[21] Generalized Random Forests. Athey, Tibshirani, Stefan Wager. 2018. 
+
+[22] https://humboldt-wi.github.io/blog/research/applied_predictive_modeling_19/blog_post_causal_knn/
+
+[23] Causal Nearest-Neighbor Rules for Optimal Treatment Regimes. Zhou, Kosorok. 2017. 
+
+[24] A Simple Method for Estimating Interactions between a Treatment and a Large Number of Covariates. Tian, Alizadeh, Gentles, Tibshirani. 2014.
+
+[25] Machine Learning Estimation of Heterogeneous Causal Effects: Empirical Monte Carlo Evidence. Knaus, Lechner, Strittmatter. 2018.
+
+[26] https://github.com/MCKnaus/CATEs 
+
+[27] Efficient Estimation of Average Treatment Effects using the Estimated Propensity Score. Hirano, Imbens, Ridder. 2003.
+
+[28] 'Ranger' R package: https://cran.r-project.org/web/packages/ranger/ranger.pdf
+
+[29] A general statistical framework for subgroup identification and comparative treatment scoring. Chen, Tian, Cai, Yu. 2017. 
+
+[30] Bayesian Nonparametric Modeling for Causal Inference. Hill. 2011. 
+
+[31] https://github.com/rguo12/awesome-causality-algorithms
+
+[32] Targeting Uplift: An Introduction to Net Scores. Martens, Michel, Schnakenburg. 2019. 
+
+[33] Hillstrom’s MineThatData Email Analytics Challenge: An Approach Using Uplift Modelling. Radcliffe. 2008.
+
+[34] A Large Scale Benchmark for Uplift Modeling. Amini, Betlei, Diemert, Renaudin. 2018. 
+
+[35] Some Methods for Heterogeneous Treatment Effect Estimation in High Dimensions. Powers, Qian, Jung, Schuler, Nigam, Shah, Hastie, Tibshirani. 2018.
+
+[36] Bayesian regression tree models for causal inference: regularization, confounding, and heterogeneous effects. Hahn, Murray, Carvalho. 2019. 
+
+[37] Uplift Modeling from Separate Labels. Yamane, Yger, Atif, Sugiyama. 2018.
+
+[38] Modified Causal Forests for Estimating Heterogeneous Causal Effects. Lechner. 2019. 
+
+[39] https://www.markhw.com/blog/causalforestintro
+
+[40] Causal Inference Using Potential Outcomes: Design, Modeling, Decisions. Rubin. 2005. 
+
+[41] Discussion of “Randomization Analysis of Experimental Data in the Fisher Randomization Test,” by D. Basu. Rubin. 1980. 
+
+[42] Estimation of Conditional Average Treatment Effects. Rolling. 2014. 
+
+[43] Recent Developments in the Econometrics of Program Evaluation. Imbens, Wooldridge. 2008. 
+
+[44] safeBART, BCF-BMA, and other Bayesian Regression Tree Algorithms. O'Neill. 2019.
+
+[45] The True Lift Model - A Novel Data Mining Approach to Response Modeling in Database Marketing. Lo. 
+
+[46] Causal Effect Inference with Deep Latent-Variable Models. Louizos, Shalit, Mooij, Sontag, Zemel, Welling. 2017. 
+
+[47] Sparse Estimation and Uncertainty with Application to Subgroup Analysis*. Ratkovic, Tingley. 2016. 
+
+[48] Deep Counterfactual Networks with Propensity-Dropout. Alaa, Weisz, van der Schaar. 2017.
+
+[49] Deep Learning for Causal Inference. Ramachandra. 2018.
+
+[50] Deep Neural Networks for Estimation and Inference. Farrell, Liang, Misra. 2019. 
+
+[51] https://thegradient.pub/independently-reproducible-machine-learning/
+
+[52] Generic Machine Learning Inference on Heterogenous Treatment Effects in Randomized Experiments. Chernozhukov, Demirer, Duflo, Fernandez-Val. 2018.
+
+[53] Differential response analysis: Modeling true responses by isolating the effect of a single action. Radcliffe, Surry. 1999.
+
+[54] True-lift modeling: Comparison of methods. Kane, Lo, Zheng. 2014.
+
+[55] Net models. Larsen. 2009. 
+
+[56] Pinpointing the persuadables: Convincing the right voters to support Barack Obama. Porter. 2012. Available online: www.predictiveanalyticsworld.com/patimes/video-dan-porter-clip/ 
+
+[57] Incremental value modeling. Hansotia, Rukstales. 2002.
+
+[58] Uplift modeling with multiple treatments and general response types. Zhao, Fang, Simchi-Levi. 2017.
+
+[59] Improved Statistical Methods are Needed to Advance Personalized Medicine. Alemi, Erdman, Griva, Evans. 2009.

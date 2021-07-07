@@ -1,0 +1,164 @@
+---
+title: "B-splines"
+author: "joe"
+date: "7/12/2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+```
+
+# Basis Splines 
+
+This information is based on the Vignette __A Primer on Regression Splines__ by Jeffrey Racine, available at https://cran.r-project.org/web/packages/crs/vignettes/spline_primer.pdf
+
+B-spline stands for 'Basis Spline', which is a generalisation of a Bezier curve. We concern ourselves with regression splines, as opposed to smoothing splines
+
+# Quadratic Bezier Curve
+A univariate quadratic bezier curve is a function $B(x)$ of $x$ with domain $x\in[0,1]$:
+
+$$\begin{array}{lcl} B(x) &=& \beta_0(1-x)^2 + \beta_1 2(1-x)x + \beta_2x^2 \\
+&=& \beta_0 B_0(x) + \beta_1 B_1(x) + \beta_2 B_2(x)   \\
+&=& \sum_{i=0}^2 \beta_i B_i(x) \\
+\end{array}$$
+
+So, we are created a curve by from a weighted sum of different polynomial functions of $x$.  
+
+```{r define_bezier}
+
+# define a grid of x-values:
+x <- seq(0,1,0.001)
+
+# define the univariate quadratic bezier function  
+B_x <- function(x,beta){ beta$beta0*(1-x)^2 + beta$beta1*2*(1-x)*x + beta$beta2*x^2 }
+
+```
+
+```{r examples}
+par( mfrow=c(2,2), pty = "s")
+
+plot( x = x,
+      y = (1-x)^2,
+      pch = ".",
+      ylab = expression( (1-x)^2 ),
+      main = expression( (1-x)^2 ),
+      xlab = "x"
+    )
+plot( x = x,
+      y = 2*(1-x)*x,
+      pch = ".",
+      ylab = expression( 2 %.% (1-x) %.% x ),
+      main = expression( 2 %.% (1-x) %.% x ),
+      xlab = "x"
+    )
+plot( x = x,
+      y = x^2,
+      pch = ".",
+      ylab = expression( x^2 ),
+      main = expression( x^2 ),
+      xlab = "x"
+    )
+
+plot( x = x, 
+      y = B_x( x = x, beta = list( beta0=1, beta1=-1, beta2=2 ) ),
+      main = expression( 1 %.% (1-x)^2 +
+                         -1 %.% 2(1-x)%.% x +
+                         2 %.% x^2 ),
+      ylab = "B(x)",
+      pch = "."
+    )
+```
+
+We could fit a curve like this to univariate data using least squares estimation. Here are examples on four random datasets: 
+
+```{r randat,echo=FALSE}
+# create random data
+par( mfrow = c(2,2) )
+x <- runif(10,0,1)
+y <- sin(x*8) + rnorm(10)
+
+B0 <- (1-x)^2
+B1 <- 2*(1-x)*x
+B2 <- x^2
+
+X <- cbind(B0,B1,B2)
+OLS_coef <- solve( t(X)%*%X ) %*% t(X) %*% y
+# this is the same as lm( y ~ B0 + B1 + B2 - 1 )
+
+x_grid <- seq(0,1,0.001)
+fitted_vals <- cbind( (1-x_grid)^2, 2*(1-x_grid)*x_grid, x_grid^2) %*% OLS_coef
+plot( y ~ x, 
+      main = paste0( round(OLS_coef[1], 2) , " * (1-x)^2 + ",
+                     round(OLS_coef[2], 2), " * 2(1-x)x + ",  
+                     round(OLS_coef[3], 2), " * x^2" ),
+      xlim=c(0,1) 
+    )
+points( x=x_grid, y=fitted_vals, pch=".", main = "test")
+
+x <- runif(10,0,1)
+y <- sin(x*8) + rnorm(10)
+
+B0 <- (1-x)^2
+B1 <- 2*(1-x)*x
+B2 <- x^2
+
+X <- cbind(B0,B1,B2)
+OLS_coef <- solve( t(X)%*%X ) %*% t(X) %*% y
+# this is the same as lm( y ~ B0 + B1 + B2 - 1 )
+
+x_grid <- seq(0,1,0.001)
+fitted_vals <- cbind( (1-x_grid)^2, 2*(1-x_grid)*x_grid, x_grid^2) %*% OLS_coef
+plot( y ~ x, 
+      main = paste0( round(OLS_coef[1], 2) , " * (1-x)^2 + ",
+                     round(OLS_coef[2], 2), " * 2(1-x)x + ",  
+                     round(OLS_coef[3], 2), " * x^2" ),
+      xlim=c(0,1) 
+    )
+points( x=x_grid, y=fitted_vals, pch=".", main = "test")
+
+x <- runif(10,0,1)
+y <- sin(x*8) + rnorm(10)
+
+B0 <- (1-x)^2
+B1 <- 2*(1-x)*x
+B2 <- x^2
+
+X <- cbind(B0,B1,B2)
+OLS_coef <- solve( t(X)%*%X ) %*% t(X) %*% y
+# this is the same as lm( y ~ B0 + B1 + B2 - 1 )
+
+x_grid <- seq(0,1,0.001)
+fitted_vals <- cbind( (1-x_grid)^2, 2*(1-x_grid)*x_grid, x_grid^2) %*% OLS_coef
+plot( y ~ x, 
+      main = paste0( round(OLS_coef[1], 2) , " * (1-x)^2 + ",
+                     round(OLS_coef[2], 2), " * 2(1-x)x + ",  
+                     round(OLS_coef[3], 2), " * x^2" ),
+      xlim=c(0,1) 
+    )
+points( x=x_grid, y=fitted_vals, pch=".", main = "test")
+
+x <- runif(10,0,1)
+y <- sin(x*8) + rnorm(10)
+
+B0 <- (1-x)^2
+B1 <- 2*(1-x)*x
+B2 <- x^2
+
+X <- cbind(B0,B1,B2)
+OLS_coef <- solve( t(X)%*%X ) %*% t(X) %*% y
+# this is the same as lm( y ~ B0 + B1 + B2 - 1 )
+
+x_grid <- seq(0,1,0.001)
+fitted_vals <- cbind( (1-x_grid)^2, 2*(1-x_grid)*x_grid, x_grid^2) %*% OLS_coef
+plot( y ~ x, 
+      main = paste0( round(OLS_coef[1], 2) , " * (1-x)^2 + ",
+                     round(OLS_coef[2], 2), " * 2(1-x)x + ",  
+                     round(OLS_coef[3], 2), " * x^2" ),
+      xlim=c(0,1) 
+    )
+points( x=x_grid, y=fitted_vals, pch=".", main = "test")
+```

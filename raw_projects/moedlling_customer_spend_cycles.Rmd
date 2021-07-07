@@ -1,0 +1,842 @@
+---
+title: "Experimentation of Modelling of Customer Spend Cycle"
+author: "Joseph Bolton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+```
+
+Some customers buy in cycles. For example, a customer might regularly replenish a particular cosmetics product. Is there a simple way to model this behaviour using on the transaction times? 
+
+I've documented my experiments here.   
+
+For example, consider the following observed transaction times for a single customer:
+
+```{r echo=FALSE}
+
+plot_transactions_ftn <- function( spend_times ){
+  
+    # plot the simulated data:
+  plot(   x = spend_times,
+          y = rep(0, length(spend_times) ),
+        cex = 2,
+        pch = 16,
+       xlim = c(0, max(spend_times)+20 ),
+        col = "white",
+       ylab = "",
+       xlab = "time",
+       main = "Observed Transaction Times"
+      )
+      abline( v = spend_times )
+
+  # plot the time gaps between transactions:    
+  text( x = spend_times[-length(spend_times)] + diff(spend_times)/2, 
+        y = runif( min=-1, max=1, n=length(spend_times)-1 ),
+        labels = (diff(spend_times)-1),
+        col = 2
+      )
+  
+}
+
+sim_single_customer_spend_data <- 
+  function(   spend_pattern = c(5, 30, 15, 50),   # length of this determines true cycle length
+             n_transactions = 30,
+            noise_intensity = 0.2,    # value in [0,1]
+            percent_of_values_to_rmv = 0.1    # more added signal noise: also a value in [0,1] 
+          ){
+    
+    spend_times <- c(0)
+    
+    counter <- 1
+    
+    sd_spend_pattern <- sd(spend_pattern) %>% round()
+    
+    for( i in 2:n_transactions ){
+      
+      spend_times[i] <- spend_times[i-1] + spend_pattern[counter]
+      noise <- rnorm( n=1, mean=0, sd=sd_spend_pattern*noise_intensity ) %>% abs() %>% round()
+      
+      spend_times[i] <- spend_times[i] + noise
+  
+      if( counter == length(spend_pattern) ){
+          counter <- 1
+          } else{ counter <- counter+1 }
+    
+    }
+    
+    # remove values (added noise to simulated data):
+    values_to_remove <- sample(    x = 1:n_transactions, 
+                                size = round(percent_of_values_to_rmv*n_transactions)
+                              )
+    
+    spend_times <- spend_times[ setdiff(1:n_transactions, values_to_remove) ]
+
+  print(spend_times)  
+    
+  plot_transactions_ftn( spend_times=spend_times )
+  
+  return(spend_times)  
+}
+```
+
+```{r echo=FALSE, fig.width=8, fig.height=6}
+set.seed(1999) 
+
+sim_transactions <- 
+  sim_single_customer_spend_data(
+      spend_pattern = c(5, 25, 10, 50),   # length of this determines true cycle length
+     n_transactions = 20,
+    noise_intensity = 0.2,    # value in [0,1]
+    percent_of_values_to_rmv = 0    # more added signal noise: also a value in [0,1] 
+  )
+```
+
+# Model 1: Iterative Period/Cycle Grid Method
+
+My idea here is that if someone is showing cyclic behaviour, then there is some period length and cycle length for which this cyclic behaviour can be captured. 
+
+Let's try this out on the simulated data:
+
+```{r echo=FALSE}
+assign_spend_times_to_periods_ftn <- function( spend_times, 
+                                               time_units_per_period,
+                                               plot = FALSE
+                                             ){
+  
+  assign_periods <- 
+    cut( spend_times,
+         breaks = seq(0, max(spend_times)+time_units_per_period, by=time_units_per_period),
+         include.lowest = TRUE
+       )  
+  
+  spend_times_period_form <- rep( -1, length(levels(assign_periods)) )
+  names(spend_times_period_form) <- levels(assign_periods)
+
+  for( period_i in names(spend_times_period_form) ){
+    spend_times_period_form[period_i] <- if_else( length(spend_times[assign_periods==period_i])>0, 1, 0 )
+  }
+
+
+  if( plot==TRUE ){
+    
+      cat("spend times: \n")
+      cat(spend_times)
+      cat("\n")
+      cat("\n")
+      tibble(     period = names(spend_times_period_form),
+              transacted = spend_times_period_form 
+            ) %>% 
+    print()
+
+    
+    plot( x = spend_times,
+          y = rep(0, length(spend_times) ),
+          cex = 2,
+          pch = "+",
+         xlim = c(0, max(spend_times)+20 ),
+          col = 2, # red
+         main = paste0("Transactions by Period. period length = ", time_units_per_period ) 
+        )
+    abline( v = seq(0, max(spend_times)+time_units_per_period, by=time_units_per_period ) )
+ 
+    text( x = which(spend_times_period_form>0) * time_units_per_period - time_units_per_period/2,
+          y = 0.5,
+          labels = "1",
+          col = 2
+         )
+  }
+  
+  return(spend_times_period_form) 
+}
+
+
+```
+
+```{r fig.width=8, fig.height=6}
+spend_times_periods <- 
+  assign_spend_times_to_periods_ftn( spend_times = sim_transactions,
+                                     time_units_per_period = 15,
+                                     plot = TRUE
+                                   )
+```
+
+Now, let's see how well a cycle of 3 fits to this data:
+
+```{r echo=FALSE}
+
+fit_n_cycle_ftn <- function( spend_times,
+                             spend_times_period_form,
+                             time_units_per_period,
+                             cycle_length,
+                             plot = FALSE,
+                             n_periods_to_predict = 5
+                           ){
+  
+  # take as many recent observations as possible, keeping a clean multiple of the cycle length:
+  n_observations_to_remove <- length(spend_times_period_form)%%cycle_length 
+  
+  if( n_observations_to_remove > 0 ){
+    cropped_spend_times <- spend_times_period_form[ (n_observations_to_remove+1):length(spend_times_period_form) ] 
+    if( plot == TRUE ){ 
+      paste0("NOTE: first ", n_observations_to_remove, " observation(s) removed to divide into cycles of length ", cycle_length) %>% print()
+    }
+  } else{ cropped_spend_times <- spend_times_period_form }
+  
+  # store the observations by cycle number:
+  store_cycle_data <- vector(mode="list", length=cycle_length)
+  names(store_cycle_data) <- paste( "cycle", 1:cycle_length, sep="_" )
+  
+  for( cyc_period_j in 1:cycle_length ){
+    get_data <- cropped_spend_times[ seq(cyc_period_j, length(cropped_spend_times), by=cycle_length) ]
+    names(get_data) <- NULL
+    store_cycle_data[[cyc_period_j]] <- get_data
+    }
+  
+  #print(cropped_spend_times)
+  
+  # calculate % transacted per cycle:
+  percent_time_transacted_per_cycle <- lapply( store_cycle_data, mean )
+  
+  if( plot == TRUE ){
+    
+    # Period Plot:
+    plot( x = 1,
+          y = 1,
+          ylim = c(0,1),
+          xlim = c(0,length(cropped_spend_times)+1+n_periods_to_predict),
+          col = "white",
+          xlab = "period",
+          main = paste0("cycle length ", cycle_length, ",  period length ", time_units_per_period)
+        )
+    abline( v = 0:length(cropped_spend_times), lty=1 )
+    # draw lines for the prediction periods: 
+    abline(   v = (length(cropped_spend_times)+1):(length(cropped_spend_times)+1+n_periods_to_predict), 
+            col = "grey"
+          )
+    # number the periods:
+    text(      x = 0:(length(cropped_spend_times)-1) + 0.5,
+               y = 0.9,
+          labels = 1:cycle_length,   
+             col = 1:cycle_length
+        )
+    # number the prediction periods:
+    text(      x = (length(cropped_spend_times)):(length(cropped_spend_times)+n_periods_to_predict) + 0.5,
+               y = 0.95,
+          labels = 1:cycle_length,   
+             col = 1:cycle_length
+        )
+    
+    # mark periods containing a transaction with an "x":
+    text( x = which(cropped_spend_times==1)-0.5,
+          y = 0.8,
+          labels = "x"
+        )
+    
+    # put in stars to show % transactions per cycle:
+    stars_to_print <- percent_time_transacted_per_cycle
+    for( i in 1:length(stars_to_print) ){
+      stars_to_print[[i]] <- 
+        paste( rep("*\n", round(percent_time_transacted_per_cycle[[i]]*10)), collapse="" )
+    }  
+    stars_to_print <- unlist(stars_to_print)
+    
+    # put stars on the plot:
+    text(      x = 0:(length(cropped_spend_times)+n_periods_to_predict) + 0.5,
+               y = 0.7,
+          labels = stars_to_print,
+             col = 1:cycle_length,
+             pos = 1
+        )
+    
+    # put the actual proportions on the plot:
+    text(      x = 0:(length(cropped_spend_times)-1) + 0.5,
+               y = 0.2,
+          labels = paste0( round(unlist(percent_time_transacted_per_cycle)*100), " %" ),   
+             col = 1:cycle_length,
+             srt = 270    # rotate text
+        )
+    
+    # put the predicted proportions on the plot:
+    text(      x = (length(cropped_spend_times)):(length(cropped_spend_times)+n_periods_to_predict) + 0.5,
+               y = 0.5,
+          labels = paste0( round(unlist(percent_time_transacted_per_cycle)*100), " %" ),   
+             col = 1:cycle_length,
+             srt = 270    # rotate text
+        )
+    
+    ## Original Data Plot ##
+     plot(  x = spend_times,
+            y = rep(0, length(spend_times) ),
+          cex = 2,
+          pch = "+",
+         xlim = c( 0, max(spend_times) + time_units_per_period*n_periods_to_predict ),
+          col = 2, # red
+         main = paste0("Transactions by Period:    period length = ", time_units_per_period ) 
+        )
+     # draw in periods removed:
+    if( n_observations_to_remove>0 ){ 
+        abline(   v = seq(0, time_units_per_period*n_observations_to_remove, by=time_units_per_period ),
+                lty = 2,    # dashed linetype
+                col = "grey"
+              )
+    }
+    # draw in periods used:
+    abline(   v = seq( time_units_per_period*n_observations_to_remove, 
+                       length(spend_times_period_form)*time_units_per_period,
+                       by = time_units_per_period
+                     )
+          )
+    # draw in periods to predict:
+        abline(   v = seq( length(spend_times_period_form)*time_units_per_period + time_units_per_period, 
+                           length(spend_times_period_form)*time_units_per_period + time_units_per_period + n_periods_to_predict*time_units_per_period,
+                       by = time_units_per_period
+                         ),
+                  col = "grey"
+              )
+    
+    # number the observed periods:
+        text(      x = seq( time_units_per_period*n_observations_to_remove,
+                            (length(spend_times_period_form)-1)*time_units_per_period,
+                            by = time_units_per_period
+                          ) + time_units_per_period/2,
+               y = 0.6,
+          labels = 1:cycle_length,   
+             col = 1:cycle_length
+        ) 
+    # number the prediction periods: 
+         text(      x = seq( length(spend_times_period_form)*time_units_per_period + time_units_per_period,
+                            length(spend_times_period_form)*time_units_per_period + time_units_per_period + n_periods_to_predict*time_units_per_period,
+                            by = time_units_per_period
+                          ) - time_units_per_period/2,
+               y = 0.3,
+          labels = 1:cycle_length,   
+             col = 1:cycle_length
+        )
+         
+    # put stars on prediction periods:
+         # put stars on the plot:
+    text(      x = seq( length(spend_times_period_form)*time_units_per_period + time_units_per_period,
+                            length(spend_times_period_form)*time_units_per_period + time_units_per_period + n_periods_to_predict*time_units_per_period,
+                            by = time_units_per_period
+                          ) - time_units_per_period/2,
+               y = 0.1,
+          labels = stars_to_print,
+             col = 1:cycle_length,
+             pos = 1
+        )
+    
+    
+  }
+  
+  calc_gini <- lapply( store_cycle_data, 
+                       function(x){ (sum(x==1)/length(x)) * (1 - (sum(x==1)/length(x))) +
+                                    (sum(x==0)/length(x)) * (1 - (sum(x==0)/length(x)))
+                                   } 
+                      )
+  calc_variance <- lapply(store_cycle_data, var)
+  calc_entropy <- lapply( store_cycle_data, 
+                          function(x){ -(sum(x==1)/length(x)) * log((sum(x==1)/length(x))) +
+                                       -(sum(x==0)/length(x)) * log((sum(x==0)/length(x)))
+                                     } 
+                        )
+  
+  
+  # ## calculate 'transaction-weighted' metrics ##
+  # transaction_weight <- sum(cropped_spend_times==0)/sum(cropped_spend_times==1)
+  # store_cycle_data_transaction_inflated <- store_cycle_data
+  # for( cycle_i in 1:length(store_cycle_data_transaction_inflated) ){
+  #   n_0 <- sum(store_cycle_data[[cycle_i]]==0)
+  #   n_1 <-   
+  #   
+  # }  
+  # 
+  # #calc_transaction_inflated_gini <- 
+  # #calc_transaction_inflated_entropy <- 
+  # #calc_transaction_inflated_variance <- 
+  
+  return( 
+          list( transactions = store_cycle_data,    # actual cycle data
+                percent_time_transacted_per_cycle = percent_time_transacted_per_cycle, 
+                # node impurity measures: 
+                cycle_variance = calc_variance,
+                 mean_variance = mean( unlist(calc_variance) ), 
+                    cycle_gini = calc_gini,  
+                     mean_gini = mean( unlist(calc_gini) ),
+                cycle_entropy = calc_entropy,
+                 mean_entropy = mean( unlist(calc_entropy) )
+              ) 
+        )
+}
+
+
+```
+
+```{r fig.width=8, fig.height=6}
+fit_3_cycle <- fit_n_cycle_ftn(             spend_times = sim_transactions,
+                                spend_times_period_form = spend_times_periods,
+                                  time_units_per_period = 15,           
+                                           cycle_length = 3,
+                                                   plot = TRUE,
+                                   n_periods_to_predict = 10
+                              )
+
+fit_3_cycle$transactions
+
+cat("proportion of times transacted per cycle:\n") 
+fit_3_cycle$percent_time_transacted_per_cycle
+```
+
+This doesn't seem like a very good fit. We can measure the *purity* of each cycle (i.e. cycle contains mostly the same value) using a metric such as *variance*, *entropy* or *gini*:
+
+```{r echo=FALSE}
+cat("variance: \n")
+fit_3_cycle$cycle_variance
+cat("\n gini: \n")
+fit_3_cycle$cycle_gini
+cat("\n entropy: \n")
+fit_3_cycle$cycle_entropy
+```
+
+We could use the average (mean) value of one of these metrics as a measure of the goodness-of-fit of a fit that we're considering: 
+
+```{r echo=FALSE}
+tibble( metric = c("variance", "gini", "entropy"),
+        avg_value = c( fit_3_cycle$mean_variance,
+                       fit_3_cycle$mean_gini,
+                       fit_3_cycle$mean_entropy
+                     )  
+      )
+```
+
+Proceeding with the *gini* metric, let's try different cycle lengths and period lengths and see how low an average *gini* value we can get for this data:
+
+```{r echo=FALSE}
+
+find_best_model_ftn <- function(   period_lengths_to_try,
+                                    cycle_lengths_to_try,
+                                             spend_times,
+                                                  metric = "mean_gini"
+){
+  
+  expand_grid( period_length = period_lengths_to_try,
+                cycle_length = cycle_lengths_to_try   
+             ) %>% 
+  mutate( avg_metric = 
+                     map2_dbl( .x = period_length,
+                               .y = cycle_length,
+                               .f = function(period.len, cycle.len){
+                                      fit_periods <- 
+                                        assign_spend_times_to_periods_ftn( 
+                                                       spend_times = spend_times,
+                                             time_units_per_period = period.len,
+                                                              plot = FALSE
+                                             )
+                                    
+                                      fit_n_cycle_ftn( 
+                                                    spend_times = spend_times,
+                                          time_units_per_period = period.len,
+                                        spend_times_period_form = fit_periods,
+                                                   cycle_length = cycle.len,
+                                                           plot = FALSE
+                                                     ) %>% 
+                                        .[[metric]] %>% 
+                                        return()
+                                    } 
+                            ) 
+         ) %>% 
+    return()
+  
+}
+
+
+```
+
+The best model by *gini* metric is:
+
+```{r fig.width=15, fig.height=6}
+find_best_model_by_gini <- find_best_model_ftn(   period_lengths_to_try = 10:50,
+                                           cycle_lengths_to_try = 2:6,
+                                                    spend_times = sim_transactions,
+                                                         metric = "mean_gini"
+                                )
+
+find_best_model_by_gini %>% arrange(avg_metric)
+
+best_model_by_gini <- find_best_model_by_gini %>% arrange(avg_metric) %>% slice(1)
+
+fit_n_cycle_ftn(             spend_times = sim_transactions,
+                 spend_times_period_form = 
+                   assign_spend_times_to_periods_ftn( spend_times = sim_transactions,
+                                            time_units_per_period = best_model_by_gini$period_length,
+                                                             plot = FALSE
+                                                    ),
+                                  time_units_per_period = best_model_by_gini$period_length,
+                                           cycle_length = best_model_by_gini$cycle_length,
+                                                   plot = TRUE,
+                                   n_periods_to_predict = 20
+              )
+```
+
+
+# Model 2: Gap-clustering Model
+
+```{r echo=FALSE}
+gap_clustering_model_ftn <- function( spend_times,
+                                      seq_length = 3,
+                                      k_values_to_try
+                                    ){
+  
+  gap_lengths <- diff(spend_times)
+  
+  k_means_results <- list()
+  
+  for( k in k_values_to_try ){
+  
+    paste0( "fitting k-means, k = ", k, "\n" ) %>% cat()
+    
+    data_for_kmeans <- data.frame( id=1:length(gap_lengths), gapsize=gap_lengths )
+    
+    run_kmeans <- kmeans(       x = data_for_kmeans[,-1],
+                          centers = k,
+                          nstart = 25
+                        )
+    get_avg_silhouette_val <- cluster::silhouette( run_kmeans$cluster, 
+                                                   dist(data_for_kmeans, method="manhattan") 
+                                                 ) %>% .[,"sil_width"] %>% mean() 
+    
+    paste0( "avg silhouette value for k=", k, ": ", get_avg_silhouette_val ,"\n" ) %>% cat()
+    
+    k_means_results[[paste0("k",k)]] <- list( clusters = cbind(data_for_kmeans, cluster=run_kmeans$cluster),
+                                               avg_sil = get_avg_silhouette_val 
+                                            )
+  }
+  
+  best_model_index <- lapply( k_means_results,
+                              function(x){ x$avg_sil }
+                             ) %>% 
+                  unlist() %>% 
+                  which.max()
+  
+  best_k <- k_values_to_try[best_model_index] 
+  
+  paste0( "best k identified: k=", best_k, "(highest mean silhouette value) \n" ) %>% cat()
+  
+  best_k_means_result <- k_means_results[[best_model_index]]$clusters 
+  
+  cluster_sequence <- best_k_means_result$cluster
+  
+  extract_windows <- list()
+  
+  continue <- 1
+  position <- 1
+  while( continue == 1 ){
+    if( position+seq_length-1 <= length(cluster_sequence) ){
+      extract_windows[[position]] <- cluster_sequence[position:(position+seq_length-1)]
+      position <- position+1
+    } else{ continue <- 0 }    
+  }
+  
+  extract_windows_tbl <- reduce( .x = extract_windows,
+                                 .f = rbind
+                               ) %>% 
+                         as.data.frame()  
+  colnames(extract_windows_tbl) <- paste( "val", 1:seq_length, sep="" )
+  extract_windows_tbl <- as_tibble(extract_windows_tbl)
+  count_seq_tbl <- 
+      extract_windows_tbl %>% 
+        group_by_all() %>% 
+        summarise( n_times_appearing = n() ) %>%
+        ungroup() %>% 
+        mutate( `%` = n_times_appearing / sum(n_times_appearing) )
+ 
+ avg_gapsize_in_each_cluster <-
+   best_k_means_result %>% 
+      group_by( cluster ) %>% 
+      summarise( mean_gapsize = mean(gapsize) ) %>% 
+      arrange( cluster )
+   
+ most_recent_state_sequence <- 
+   cluster_sequence[ (length(cluster_sequence)-seq_length+2):length(cluster_sequence) ]
+ 
+ # have we seen the most recent state sequence before? 
+ cols_to_check <- 
+   count_seq_tbl[,1:(seq_length-1)]
+ rows_of_cols_to_check_matching <- c()
+ for( row_i in 1:nrow(cols_to_check) ){
+   
+   if( sum( cols_to_check[row_i, ] != most_recent_state_sequence )==0 ){ 
+       rows_of_cols_to_check_matching <- c(rows_of_cols_to_check_matching, row_i)
+   }
+ }
+ 
+ count_seq_tbl
+ 
+ possible_next_states <- 
+   count_seq_tbl[rows_of_cols_to_check_matching,]
+ 
+ names(possible_next_states)[seq_length] <- "potential_next_state"
+ 
+ possible_next_states <- 
+   possible_next_states %>% 
+    group_by( potential_next_state ) %>% 
+    summarise( n_times_appearing = sum(n_times_appearing) ) %>%
+    left_join( avg_gapsize_in_each_cluster,
+               by = c("potential_next_state"="cluster")  
+             ) %>% 
+    mutate( `%` = paste0( n_times_appearing,"/", sum(n_times_appearing), " = ", round( n_times_appearing/sum(n_times_appearing), digits=2 ) ) 
+          )
+ 
+ # plot the transactions data:
+ plot(   x = spend_times,
+          y = rep(0, length(spend_times) ),
+        cex = 2,
+        pch = 16,
+       xlim = c(0, max(spend_times)+max(avg_gapsize_in_each_cluster$mean_gapsize) ),
+        col = "white",
+       ylab = "",
+       xlab = "time",
+       main = paste0( "Observed Transaction Times with Clustered Gaps \n",
+                      "Number of Clusters = ", best_k,
+                      ",   n preceding observations in prediction = ", seq_length-1
+                    )
+      )
+  abline( v = spend_times )
+  
+  # write in the cluster numbers:
+  text(      x = spend_times[-length(spend_times)] + gap_lengths/2,
+             y = -0.9,
+        labels = as.character(cluster_sequence),
+           col = cluster_sequence
+  )
+  
+  if( nrow(possible_next_states) > 0 ){ 
+    
+    # plot possible next states:  
+    for( possible_next_state_i in 1:nrow(possible_next_states) ){ 
+        
+         segments( x0 = max(spend_times),
+                   y0 = 1 - possible_next_state_i/5,
+                   x1 = max(spend_times) + possible_next_states$mean_gapsize[possible_next_state_i],
+                   y1 = 1 - possible_next_state_i/5,
+                   col = possible_next_state_i,
+                   lwd = 3
+                 ) 
+      
+         text( x = max(spend_times),
+               y = 1.05 - possible_next_state_i/5,
+               labels = paste0( "cluster ", 
+                                possible_next_states$potential_next_state[possible_next_state_i],
+                                ":   ",
+                                possible_next_states$`%`[possible_next_state_i]
+                              ),
+                   col = possible_next_states$potential_next_state[possible_next_state_i]
+             )
+    }
+  } else{ 
+    
+      text( x = max(spend_times),
+            y = 0,
+            labels = "Cannot \n Predict \n Next \n Gapsize",
+            col = 4
+          )
+  }
+  
+  # plot in possible next states, with  
+  
+  # print the sequence counts table:
+  count_seq_tbl %>% 
+    arrange( desc(`%`) ) %>% 
+    print()
+  
+  return(count_seq_tbl)
+  
+}
+
+```
+
+```{r fig.width=8, fig.height=6}
+run_gap_clustering <- gap_clustering_model_ftn(     spend_times = sim_transactions,
+                                                     seq_length = 4,
+                                                k_values_to_try = 2:5
+                                              )
+```
+
+# Compare models to different datasets
+## model comparison test 1
+
+```{r}
+sim_data <- c(0, 25 ,42 ,133 ,232 ,330 ,353 ,407 ,533 ,595 ,631 ,645 ,707 ,743 ,812 ,959 ,1044 ,1113)
+
+plot_transactions_ftn( spend_times = sim_data )  
+
+# iterative period/cycle grid method------------------------------------------------------
+find_best_model_by_gini <- find_best_model_ftn(   period_lengths_to_try = 10:50,
+                                           cycle_lengths_to_try = 2:6,
+                                                    spend_times = sim_data,
+                                                         metric = "mean_gini"
+                                )
+
+best_model_by_gini <- find_best_model_by_gini %>% arrange(avg_metric) %>% slice(1)
+
+fit_n_cycle_ftn(             spend_times = sim_data,
+                 spend_times_period_form = 
+                   assign_spend_times_to_periods_ftn( spend_times = sim_data,
+                                            time_units_per_period = best_model_by_gini$period_length,
+                                                             plot = FALSE
+                                                    ),
+                                  time_units_per_period = best_model_by_gini$period_length,
+                                           cycle_length = best_model_by_gini$cycle_length,
+                                                   plot = TRUE,
+                                   n_periods_to_predict = 8
+              )
+
+# gap clustering method:
+run_gap_clustering <- gap_clustering_model_ftn(     spend_times = sim_data,
+                                                     seq_length = 2,
+                                                k_values_to_try = 2:4
+                                              )
+run_gap_clustering <- gap_clustering_model_ftn(     spend_times = sim_data,
+                                                     seq_length = 3,
+                                                k_values_to_try = 2:4
+                                              )
+``` 
+
+## model comparison test 2
+```{r}
+sim_data <- c( 0 ,93 ,270 ,295 ,365 ,582 ,622 ,668 ,745 ,768 ,788 ,954 )
+
+plot_transactions_ftn( spend_times = sim_data )  
+
+# iterative period/cycle grid method------------------------------------------------------
+find_best_model_by_gini <- find_best_model_ftn(   period_lengths_to_try = 10:50,
+                                           cycle_lengths_to_try = 2:6,
+                                                    spend_times = sim_data,
+                                                         metric = "mean_gini"
+                                )
+
+best_model_by_gini <- find_best_model_by_gini %>% arrange(avg_metric) %>% slice(1)
+
+fit_n_cycle_ftn(             spend_times = sim_data,
+                 spend_times_period_form = 
+                   assign_spend_times_to_periods_ftn( spend_times = sim_data,
+                                            time_units_per_period = best_model_by_gini$period_length,
+                                                             plot = FALSE
+                                                    ),
+                                  time_units_per_period = best_model_by_gini$period_length,
+                                           cycle_length = best_model_by_gini$cycle_length,
+                                                   plot = TRUE,
+                                   n_periods_to_predict = 8
+              )
+
+# gap clustering method:
+run_gap_clustering <- gap_clustering_model_ftn(     spend_times = sim_data,
+                                                     seq_length = 2,
+                                                k_values_to_try = 2:4
+                                              )
+run_gap_clustering <- gap_clustering_model_ftn(     spend_times = sim_data,
+                                                     seq_length = 3,
+                                                k_values_to_try = 2:4
+                                              )
+```   
+
+## model comparison test 3
+```{r}
+sim_data <- c( 0 ,84 ,126 ,289 ,329 ,455 ,520 ,679 ,765 ,878 ,905 ,1017 ,1031 ,1109 )
+
+plot_transactions_ftn( spend_times = sim_data )  
+
+# iterative period/cycle grid method------------------------------------------------------
+find_best_model_by_gini <- find_best_model_ftn(   period_lengths_to_try = 10:50,
+                                           cycle_lengths_to_try = 2:6,
+                                                    spend_times = sim_data,
+                                                         metric = "mean_gini"
+                                )
+
+best_model_by_gini <- find_best_model_by_gini %>% arrange(avg_metric) %>% slice(1)
+
+fit_n_cycle_ftn(             spend_times = sim_data,
+                 spend_times_period_form = 
+                   assign_spend_times_to_periods_ftn( spend_times = sim_data,
+                                            time_units_per_period = best_model_by_gini$period_length,
+                                                             plot = FALSE
+                                                    ),
+                                  time_units_per_period = best_model_by_gini$period_length,
+                                           cycle_length = best_model_by_gini$cycle_length,
+                                                   plot = TRUE,
+                                   n_periods_to_predict = 8
+              )
+
+# gap clustering method:
+run_gap_clustering <- gap_clustering_model_ftn(     spend_times = sim_data,
+                                                     seq_length = 2,
+                                                k_values_to_try = 2:3
+                                              )
+run_gap_clustering <- gap_clustering_model_ftn(     spend_times = sim_data,
+                                                     seq_length = 2,
+                                                k_values_to_try = 2:4
+                                              )
+run_gap_clustering <- gap_clustering_model_ftn(     spend_times = sim_data,
+                                                     seq_length = 3,
+                                                k_values_to_try = 2:4
+                                              )
+```   
+
+```{r}
+
+sim_data <- c( 0, 141, 162, 221, 229, 344, 358, 490, 570, 585, 609, 809, 872, 970, 1034, 1100, 1103, 1137 )
+
+plot_transactions_ftn( spend_times = sim_data )  
+
+# iterative period/cycle grid method------------------------------------------------------
+find_best_model_by_gini <- find_best_model_ftn(   period_lengths_to_try = 10:50,
+                                           cycle_lengths_to_try = 2:6,
+                                                    spend_times = sim_data,
+                                                         metric = "mean_gini"
+                                )
+
+best_model_by_gini <- find_best_model_by_gini %>% arrange(avg_metric) %>% slice(1)
+
+fit_n_cycle_ftn(             spend_times = sim_data,
+                 spend_times_period_form = 
+                   assign_spend_times_to_periods_ftn( spend_times = sim_data,
+                                            time_units_per_period = best_model_by_gini$period_length,
+                                                             plot = FALSE
+                                                    ),
+                                  time_units_per_period = best_model_by_gini$period_length,
+                                           cycle_length = best_model_by_gini$cycle_length,
+                                                   plot = TRUE,
+                                   n_periods_to_predict = 8
+              )
+
+# gap clustering method:
+run_gap_clustering <- gap_clustering_model_ftn(     spend_times = sim_data,
+                                                     seq_length = 2,
+                                                k_values_to_try = 2:3
+                                              )
+run_gap_clustering <- gap_clustering_model_ftn(     spend_times = sim_data,
+                                                     seq_length = 2,
+                                                k_values_to_try = 2:4
+                                              )
+run_gap_clustering <- gap_clustering_model_ftn(     spend_times = sim_data,
+                                                     seq_length = 3,
+                                                k_values_to_try = 2:4
+                                              )
+```
+
+
+
+
+
+
+
+
+
+
+
+
+    

@@ -1,0 +1,87 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Central Tendency
+
+**Central tendency** measures the typical, or central, value in a set of values. 
+
+Suppose that we observe the following set of 10 observations $x_1,x_2,...,x_{10}$: 
+
+```{r simdat}
+#y <- sample( 1:100, size=10 )
+set.seed(1971)
+y <- rexp( 10, rate=10 )
+plot( x = y,
+      y = rep(0, length(y)),
+      axes = FALSE,
+      pch = 16,
+      xlab = "", ylab = ""
+    )
+abline( h=0)
+```
+
+# Arithmetic mean
+The arithmetic mean minimises the sum of square distances of each point to the mean. For our example, the mean $\overline{x}=\frac{\sum x_i}{10}$ is the value which minimises:
+
+$$\sum_{i=1}^{10} \Big(x_i - \overline{x}\Big)^2$$
+
+If we are estimating the mean of a population of values using only a sample from the population, then the sample mean is an unbiased estimator of the population mean (meaning that the expected value of the sample mean over many different samples is the population mean).  
+
+The mean is very affected by outlying observations, since distances furthest from the mean have the largest effect on it (since we are minimising squared distances).  
+
+```{r showthemean}
+plot( x = y,
+      y = rep(0, length(y)),
+      axes = FALSE,
+      pch = 16,
+      xlab = "", ylab = ""
+    )
+abline( h=0)
+abline( v=mean(y), col=2, lty=2)
+text( x=mean(y), y=1, labels="mean", col=2)
+```
+
+# Median
+The median of our data is the value which ensures that we have an equal number of observations/values above and below it.
+The median is the value $\text{median}(\mathbf{x})$ which minimises the sum of the distances of each value to $\text{median}(\mathbf{x})$. So, for our data, $\text{median}(\mathbf{x})$ is the value which minimises
+
+$$\sum_{i=1}^{10} |\space x_i-\text{median}(\mathbf{x}) \space |$$
+
+```{r showthemedian}
+plot( x = y,
+      y = rep(0, length(y)),
+      axes = FALSE,
+      pch = 16,
+      xlab = "", ylab = ""
+    )
+abline( h=0)
+abline( v=mean(y), col=2, lty=2)
+text( x=mean(y), y=1, labels="mean", col=2)
+abline( v=median(y), col=3, lty=3)
+text( x=median(y), y=1, labels="median", col=3)
+```
+
+# Mid-range
+The mid-range is the midpoint between the highest and lowest observation/value in our data.. It measures central location by minimising the worst case - minimising the largest distance between $\text{midrange}(\mathbf{x})$ and a value/observation $x_i$.  In our example, the mid-range is:
+
+$$\text{midrange}(\mathbf{x}) \quad = \quad \frac{\text{max}(\mathbf{x})-\text{min}(\mathbf{x})}{2}$$
+
+```{r addthemidrange}
+plot( x = y,
+      y = rep(0, length(y)),
+      axes = FALSE,
+      pch = 16,
+      xlab = "", ylab = ""
+    )
+abline( h=0)
+abline( v=mean(y), col=2, lty=2)
+text( x=mean(y), y=1, labels="mean", col=2)
+abline( v=median(y), col=3, lty=3)
+text( x=median(y), y=1, labels="median", col=3)
+abline( v=(max(y)-min(y))/2, col=4, lty=4)
+text( x=(max(y)-min(y))/2, y=1, labels="midrange", col=4)
+```
+
+There are many more different ones - go check the Wikipedia page! 

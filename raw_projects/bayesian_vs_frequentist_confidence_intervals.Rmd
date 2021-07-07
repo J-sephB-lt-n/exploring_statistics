@@ -1,0 +1,359 @@
+---
+title: 'Confidence Intervals: Bayesian vs. Frequentist'
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(HDInterval)          # for calculating Highest Density Regions for posterior distributions
+```
+
+# Random Variables
+Random variables are 
+
+# Quantifying Confidence in a Sample Proportion
+Does drug A or drug B work better? 
+
+Suppose that if we extract a random sick person from the general population and give them drug A, then the probability that that person would recover from their sickness is $\theta_A$. $\theta_A$ is the true proportion of sick people treated with drug A that recover. 
+
+If we were to extract a random sick person from the general population and give them drug B, then the probability that we'd see that person recover from their sickness is $\theta_B$. $\theta_B$ is the true proportion of sick people treated with drug B that recover.
+
+Suppose that we don't known the true value of $\theta_A$, nor the true value of $\theta_B$. 
+
+We do the following:
+
+1. We give 100 random sick people drug A. We observe that 90 of them recover. This data gives us a point estimate $\hat\theta_A=0.9$ of $\theta_A$.
+
+2. We give 100 random sick people drug B. 95 of them recover. This gives us a point estimate $\hat\theta_B=0.95$ of $\theta_B$.
+
+How can we objectively quantify our uncertainty in these estimates $\hat\theta_A$ and $\hat\theta_B$, and in the difference between them? 
+
+# Confidence in a Sample Proportion: Bayesian Approach
+The basic logic behind the Bayesian approach is this:
+
+* $\theta_A$ is the true proportion of sick people on drug A who recover in the population. We don't know the value of $\theta_A$. Therefore, we consider $\theta_A$ a random variable. 
+
+* If we take a random sample of 100 sick people and give them drug A, then $X$ of them will recover. $X$, then, is also a random variable. The distribution of $X$ is clearly highly dependent on the value of random variable $\theta_A$. 
+
+* Using results from conditional probability ([Bayes Theorem](https://www.youtube.com/watch?v=HZGCoVF3YvM)), we can calculate the [conditional distribution](https://en.wikipedia.org/wiki/Conditional_probability_distribution) of $\theta_A$ given that the outcome ($x$) of the random variable $X$ has been observed:
+
+$$\overset{posterior}{\overbrace{f\Big(\theta_A \space\Bigl|X=x\Big)}} 
+\quad=\quad 
+\displaystyle\frac{\overset{likelihood}{\overbrace{Pr\Big[X=x\space\Bigl|\theta_A\Big]}}\cdot \overset{prior}{\overbrace{f(\theta_A)}}}{\underset{\theta_A}{\displaystyle\int} Pr\Big[X=x\space\Bigl|\theta_A\Big]\cdot f(\theta_A) \hspace{2mm} d\theta_A} $$
+
+This means that if we are comfortable assuming a marginal distribution (*prior*) $f(\theta_A)$ for $\theta_A$ (distribution of $\theta_A$ ignoring $X$) and assuming the form of the conditional distribution $Pr\Big[X=x\Bigl|\theta_A\Big]$ of $X$, then we get "**the conditional distribution of $\theta_A$ given $X$**" (the distribution of parameter of interest $\theta_A$, having taken into account the evidence provided by our data $X$).
+
+The conditional distribution of our data $X\Bigl|\theta_A$ (the *likelihood*) is easy: we assume that each randomly drawn sick individual from the population who is given drug A has a probability $\theta_A$ of recovering. This gives the following distribution for $X\Bigl|\theta_A$:
+
+$$\begin{array}{lcl} X \space \Bigl| \space \theta_A &\sim& \text{Binomial}\Big(n=100, \quad prob=\theta_A\Big) \\
+Pr\Big[X=x \space\Bigl|\space\theta_A \Big] &=& \displaystyle\binom{100}{x} \cdot (\theta_A)^{x} \cdot (1-\theta_A)^{100-x} \\
+\end{array}$$
+
+See https://en.wikipedia.org/wiki/Binomial_distribution for details.
+
+The choice of the *prior* distribution $f(\theta_A)$ is more subjective, and a point of some contention. This distribution must quantify our belief in different possible values of $\theta_A$ before having observed our data $X$.
+
+For our data, suppose that we choose the following **prior distribution** for $\theta_A$:
+
+```{r echo=FALSE}
+x_seq <- seq(from=0,to=1,by=0.01)
+plot(    x = x_seq, 
+         y = dbeta(x=x_seq, shape1=5, shape2=1), 
+      type ="l", 
+      main = bquote("Beta distribution with parameters"~alpha~"= 5, "~beta~"= 1"),
+      xlab = bquote(theta[A]),
+      ylab = bquote("f ("*theta[A]*")"),
+      ylim = c(0,5)
+    )
+axis( side=1, at=seq(0,1,0.1) )
+abline( v = seq(0,1,0.1), col="grey" )
+```
+
+Notice that we are specifying that we believe that higher values of $\theta_A$ are much more likely than lower values. The choice of prior should in practice be justified by evidence. 
+
+The choice of a **beta** distribution for the **prior distribution** here is for mathematical convenience (see https://en.wikipedia.org/wiki/Conjugate_prior).
+
+Combining this choice of prior $f(\theta_A)$ with our binomial likelihood $Pr\Big[X=x \space\Bigl|\space\theta_A \Big]$ gives us our **posterior distribution** of $\theta_A$:
+
+$$\begin{array}{lcl} f\Big(\theta_A \space\Bigl|X=90\Big) 
+&=& \text{Beta}\Big(\alpha=5+90, \quad \beta=1+100-90\Big) \\
+&=& \text{Beta}\Big(\alpha=95, \quad \beta=11\Big) \\
+\end{array}$$
+
+For details on this calculation, see https://stats.stackexchange.com/questions/70661/how-does-the-beta-prior-affect-the-posterior-under-a-binomial-likelihood.
+
+Here is an illustration of these **prior** and **posterior** distributions:
+
+```{r echo=FALSE, fig.width=6, fig.height=6}
+par( mfrow=c(2,1) )
+x_seq <- seq(from=0,to=1,by=0.01)
+plot(    x = x_seq, 
+         y = dbeta(x=x_seq, shape1=5, shape2=1), 
+      type ="l", 
+      main = bquote("Prior (Beta) Distribution with parameters"~alpha~"= 5, "~beta~"= 1"),
+      xlab = bquote(theta[A]),
+      ylab = bquote("f ("*theta[A]*")"),
+      ylim = c(0,5),
+       las = 1
+    )
+axis( side=1, at=seq(0,1,0.1) )
+abline( v = seq(0,1,0.1), col="grey" )
+abline( v = 0.9, lwd=2.5, col=2 )
+legend( "topleft",
+        legend = "Observed proportion of people recovering",
+        col = 2,
+        lty = 1,
+        lwd = 2.5
+      )
+
+## POSTERIOR ##
+plot(    x = x_seq, 
+         y = dbeta(x=x_seq, shape1=95, shape2=11), 
+      type ="l", 
+      main = bquote("Posterior (Beta) Distribution with parameters"~alpha~"= 95, "~beta~"= 11"),
+      xlab = bquote(theta[A]),
+      ylab = bquote("f ("*theta[A]*")"),
+       las = 1
+    )
+axis( side=1, at=seq(0,1,0.1) )
+abline( v = seq(0,1,0.1), col="grey" )
+abline( v = 0.9, lwd=2.5, col=2 )
+legend( "topleft",
+        legend = "Observed proportion of people recovering",
+        col = 2,
+        lty = 1,
+        lwd = 2.5
+      )
+```
+
+Here is another way to think about this:
+
+1. Suppose that we draw out a million values of $\theta_A$ from the prior distribution $\text{beta}\Big(5,1\Big)$:
+
+```{r echo}
+theta_A_sample <- rbeta( n=1e6L, shape1=5, shape2=1 )
+hist(      x = theta_A_sample, 
+      breaks = 70,
+        main = bquote( "1,000,000 simulated values of"~theta~"from prior distribution Beta(5,1)"),
+        xlab = bquote(theta)
+    )
+```
+
+2. Now, suppose that for each value $\theta_A^{(i)}: \hspace{4mm} i=1,...,1\hspace{1mm}000\hspace{1mm}000$ of the million $\theta_A$ values, we simulate a binomial value $X_i \sim \text{Binomial}\Big(n=100, \space prob=\theta_A^{(i)}\Big)$:
+
+```{r fig.width=8, fig.height=4}
+binomial_data_sample <- 
+  rbinom(    n = length(theta_A_sample), 
+          size = 100, 
+          prob = theta_A_sample 
+        )
+
+barplot(         table(binomial_data_sample),
+          xlab = "X",
+          ylab = "Frequency",
+          main = "Distribution of Number of People Recovered in 1,000,000 binomial samples"
+        )
+```
+
+3. Now, we can look at the distribution of the values $\theta_A^{(i)}$ ONLY ON THE SAMPLES $i$ IN WHICH WE SAW $X_i=90$:
+(this happened in `r sum(binomial_data_sample==90)` out of the million binomial values)
+
+```{r}
+posterior_theta_A_sample <- theta_A_sample[ binomial_data_sample == 90 ]
+
+hist(      x = posterior_theta_A_sample, 
+      breaks = 50,
+        freq = FALSE,
+        xlab = bquote(theta),
+        main = bquote( "Distribution of "~theta[A]~"over samples with exactly 90 recoveries" )
+    )
+
+curve( dbeta( x, shape1=95, shape2=11),
+       add = TRUE,
+       col = 2
+      )
+
+legend(          "topleft",
+        legend = "Theoretical Posterior Distribution",
+           lty = 1,
+           col = 2
+      )
+```
+
+We can use this posterior probability distribution (density) of $\theta_A$ to generate a $100(1-\alpha)\%$ *credibility interval* - an interval containing $\theta_A$ with probability $(1-\alpha)$. We calculate the 90% **Highest Density Interval** (HDI), using the R package **HDInterval**. The **HDI** is the narrowest interval containing 90% of the posterior density:  
+
+```{r}
+calculate_hpd_0.9 <- 
+  HDInterval::hdi( qbeta,
+                   credMass = 0.9,
+                     shape1 = 95,
+                     shape2 = 11
+                 )
+
+calculate_hpd_0.9
+```
+
+Check that the interval contains 90% of the density:
+
+```{r}
+pbeta( q = calculate_hpd_0.9[2], 95, 11 ) - pbeta( q = calculate_hpd_0.9[1], 95, 11 )   
+```
+
+Here is a plot of the 90% HDI: 
+
+```{r echo=FALSE}
+# plot the HPD interval:
+coord_x <- seq( 0, 1, by=0.0001 )
+coord_y <- dbeta( x = coord_x, shape1=96, shape2=11 )
+coord_y <- ifelse( coord_x>=calculate_hpd_0.9[1] & coord_x<=calculate_hpd_0.9[2],
+                   coord_y,
+                   0
+                 )
+curve( dbeta(x, 96, 11), 
+       xlim=c(0.6, 1), 
+       xlab=expression(theta[A]), 
+       ylab=bquote("f ("*theta[A]*")"),
+       main = bquote( "90% Credibility Interval (HDI) for"~theta[A] )
+     )
+polygon( coord_x, coord_y, col='skyblue')
+axis(   side = 1,
+          at = calculate_hpd_0.9,
+      labels = c("", ""),
+         lwd = 3 
+    )
+```
+
+# Confidence in a Sample Proportion: Frequentist Approach
+The frequentist approach to this problem is to choose a method for creating confidence intervals which we know will contain the true value of $\theta_A$ in a certain proportion of datasets.
+
+For example, if we draw a whole lot of random samples, each of 100 people, from the population of sick people, give them drug A, and calculate the following confidence interval for each of the samples:
+
+$$\Bigg[\underset{\quad lower}{\underbrace{\displaystyle\frac{1}{1+\displaystyle\frac{n-x+1}{x}F_{2(n-x+1), 2x, \frac{\alpha}{2}}}}} \quad;\quad \underset{upper}{\underbrace{\displaystyle\frac{\displaystyle\frac{x+1}{n-x}F_{2(x+1),2(n-x),\frac{\alpha}{2}}}{1 + \displaystyle\frac{x+1}{n-x}F_{2(x+1),2(n-x),\frac{\alpha}{2}}}}} \quad\Bigg]$$
+
+..then the interval $\Big[lower \space ; upper \Big]$ will contain the true value of $\theta_A$ in **at least** $100(1-\alpha)\%$ of the samples. 
+
+See [exact binomial confidence intervals](https://www.researchgate.net/publication/255630317_Exact_Binomial_Confidence_Interval_for_Proportions) for details on this calculation. 
+
+So, using this method, we know that our confidence intervals will **not contain** the true value of $\theta_A$ in some small number of samples ($100(\alpha)\%$ of them). We can increase this value of $\alpha$, to be safe, but this will give us wider confidence intervals. 
+
+There are many different types of confidence intervals for the sample proportion ($\theta_A$), each with different properties - see **LINK HERE JOE**.
+
+Here is an example of this method: 
+
+We simulate 100,000 random samples, where each sample contains 100 sick people. For purposes of illustration, we specify that the true proportion of sick people on drug A who recover is $\theta_A=0.85$. We calculate the exact confidence interval discussed above, choosing 90% confidence ($\alpha=0.1$), and observe the fraction of samples in which the confidence interval contained the true value of $\theta_A$.
+
+```{r}
+# function to generate exact binomial confidence intervals for a single sample:
+# this is the same as binom::binom.confint( ..., method="exact" )
+get_exact_binomial_confint <- function( n, x, alpha ){
+  
+    if( n == x ){ upper_limit <- 1 } else{
+      upper_limit <- (      ((x+1)/(n-x)) * qf(df1=2*(x+1), df2=2*(n-x), p=1-alpha/2)   ) /
+                     (  1 + ((x+1)/(n-x)) * qf(df1=2*(x+1), df2=2*(n-x), p=1-alpha/2)   )  
+    }
+  
+    if( x == 0 ){ lower_limit <- 0 } else{
+      lower_limit <- 1 / (   1 + ((n-x+1)/x) * qf( df1=2*(n-x+1), df2=2*x, p=1-alpha/2 )  )
+    }
+  
+  return( 
+          list( lower_confint = lower_limit,
+                upper_confint = upper_limit
+              ) 
+        )
+}
+
+true_theta <- 0.85
+
+# simulate the 100,000 random samples of size 100 
+sim_x_values <- rbinom(    n = 1e5L,
+                        size = 100,
+                        prob = true_theta
+                      )
+
+barplot( table(sim_x_values),
+         xlab = "Number Recovered (X)",
+         ylab = "Frequency"
+        )
+
+# calculate the exact confidence intervals:
+calc_confint <- 
+  tibble( n_recovered = sim_x_values ) %>% 
+    mutate( point_estimate = sim_x_values / 100 ) %>% 
+    mutate( get_confint = map( .x = n_recovered,
+                               .f = function(x){ 
+                                 get_exact_binomial_confint(     n = 100, 
+                                                                 x = x,
+                                                             alpha = 0.1
+                                 )  
+                                               }
+                              )
+    ) %>% 
+    unnest_wider( col = get_confint ) %>% 
+    mutate( contains_true_theta = 0.85 >= lower_confint & 
+                                  0.85 <= upper_confint
+          )
+
+# here are the first 100 samples plotted with their 90% confidence intervals:
+ggplot( data = calc_confint %>% slice(1:100) %>% mutate(rownum = row_number()),
+        aes(      x = rownum,
+                  y = point_estimate,
+             colour = contains_true_theta 
+           )  
+      ) +
+  geom_point( size=1.5 ) +
+  geom_linerange( aes(ymin=lower_confint, ymax=upper_confint) ) +
+  geom_hline( yintercept = 0.85 ) +
+  theme( legend.position = "none" ) +
+  labs( x = "sample",
+        y = bquote(hat(theta)),
+        title = "90% Confidence Intervals for the First 100 Samples"
+      )
+
+# calculate the proportion of samples for which the confidence interval contained 
+# the true proportion theta=0.85
+sum(calc_confint$contains_true_theta) / nrow(calc_confint)
+```
+
+For our original data
+
+# Bayesian: Intervals for the difference between 2 proportions ($\theta_A-\theta_B$)
+*Confidence and Credibility Intervals for the Difference of Two Proportions* (Zhang, Rojas, Cuervo 2010)
+
+# Frequentist: Intervals for the difference between 2 proportions ($\theta_A-\theta_B$)
+
+```{r echo=FALSE}
+freqentist_exact_intervals_for_theta_A <- 
+  get_exact_binomial_confint(     n = 100, 
+                                  x = 90,
+                              alpha = 0.1
+                            )
+
+freqentist_exact_intervals_for_theta_B <- 
+  get_exact_binomial_confint(     n = 100, 
+                                  x = 95,
+                              alpha = 0.1
+                            )
+
+tibble( theta = c("A","B"),
+        point_estimate = c(0.9, 0.95),
+        lower = c(freqentist_exact_intervals_for_theta_A$lower_confint,
+                  freqentist_exact_intervals_for_theta_B$lower_confint),
+        upper = c(freqentist_exact_intervals_for_theta_A$upper_confint,
+                  freqentist_exact_intervals_for_theta_B$upper_confint)  
+      ) %>% 
+  ggplot( data = .,
+          aes( x = theta,
+               y = point_estimate
+             )
+        ) + 
+  geom_point( size=2 ) +
+  geom_errorbar( aes( ymin=lower, ymax=upper) ) +
+  coord_flip() +
+  labs( y = bquote(theta[j]),
+        x = "Drug",
+        title = bquote("90% (Frequentist) Exact Binomial Confidence Intervals for "*theta[j])
+      )
+```

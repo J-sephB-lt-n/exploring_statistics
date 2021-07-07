@@ -1,0 +1,26 @@
+---
+title: "R Notebook"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+```
+
+
+Concept:
+    
+* Small sample sizes are making the estimated difference between groups jump everywhere
+
+* Idea: use Bayesian approach to shrink estimates towards a reasonable conservative baseline, especially where little data is available in one of both of the groups
+
+* Baseline to use: for each group (treatment/control), keep a rolling prior (distribution of pooled values in previous x periods all pooled into one sample)
+
+
+```{r}
+
+```
+
+# Resources
+
+http://www.ams.sunysb.edu/~zhu/ams570/Bayesian_Normal.pdf

@@ -1,0 +1,211 @@
+---
+title: "Shannon Information, Entropy, Mutual Information"
+output: 
+  html_document:
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+# Shannon Information 
+The *Shannon Information* $I(A)$ of an event $A$ with probability 
+
+$$Pr \Big[A=a\Big] = \begin{cases} \theta \quad \text{for } a=1 \\ 1-\theta \quad \text{for } a=0 \\ 0 \quad \text{otherwise} \end{cases}$$
+
+..is defined as 
+
+$$I(A) = log\Big(\displaystyle\frac{1}{\theta}\Big)=-log(\theta)$$ 
+
+Here is a plot of this function for different probabilities $\theta$ and different log bases:
+
+```{r fig.width=6, fig.height=6}
+x_sequence <- seq(from=0, to=1, by=0.01)
+plot( 
+         x = x_sequence,
+         y = -log(x_sequence, base=2),
+      type = "l",
+      xlab = bquote(theta~"(probability)"),
+      ylab = bquote( -log[b](theta) ),
+      main = "Shannon Information",
+       col = "black"
+    )
+lines( 
+        x = x_sequence,
+        y = -log(x_sequence),
+      col = "red"
+    )
+lines( 
+        x = x_sequence,
+        y = -log(x_sequence, base=10),
+      col = "blue"
+    )
+legend(
+                 "topright",
+           col = c("black","red","blue"),
+        legend = c("2","e","10"),
+           lty = rep(1,3),
+         title = "log base (b)" 
+)
+```
+
+# Shannon Entropy 
+For a random variable $X$ with probability distribution $p(x) = Pr\Big[X=x\Big]$, the *Shannon Entropy* is defined:
+
+$$\begin{array}{lcl}
+H(X) &=& E\Big[ I(X)\Big] \\
+&=& -\displaystyle\sum_x p(x) \cdot log\Big[p(x)\Big] \\
+\end{array}$$
+
+The *Shannon Entropy* is the expected *Shannon Information* (average *Shannon Information*), averaged over the possible outcomes of $X$.
+
+Here are the entropies of a few different random variables:
+
+```{r fig.height=8, fig.width=12}
+
+distribution_examples <- 
+  list( 
+          c( 0.5, 0.5 ),
+          c( 0.6, 0.4 ),
+          c( 0.1, 0.9 ),
+          c( 0.4, 0.3, 0.3 ),
+          c( 0.6, 0.2, 0.2 ),
+          c( 0.6, 0.3, 0.1 ),
+          c( 0.3, 0.3, 0.2, 0.1, 0.1),
+          c( 0.6, 0.1, 0.1, 0.1, 0.1),
+          c( 0.99, 0.0025, 0.0025, 0.0025, 0.0025)
+    )
+
+bind_rows(
+            tibble( 
+              distribution = lapply( distribution_examples,
+                                     function(x) paste(x, collapse=" ; ") 
+                                   ) %>% unlist(),
+              log_base = "log_base=2",
+              shannon_entropy = lapply( distribution_examples,
+                                        function(x) -sum( x * log(x, base=2) ) 
+                                      ) %>% unlist()
+              )
+            ,
+            tibble( 
+              distribution = lapply( distribution_examples,
+                                     function(x) paste(x, collapse=" ; ") 
+                                   ) %>% unlist(),
+              log_base = "log_base=e",
+              shannon_entropy = lapply( distribution_examples,
+                                        function(x) -sum( x * log(x, base=exp(1)) ) 
+                                      ) %>% unlist()
+              )
+            ,
+            tibble( 
+              distribution = lapply( distribution_examples,
+                                     function(x) paste(x, collapse=" ; ") 
+                                   ) %>% unlist(),
+              log_base = "log_base=10",
+              shannon_entropy = lapply( distribution_examples,
+                                        function(x) -sum( x * log(x, base=10) ) 
+                                      ) %>% unlist()
+              )
+            
+            
+  ) %>% 
+  
+  ggplot( data = .,
+          aes( x = distribution,
+               y = shannon_entropy,
+               label = round(shannon_entropy, digits=2),
+               fill = log_base
+             )
+        ) + 
+  geom_bar( stat = "identity", position="dodge" ) +
+  geom_text() + 
+  coord_flip() + 
+  facet_wrap( ~log_base, ncol=1, scales="free_x" )
+
+```
+
+Notice that random variables with a larger number of possible outcomes have higher entropy, and also that more uniform outcome probabilities result in higher entropy.  
+
+Notice also that changing the base of the log function used does not change the relative entropies of the different outcomes of the random variable, but only the relative sizes of the entropy numbers.  
+
+# Bit Entropy example
+Imagine that we're at war, and that you have a submarine-monitoring system which outputs one of the symbols $\{A,B,C,D\}$, each representing a different measurement. Over time, you've noticed that certain readings occur more often than others. You've noted the relative frequencies of occurrence of the readings, and they are as follows:
+
+symbol  | relative frequency (probability)
+--------|------------
+A       | $\frac{4}{8}$
+B       | $\frac{2}{8}$
+C       | $\frac{1}{8}$
+D       | $\frac{1}{8}$
+
+Every time the machine makes a reading (A, B, C, or D), we must communicate this symbol to the front line, using a dedicated secure channel that ensures that our message is not intercepted by the enemy. This secure channel is very costly and slow. Through the secure channel, information can only be communicated through sequences of 0s and 1s. For example, a single sequence sent through the secure channel could be "011010". 
+
+We want to minimise the amount of information sent through the secure channel, so as to make the transmission as fast as possible. 
+
+Suppose that our submarine-monitoring system outputs a symbol (one of A,B,C,D, or E), and that we want to transmit this outcome through the secure channel. An intuitive but naive coding of the information could be:
+
+symbol to transmit | encoding
+-------------------|------------
+A                  | 1000 
+B                  | 0100
+C                  | 0010
+D                  | 0001
+
+However, under this naive encoding the length of a transmission sent through the secure channel is 4.
+
+..and we can do better than this.
+
+Knowing the relative frequencies at which the different readings occur on the monitoring machine allows us to devise a much more cunning encoding of the message:
+
+symbol to transmit | encoding
+-------------------|------------
+A                  | 1 
+B                  | 01
+C                  | 001
+D                  | 000
+
+The length of an average message sent on the secure channel using this encoding system is 
+
+$$\displaystyle\frac{4}{8}\cdot1 \quad+\quad \frac{2}{8}\cdot2  \quad+\quad \frac{1}{8}\cdot3 \quad+\quad \frac{1}{8}\cdot3 \quad=\quad \frac{14}{8} \quad=\quad 1.75$$
+..which is more than double as efficient. Giving the more frequently occurring events shorter encodings allows us to shorten the average sent message length. 
+
+This quantity (average message length) is the *Shannon Entropy* of the random variable (probability distribution) $X\in\{A,B,C,D\}$:
+
+$$\begin{array}{lcl}
+H(X) &=& -\displaystyle\sum_x p(x) \cdot log\Big[p(x)\Big] \\
+&=& -Pr(A) \cdot log_2\Big[Pr(A)\Big] -Pr(B) \cdot log_2\Big[Pr(B)\Big] -Pr(C) \cdot log_2\Big[Pr(C)\Big] -Pr(D) \cdot log_2\Big[Pr(D)\Big] \\
+&=& -\displaystyle\frac{4}{8}\cdot(-1) \quad-\quad \frac{2}{8}\cdot(-2)  \quad-\quad \frac{1}{8}\cdot(-3) \quad-\quad \frac{1}{8}\cdot(-3) \\
+&=& \displaystyle\frac{14}{8} \\
+&=& 1.75 \\
+\end{array}$$
+
+Notice that all of the outcome probabilities (relative symbol frequencies) in this example all had a denominator which was a power of 2 ($8=2^3$). This is important. 
+
+# Base-3 Entropy Example
+symbol to transmit | probability                 | encoding
+-------------------|-----------------------------|-------------
+A                  | $\frac{10}{27}\approx 0.37$ | 1 
+B                  | $\frac{6}{27}\approx 0.22$  | 2
+C                  | $\frac{4}{27}\approx 0.15$  | 01
+D                  | $\frac{3}{27}\approx 0.11$  | 02
+E                  | $\frac{3}{27}\approx 0.11$  | 001
+F                  | $\frac{1}{27}\approx 0.04$  | 002
+
+The average (mean) sequence length to transmit a symbol through this 3-bit line is
+
+$$\begin{array}{lcl}
+\displaystyle\frac{10}{27}\cdot 1 \quad+\quad 
+\displaystyle\frac{6}{27}\cdot 1 \quad+\quad 
+\displaystyle\frac{4}{27}\cdot 2 \quad+\quad 
+\displaystyle\frac{3}{27}\cdot 2 \quad+\quad 
+\displaystyle\frac{3}{27}\cdot 3 \quad+\quad 
+\displaystyle\frac{1}{27}\cdot 3 
+&=&
+\end{array}$$
+
+
+
+
+

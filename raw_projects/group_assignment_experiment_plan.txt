@@ -1,0 +1,57 @@
+
+Variables for propensity score model:
+	- total spend at HC
+	- number of orders at HC
+	- number of years since last order 
+	- number of years since registered at HC
+	- current ATB 
+	- median order value 
+	- customer age 
+	- customer gender 
+
+Potential Methods of Experimental Group Assignment for Variance Reduction (without introducing bias)
+
+1. 	Stratified sampling, with customers stratified on predicted spend in next period:
+	1a XGB-Regressor with hundreds of features
+	1b linear model with hundreds of features
+	1c XGB-Regressor with handful of curated RFM features (spend in last week/month/3month/6month/12month, time since registered, days since last order, Frequency, avg/max/min spend)
+	1d linear model with handful of curated RFM features
+
+2. Same models as (1.), but stratifying on predicted probability of dispatched order in next period 
+
+3. Cluster the data (k-Means or CLARA), then randomly sample test/holdout separately within each cluster
+		3a	cluster based on a small number of curated RFM features 
+		3b	cluster based on hundreds of features 
+
+4. Perform random sampling multiple times to get a whole lot of potential group assignments
+		..then select the assignment achieving the best preperiod balance (see POTENTIAL MEASURES OF PREPERIOD BALANCE below)
+
+5. Discrete optimisation: model chooses group assignment which maximises preperiod balance explicitly using an optimisation algorithm (see POTENTIAL MEASURES OF PREPERIOD BALANCE below) 
+							(genetic optimisation, simulated annealing, tabu search)
+														
+POTENTIAL MEASURES OF PREPERIOD BALANCE:
+	- similarity in propensity score distribution (see https://stats.stackexchange.com/questions/82076/similarity-measure-between-multiple-distributions)
+	- calculate [mean nsv test - mean nsv holdout] per period day/week/month then aggregate these values into a single metric (i.e. low value means good balance)
+													e.g. could use mean difference between groups, or could use SD of difference
+	- similarity between multivariate distributions of test/holdout groups: https://stats.stackexchange.com/questions/4044/measuring-the-distance-between-two-multivariate-distributions
+															(there are MANY options here)
+															
+6. Stratified sampling:
+	6a based on some clever choice of univariate variable
+			- sum of discounted spend at HC (sum of total spend, discounting purchases based on how long ago they are)   ..try a few different discount rates 
+			- univariate variable formed by linear combination of curated RFM variables (can ensure maximally correlated using Canonical Correlation Analysis)
+	6b stratify on customers who have ordered before and have not ordered before separately:
+					* customers have NOT ordered before: stratify on days since registration ...or could be MIN{ days since last opened HC email, days since registration }
+					* customers HAVE ordered before:     stratify on days since last order   ...or could be MIN{ days since last opened HC email, days since last order }
+
+7. Approximate nearest neighbour calc, then assign to test/holdout in pairs 
+
+8. 	A hybrid of more than 1 of the methods discussed above?
+		e.g. optimize both preperiod mean NSV match and predicted spend balance etc.  
+
+						
+						
+
+						
+
+	

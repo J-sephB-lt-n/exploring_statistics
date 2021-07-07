@@ -1,0 +1,141 @@
+---
+title: "feature_embedding"
+output:
+  pdf_document: default
+---
+
+```{r setup}
+# R
+library(reticulate)
+reticulate::use_python("C:/Program Files (x86)/Microsoft Visual Studio/Shared/Python37_64/")
+```
+
+```{python load_python_packages}
+# python
+import numpy as np
+import random
+import pandas as pd
+```
+
+```{python}
+# python
+user_list = [ 'user' + str(i+1) for i in range(10) ]
+user_list
+```
+
+https://stackoverflow.com/questions/42762849/keras-embedding-layers-how-do-they-work
+
+one-hot encode each user: 
+
+```{python}
+# python
+def item_1hot(username):
+  vec = [0]*len(user_list)
+  vec[ user_list.index(username) ] = 1
+  return vec
+  
+user_list_1hot = [ item_1hot(x) for x in user_list ]
+user_list_1hot = np.array(user_list_1hot)
+
+for s in user_list_1hot:
+    print(*s)
+```
+So, for example, **user3** has the 1-hot encoding:
+
+```{python}
+# python
+user_list_1hot[2]
+```
+
+So, using the 1-hot encoding, the users are represented by vectors in a 10-dimensional space.
+
+**Embedding** means representing the users in a smaller-dimensional space. This process necessarily means a loss of information but this is offset by the gains from reducing the size of the input data (memory/space, computation time etc.).   
+
+```{python}
+# python
+n_dims = 2   # desired number of dimensions of new space
+n_users = len(user_list_1hot)   # number of users 
+
+embedding_matrix = np.random.rand(n_users, n_dims).round(2)
+
+print( embedding_matrix )
+```
+
+```{python}
+# python
+user_embeddings = user_list_1hot.dot( embedding_matrix  ) 
+print(user_embeddings)
+```
+
+```{r}
+# R
+user_embedding_matrix_R <- py$user_embeddings
+plot( x = user_embedding_matrix_R[,1],
+       y = user_embedding_matrix_R[,2],
+       xlab = "embedding dimension 1",
+       ylab = "embedding dimension 2",
+       pch = 16
+     )
+ text( x = user_embedding_matrix_R[,1],
+       y = user_embedding_matrix_R[,2],
+       labels = paste("user", 1:nrow(user_embedding_matrix_R), sep=""),
+       col = 1:nrow(user_embedding_matrix_R)
+     )
+```
+
+```{python}
+user_ages = [ random.randint(0,90) for x in range(len(user_list) ) ]
+user_ages
+```
+
+```{python}
+user_list_1hot
+```
+
+```{python}
+# python
+
+# https://www.datacamp.com/community/tutorials/deep-learning-python
+
+from keras.models import Sequential
+from keras.layers import Embedding, Dense, Flatten
+
+model = Sequential()    # initialise feed-forward neural network model
+
+# add embedding layer:
+model.add( 
+           Embedding( input_dim = 11,
+                      output_dim = 2,       # desired dimension of latent/embedded vector (output of the embedding)
+                      embeddings_initializer = "uniform", # how starting values in embedding matrix are chosen 
+                      embeddings_regularizer = None, # if there is regularization on the embedding matrix       
+                      embeddings_constraint = None,  # constraints on embedding matrix
+                      mask_zero = False,    # used when input vectors are different lengths
+                      input_length = 10    # required if we want to connect to Dense layers later in the network
+                    )
+         )
+         
+# need to do this apparently:
+model.add( Flatten() )
+
+# (dense) output layer:
+model.add( 
+           Dense( 1, 
+                  activation = 'linear'
+                )
+        )
+        
+model.compile( optimizer = 'adam',
+                    loss = 'MSE'
+             )        
+        
+model.fit( x = user_list_1hot,
+           y = user_ages,
+           epochs = 50,
+           verbose = 0
+         )        
+
+```
+* https://keras.io/api/layers/core_layers/embedding/
+
+
+

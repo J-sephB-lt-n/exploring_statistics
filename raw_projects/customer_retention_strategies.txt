@@ -1,0 +1,14 @@
+
+
+
+The goal of CUSTOMER RETENTION is to identify customers who were not going to order again to order. 
+
+Problem 1: 
+
+
+
+Pareto/GGG Model:
+	models customer transation rate and life time probabilistically 
+	this variant models customer repeated purchased patterns
+	
+	

@@ -1,0 +1,96 @@
+---
+title: "Untitled"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Latent Matrix Factorisation
+
+# Factorisation Machine
+A 2nd-order factorization machine: 
+
+$$\begin{array}{lcl}
+\hat{y}(\mathbf x) &=& Pr\Big[Y=1\Bigl|\mathbf{x}\Big] \\
+                   &=& w_0 + \displaystyle\sum_{i=1}^p w_i x_i + \underset{\text{feature interaction block}}{\underbrace{\sum_{i=1}^p \sum_{j=i+1}^p \langle v_i,v_j \rangle x_i x_j}} \\
+               w_0 &=& \text{" global bias "} \\
+               v_i &=& \text{" latent vector representation of feature } i \\
+               v_j &=& \text{" latent vector representation of feature } j \\
+                 p &=& \text{number of features} \\
+\langle a,b \rangle &=& \text{dot product between } a \text{ and } b \\ 
+\end{array}$$
+
+A 3rd-order factorization machine:
+
+$$\begin{array}{lcl}
+\hat{y}(\mathbf x) &=& Pr\Big[Y=1\Bigl|\mathbf{x}\Big] \\
+                   &=& w_0 + \displaystyle\sum_{i=1}^p w_i x_i + \underset{\text{feature interaction block}}{\underbrace{\sum_{i=1}^p \sum_{j=i+1}^p \langle v_i,v_j \rangle x_i x_j}} \\
+               w_0 &=& \text{" global bias "} \\
+               v_i &=& \text{" latent vector representation of feature } i \\
+               v_j &=& \text{" latent vector representation of feature } j \\
+                 p &=& \text{number of features} \\
+\langle a,b \rangle &=& \text{dot product between } a \text{ and } b \\ 
+\end{array}$$
+
+
+
+# Field-Aware Factorisation Machine
+**Field-aware factorisation machines** are almost the same as **factorisation machines**, except that each feature is allowed a different latent factor vector representation within each field. 
+
+Example data: 
+
+field          | feature value
+---------------|----------------------------------------------
+outcome (y)    | clicked on item (or could be "bought item")
+user ID        | user 1 
+user ID        | user 2 
+user ID        | user 3
+item ID        | item 1
+item ID        | item 2
+day of week    | Monday
+day of week    | Tuesday
+day of week    | Wednesday
+day of week    | Thursday
+day of week    | Friday
+day of week    | Saturday
+day of week    | Sunday
+item category  | shoes
+item category  | food
+item category  | tech
+
+$$\begin{array}{lcl}
+\hat{y}(\mathbf x) &=& Pr\Big[Y=1\Bigl|\mathbf{x}\Big] \\
+                   &=& w_0 + \displaystyle\sum_{i=1}^p w_i x_i + \underset{\text{feature interaction block}}{\underbrace{\sum_{i=1}^p \sum_{j=i+1}^p \langle v_{i,f_2},v_{j,f_1}\rangle x_i x_j}} \\
+               w_0 &=& \text{" global bias "} \\
+         v_{i,f_2} &=& \text{" latent vector representation of feature } i
+                       \text{ in field } f_2 \text{ "}\\
+         v_{j,f_1} &=& \text{" latent vector representation of feature } j
+                       \text{ in field } f_1 \text{ "} \\
+               f_1 &=& \text{field of feature } i \\
+               f_2 &=& \text{field of feature } j \\
+                 p &=& \text{number of features} \\
+\langle a,b\rangle &=& \text{dot product between } a \text{ and } b \\ 
+\end{array}$$
+
+So, for example, a user (e.g. user 69) will have 3 different vector representations - one in each field ($\{\text{itemID, day of week, item category}\}$)
+
+# Categorical Feature Embedding
+refer to my other RMD
+
+# Wide & Deep Network (pre-knowledge for deepFM)
+```{r echo=FALSE}
+knitr::include_graphics("C:/Users/jbolton/Documents/blogs/media/wide_and_deep_structure_illus.jpg")
+```
+
+# deepFM
+```{r echo=FALSE}
+knitr::include_graphics("C:/Users/jbolton/Documents/blogs/media/deepFM_structure_illus.jpg")
+```
+
+
+# References
+* DeepFM: An End-to-End Wide & Deep Learning Framework for CTR Prediction (https://arxiv.org/pdf/1804.04950.pdf)
+
+* Higher-Order Factorization Machines (https://arxiv.org/pdf/1607.07195.pdf)

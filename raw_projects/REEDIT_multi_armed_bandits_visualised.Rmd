@@ -1,0 +1,1069 @@
+---
+title: "Multi-Armed Bandit Algorithms Visualised"
+author: "Joseph Bolton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    df_print: paged
+    theme: darkly
+    highlight: espresso
+---
+
+```{r setup, echo=FALSE, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(gganimate)
+library(magick)
+library(knitr)
+
+# change formatting of code output:
+knitr::opts_chunk$set(
+  class.output  = "bg-primary",
+  class.message = "bg-info text-info",
+  class.warning = "bg-warning text-warning",
+  class.error   = "bg-danger text-danger"
+)
+
+options(scipen=999)
+```
+
+
+# JOEJOEJOEJOE DEFINITELY PUT A HUGE GIF AT THE TOP OF THE POST TO GRAB ATTENTION!!!!
+
+Standard supervised learning models (like classification or regression) aim to capture the relationships between observed features data (e.g. customer attributes) and observed outcome data (e.g. customer spend).   
+
+This post is about stationary non-contextual multi-armed bandit algorithms, which are a simple form of reinforcement learning. These bandits are agents which explicitly balance strategic exploration of their environment with exploitation of information learned through exploration. While the algorithms, as described, can be used in a number of real contexts, the principles on which the algorithms are built also form part of more complex reinforcement-learning frameworks.   
+
+Consider the following situation: You have 5 *one-armed bandit* gambling machines available to you:
+
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 8px;
+text-align: center;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+<pre style="font-size: 8px; font-family: &quot;Ubuntu Mono&quot;; background-color: rgb(0, 0, 0); color: rgb(255, 255, 255); line-height: 7px;">                                                                                                                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                                                                                                                        
+                                                                         '`                                                                                                                                                                                                                                                             
+                                                                                                                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                                                                           `^}yuv_                                      
+                                                                                                                                                                                                                                                                                           YDKhKMG`                                     
+                     ```  `` `^rvxL=           `    `     `                                 `_-                                                                                                                                                                                            zoUKM}5_                                     
+                             .lTzIKx`                                                      xGZbi                                                                                                                                                                                     `,=rvTHGbbbZMki)^:.                                
+                         `,=*IZMWWZZGv~,`                                                *}9QQQQV*_`                                                                                                                                                                             -*TGE8RMPaePHK3GKUHPdggZov:`                           
+                     :*icjK3e3M5q5MWasKKzTr~.                                    `,~*xb8ZZZbO06dWMdGgWx^!"'                                                                                                                                                                    ,y$QEX}}uwmPPmXzoU3H3XVTYyMgQd^                          
+                 `=ruGPPE8gb88aZ$DK8gW0EgdPGKx*!`                            `&lt;^eHOZMhhVLTky}IXyl}|YkZ3Mm3dWr^`                                                                                                                                                              .xERXyuzehwVu}TLx]iL}TTuyIeIcuk3$3!                        
+               -xwsMg$U$gQ$hkdHsXPzReMVd3OOZQ$qok}_                        _ubMobUuxTVo}}iYxxVxix^)*xvyylTlLuMMV!                                                                                                      `:ruIhhhIT&lt;`                                         .M8V\Yvvxv?vxxxxvvxvvvvx]xxvxxviixG0r                       
+             -vjkbgmMg3G$dO$Dd$069gRZ86$I6j00PdQOzz)`                   !kw0BQdM0ZIIePMe33s3HGGP3MMOEMPPPPdZKZgRZTTc^                                                                                                `Y8#QZcxxxlHQBy"                                       )8T:xLVkPW5555MMM5qqqqqMqq5qq3kVL*"Z0_                      
+            =wyqQsuxiw8QgZRQ$3dZGdO6mZ$DP0OwvLTobQMwV"                  *0dZOOdZHmsowkeHO3kKP6ZdMGMd6dMeMMMd5WMHGWGRr                              `:rLVwwwwwwwwwwkyx^'                                             _0@OircdQQ8Z}=V##u                                      xG=ImeeUoyIswjmHH3KKaHHKzjmhzIheKUcuQ!,rx&lt;`                 
+           ~Iw988DddOgQ8$O088Od6M0dEqObqK0MG5dd9$886Vy-                 xRZOZbRdqZdWKhIqqIK3GGbZddMMRGZOZM0OM$9d08$Q!                            `|ZQQQQQQQQQQQQQQQQQQ0T'                                  _cuuuuuuu$@6\}#@#$RE#@R"T@@auuuuuuu?                             x3;Zwr=!*(TVc}xxlywwVLuYuulY)~!|}M3cQvhVwVc^                
+          .zkjIIIXoXoooooooIjkwkwwVkojzzkzzzjIXojoXIwX}                 ^#bOGePdD0DD$$0DD0EEEERRR9966666Rg0DER$E0Ed)` 'r|v&lt;                     `YQQQQQQQQQQQQQQQQQQQQQQq,                                 *@QWGokkkkk):(555MM55Mj";kkkkkkkk$@0                             xG!Zw*urvkWzu~*~?jmmx!X^vhM3x!vrYbw}QrHI5jI^                
+          -xi}V?rrrr*********(\)|))|)**rr)(()rr*r*rTvx*`                =QhIwIxIIIemmeszcMsoXIoXozzVjwywzoXokVuKMlV~  ux&lt;&lt;v:                    |BBBBBBBBBBBBBBBBBBBBBBBBP`                             &lt;}}P@BZMeIIIIhhIIIIIIIIIIIIIIIIIIIIIg@B}}}~                         xgT5w*Y}!)v)r:L^=\]L&lt;_G*=?}v=.T;}Z}sQ:`~gv.                 
+          -xLVX`"~=,():~)):  !)-v!:v_  -((-rx)-==!`Vxx*`                =QDqKo^?bddddddT&gt;Z9ddOO69W*Txddd6996$*~dDVV^  xGiTa-                   `,!!!!!!!!!!!!!!!!!!!!!!!!:'`      .;^-                rO#gOZZbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbZbbZ0#O^                       xQ}wIr}w.*T}^'i^-=Y*..M~"v}x:"I~lb)WQ:  u_                  
+          -xicI`=():(?:!^^,"|TyTyT}Vl|:-()-*v*-((*`Vxx*.rxi)`           =QjZGmiGWzzzzzzi&lt;MEIzzjzUm*TjZjzzzjjMr*$6scr   r3v                    'OshhhhUhUR$UhhhIIUM8IhshhhUdd`   .zQQQQa:              g@My}YYYYYYYYYY),:]LYYr,=YYYv,,*YYYYYYYYYYYYd@9    .x^-               xQoy3)TV-:}*_'i&lt;,=^&lt;_.G^_*L^__j^cZL$Q:  T=                  
+          -xiuI'=rr,^^,_::-  ,^.&gt;:-^-  .^^.!^=-rr*-yxx*.*V}*`           =QmyIILqIYYYYYYYrZ6}YYYYuK(VGqYYYYYYh}]g6Ic(   v**                    x$       `zy       =Z       :Dr   =BQQQQB|              g@5wTYYYYYYYYYYx*rLYYYv*)YYYx**vYYYYYYYYYYYYm0}    !8Q@s`             xQ3TP(VL&gt;x}}i"\;^yeor:P*r}T?^.V(V3vQQ: -T*                  
+          -xxxTV]xxxxxxxxxxxxxxiL}}}}Yi]]]i]xxxxx]uVxx*` x;             =QPyVkL5s}}}}}}cid6TT}T}VGxz9Z}}TT}}m}L89}V)   yr~                    3m ~VVcV=-dc vcccx,=E`^Vcc}_`ww   `&gt;HQBHr-              g@5w}jBQ$$$000008BQ$$000000gBQ$$$000008B0YYYhRx   ~gMD@Q-             xQ3Lmrkrvyyuv:::*(x\r~|=rlczY:liye*QQ: :}|                  
+          -vxxxxz006M5ZddddDDbMMdOOO60DZMMddbdE003xxxx*` x;             =QZi)yL5ZoXXXXIyLdEIXXoXmMxh$DoXXXXXZ}YQdiVr   cv~                   .gr :r)d$=!Qx ~rx8X_=g.:rrGD: \b`    !QBr                g@5w}K@3.;vv\\*`i@0.!vvv\v-*@H-~v\\\*`y@BYYYd@9   =#@Oi-              xQKTk*vr(rr\\iuI3WM5qPXVLv?r?)|LV3x8Q: :}|                  
+          -v()r(jZK:``----,}}-``----,wx'`.---_(ddK\r(v^` |=             =QZmcIiqOqZZZWMy]d$ZqMq5Mq]yEgMZZZZZZLi86Vc*  ,}K=                   *d_   u8* ;Q~  `yg= =Q_  `Zm  =8_    "QB*                g@qwTK@K`VB0O@B.x@0`v#8G@@~&lt;@3`V#0O@B.V@BYYYb@Qr!  *@*                xgYXGwLuu}x(|vi}Tucccu}iv(?x}VLVKM]PQ: :}v                  
+          -v)\|rUHx:\Yix]i*rv&lt;Vcc}}i,}|~VccLlr=LMP()??^` (~             ~QIyzZKPyyyyyu}zhOmoImmsk3ZoMKemKK33hsM$RYV~'vYy)`                  `Gx   i8)  *D-  vQ?  =B:  *g*  .Gv    "QB*                g@qwTK@m`'`rBBv x@0`` *Q#u`&gt;@3```vQQ| V@BYYYd@#EQgIT@*                *L&lt;ucuL}TTVkIKP5MMZZZM5GKUkVuT}Yucxv3, :}v                  
+          -vvvvvmdi~yz}UI}!)}rGclaer,Yx*H}I3V!^TZOvxxx*` x&gt;             ~QIwWdWbdddZMqHaeUm3WO6dOddOddd99O6E$$RMky9x?sIv.                   ,8~  ^Qi`  vb` ,gO'  :Q~ `Z3`   xM`   "QB*                g@qwTK@K``&gt;#B,  x@0``_B@&lt;  &gt;@3``x@g`  V@BYYYb@Bx~W@Q@*                =vv;?xxxxxrx}}}ix(\iYYixricv*r)r*^^x^! :}|                  
+          -vxxxxP$u~:iKP(,,;Y!!YKG)_,\]:=UKV:_=yERvxxx*` x;            _T8Dq68OMd$$QOZHHHHHRgZd0GGWq5MZdQQD88ddR6MZgEOD6G}                  *g. =$H'   }P  }Q^   _Er ^B}    ^8_   :QB*                g@qwTK@0LLTzyxvvW@BiiLzwxvvo@$LilzVvvvO@BYYYb@Bx~K@8B~               iTyuewjzIzTvXzzzywvuwkzzhvyOh}yzzzUoz^u'_T*                  
+          -vxxxxPQ3\vVywLvvL}vxVVw]vvVTxiyVTvvY68RvxxxY3wwyr         ,VymVsOOPywPZ5MMkzzzzkGZ6OPkkkkwwwwXdOOmyyVVVuuXk08g}                 '3u  ``     wI  ``    .HY ``     .$i   :QB*                g@5wTVZZZZZd6dZZZZZZZZd9bZZZZZZZZd6ZZZZZ3YYYb@Bx~a@Z                ^s}zGHPHqGk?ePP3Pam}eHP3GamIE6UmPa3GakocZ;M\                  
+      `   -vxxxxPQDhwlTukwkHZzyTTcwwkM5kVTTykkP$QRvxxxcQ0MZk         _czVLwy}LLiiiv()((vLx\xLYY}TlcVwzXIIIhmKGMdOZMaWOM*-                  ~Q*.........3X........_Kh........-Mb`  :QB*                g@5wTYY}VEQBQQQZ}YYw0BBQQB6cYYI$QQQQQWTYYYYYb@Bx~K@I               _}^T3PqMMZZbbbZZZZZMMMMMMMZZZZZZZZZZM5PaxvTVT.                 
+          -xxxxxuP55ZbdbZ5MMMMMMWqqWWW55WqqqqWWqPVxxxxl65HK|          }gQ$Zc*^^~:_  `._::,!&gt;^^^^^^^^^^&lt;^&lt;&lt;^^**r|\Ld96$E-                   ;aXkzkkkkkkjIXwkkkkkkzzXIzkkkkkkkwUz.  :QBr                g@5y}YYK@@qv!!8@dYy#@Ex~!O@$Ys@@Wv=~Q@dYYYYYb@BvL$@I               =Er*}kjzUzksaUsyzoXXIhhhIIjokezKKzzhjzVx(d9~wU`                
+          _}TTTTVVVu}TVVVuT}cVVcT}TVkIIIow}}cVVVVVcT}T|               TBgMdMy*!-''_!&lt;=~**rrrrr**rrr****r*******r\5R$g8P`                   :vv\\\|||\v\\\||\\\\\\\||v\||||\\\\v.-?YQBy),              g@5w}YLVZ#QRZZ#QkLTb##EbMBBmYc9#QRZZ#8zYLYYYb@#6Dwr.                PO|LXsmmmsKWLD)lx)rrrrrrrY?xVcGeemmms}vcQ3x}Z_                
+          _}}}TujGGI}usGqmluy33s}}VcVPPGWKT}GOOOOOZuT}?               vg$g$OREORDEdZZZZbbddbbddddddddOOdOdddR$RO668RgQ}`                   }QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQB=&lt;#QQQQBx              g@5wTYYYY}XK3KwYLLYYTIK3Kj}LYYYTha3Ky}YYYYYYd@R                     KQTvxTTTucVUL6xZUzzjooozkPyiVckuuT}}Lv?oQavu*                 
+          _LYY}Y}}}}Y}}}}}}Y}xvvxxvYL}}}}Y?viYYYYYYYYY)`               _!!!O##BBBBQ@BQB@@@@@@@@@@@@@@@@k5QQ######Q0u="`                    }QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQB=&lt;#QQQQBx              g@##BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB#@R                     mQT^rvYVVVyycTymmmKmKKKKKKUuccVVVVux)*,3Qm                    
+          _vxxvvxxxvxxx\vxxxv||v)\|v()(v\|)(vxvxxxvvxx*`                   VGBdZMMRQMMMy}VXeemeeeeeeseUx)mqMMbOMgGH'                       YQQQQQQQQQgY))r)rrrrrrrr)eQQQQQQQQQB!-?rrr)(,              -,8@QZZOOOOOOOOOOOOOOOOOOOOOWjjMOOOOOOOdaoQ@P_-                     mQuUMhIUzszyXejVTY}}}}}}Y}ckhhkzszIXKM&lt;aQe                    
+          _vxx*rxx\^xxv&lt;|xxv^vxx*rvxx^(xx*?xx(^xxxr*xx*`                   *ydZMMZMMZu,`_:^^^^^^^^^^^^^xYK0MMMMZOKE                        YQQQQQQQQQE,             iQQQQQQQQQB!                        $@QP8@0KsUhhhhhhhhhhhhhh6@gTTB@gmUUh#@Wlg@z                       KQVMdWM55MZbbddOOdddddddOOOOOdZZM5MMqOxmQm                    
+          -vxx)?xxx]iiiYyyyyyyyyyyyyyyyyyVi]]i]xxx?)xx*`                    ]IZMMMdmm)rxvTuuuuuuuuuuuuuu3b$MMMMM$Xx                        YQQQQQQQQQQEOOOOOOOOOOO6O$QQQQQQQQQB!                        $@QP8#w=::::::::::::::::}@gTTB@l`   E@Wlg@z                       3Q]9bK3mUmeIzjzjjIIIIhUhIIXIhIsmKUeaa6cTQa                    
+          _vxxr)xxxx]]]V8gg88888888888888RL]]]xxxx(rxxr`                    }KQMMM9$Eg8DEDDDDDDDDDDDDDDDEOMMZMMRO?`                      rydQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQB3v                       kB03d888Q8QQQQQQQQQQQQQ888MTTQ@Hr^^^Q@Wlg@z                       3$}OHaKKK3P3K33aaaaaKaaaKaKKKKK3aameK63VQ3                    
+          _vxx)(xxxiiiLuMMMM5MM5MM5MMM5MM3YLLiixxx?rxxr`                    xI8MMMPeHP6M5MMMMMMMMMMMM5MMMMZdOMM8EL                       yQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQs                       &lt;ZdmVTTllTTTTTTTTTlTllTTlTTlTO8888888$Ulg@z                      `P}iR3HG5MZbZZZZZbbbZZZbZZZZZZZZZMqGPPd6yQP                    
+          _vxx*rxxxxxxxx]xxxxxxx]xxxx]xxxxxxxxxxxxr*xxr`                    cdBMmVvvvv}3MMMMMMMMMMMMMMMMMZMMMMZQaK                       yQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQs                   :vvvB@#0dZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZB@Rvvv`                  _dihdKHMMMMMMqGGGHPPPPPGPPPPPPGqGGHWMHM0u0Z                    
+          _vxxr)xxv*vxv*vxxv*vxxr)xxxr|xxr?xx|rxxx)rxxr`                    rEdddOyuVLaq5MMMMMMMMMMMMMMMMMMMMMZ$Wy                       yQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQs                   V@#6O@@6GQ@#ZHB@QGG#@QHHB@QGP#@dG5#@DGO@@dGd##ZG#@_                  *$YOG3GW5MMMMMMMGPKesssem3HqMMMMMMMMGWP6uk0                    
+          _vvv*rxxvrxxv*\vxv*vxxr)xxxr|xxr?xx|*vv|rrxxr`                    _KZbMb5ZZPMMMMMMMMMMMMMMMMMMMMMMMM6ga&gt;                       y8QQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQQm                   V@Bmh@@sT$@By}8@DTTB@E}Tg@0T}B@kTc#@PTo@#j}z##yTB@_                  xO)ywoImzeaIoKG5WHaKmmmKaPG5q3Ujm3oXUkzyc*O                    
+           -,_,,:,:::::::,:::::::::":::::":""",:,,:,::-                      `.................................-'                        !)\vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv~                   ^hhhhhhhhhhhhhhUhIhUhhhhhhhhhhhUhhhhhhhhhhhhhhhhhh'                  ^|LwUUUUUUUUUUUUUUUUUUsUUUUUUUUUUUUUUUUIVr\                    
+                                                                                                                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                                                                                                                        </pre>
+
+<!-- set code style back to normal -->
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 14px;
+text-align: left;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+
+Suppose that when you pull the arm of a particular machine (call this *1 game*), you will either *win* that game (a *reward* of **1**) or *lose* that game (a *reward* of **0**). Suppose that you know that the probability of a *win* (*reward*=1) is fixed for each machine (e.g. 15% chance of winning each time you play on machine $B$), but that you don't know what that *win* probability is. You can only estimate the *win* probability of each machine by repeatedly playing on it.  
+
+Suppose that you can afford to play 500 games in total, over which you want to maximise your **total** reward (total number of *wins* in those 500 games).
+
+What would be your strategy? 
+
+By evenly playing 100 games on each machine, you could get decent estimates of the *win* probability of each machine, but will not have any games remaining in which to exploit that information (and you are also guaranteed to have played 100 games on the worst machine). On the other hand, if you don't explore each machine sufficiently, you may end up playing exclusively on a suboptimal machine, thinking erroneously that it is the best one. 
+
+This problem, which involves the strategic balancing of exploration and exploitation over a process of sequential decision-making, is called the *Multi-Armed Bandit problem*. Many algorithms have been proposed to solve it. 
+
+These algorithms have practical application in web design (e.g. which variant of a website to show users), direct marketing (e.g. which promotion to show to customers), finance (e.g. dynamic asset selection in portfolios), dynamic pricing (e.g. allowing product prices to vary adaptively over time), and others. 
+
+*Multi-armed Bandit* algorithms provide an automated alternative to repeated A/B testing.   
+
+When I discovered the [gganimate](https://cran.r-project.org/web/packages/gganimate/index.html) package, I couldn't resist visualising some of the bandit algorithms described in the excellent book [Bandit Algorithms For Website Optimisation](https://www.goodreads.com/book/show/15842784-bandit-algorithms-for-website-optimization) by John Myles White.  
+
+I've visualised the **epsilon-greedy**, **Boltzmann/soft-max** and **Thompson sampling** algorithms here, and will implement the **U.C.B.** algorithm at some point in the future, when I get a some free time (**U.C.B.** is an important base for many *contextual bandit* algorithms).   
+
+The **Contextual Bandit problem** is an extension of this bandit problem, in which the algorithms can additionally consider contextual information available at each iteration and use this information to improve the performance and scope of the algorithms. An example of this is serving personalised content to a user on a website, given available attributes of that user at the time that the decision is made. I will explore algorithms for solving this more complex problem in a future post. 
+
+In all of the implementations illustrated here, the algorithm is presented with 5 one-armed bandit machines with the following fixed *win* probabilities:
+
+Bandit  Win Probability ( Pr[reward=1] ) Lose Probability ( Pr[reward=0] )
+------- -------------------------------- -------------------------------------- -
+1       0.1                              0.9  
+2       0.2                              0.8
+3       0.3                              0.7
+4       0.4                              0.6
+5       0.5                              0.5       
+
+These probabilities are, of course, unknown to the algorithm.   
+
+```{r echo=FALSE, eval=FALSE}
+# # testing out gganimate package:
+# test <- tibble(
+#                 iteration = 1:50,
+#                    choice = sample( 1:5, size=50, replace=TRUE )
+#               )
+# test
+# 
+# run_anim <- ggplot( data = test,
+#                     aes( x = iteration,
+#                          y = choice
+#                        )
+#                    ) +
+#             geom_point() +
+#             geom_line() +
+#             transition_reveal(iteration)
+# 
+# run_anim
+```
+
+# Epsilon Greedy Algorithm
+
+The *epsilon-greedy* algorithm works as follows:
+
+* The (hyper) parameter $\epsilon$ must be chosen by the user (us) prior to running the algorithm. This parameter controls how often the *epsilon-greedy* algorithm chooses to *exploit* (use the information collected so far to get *reward*), versus how often to *explore* (make potentially suboptimal choices in order to collect more information about the system).  
+
+* The *epsilon-greedy* algorithm keeps running estimates of the probability of a win/reward under each option (machine). These estimates are updated at each iteration, after the algorithm has made a decision, taken an action, and observed the outcome of that action.
+
+* At each iteration, the algorithm will play the machine on which it estimates it is mostly likely to win (be rewarded) with probability $\epsilon$. With probability $1-\epsilon$, the algorithm will play on a random machine (with each machine given equal chance of being chosen). After making a choice and observing the reward, the algorithm updates it's value estimates of the machines. 
+
+In my implementation of the *espilon-greedy* algorithm, I've calculated the estimated value of each machine as:
+
+$$\text{average reward for machine } i \quad=\quad \displaystyle\frac{\text{sum of rewards obtained from all plays on machine } i}{\text{number of times have played machine } i}$$
+
+500 iterations of this process are shown below, using $\epsilon=0.1$.
+
+Notice that the algorithm initially estimates machine 3 to be the best, before discovering that machine 4 is more valuable (after 59 iterations), and finally settling on machine 5 (after 123 iterations) and staying there. Notice that the algorithm continues to explore exactly 10% of the time, even after it has settled on the best machine (machine 5). This is one of the potential shortcomings of this simple algorithm.   
+
+The full calculations of the algorithm for this example are shown [at the very end of this article](#epsilongreedy). 
+
+Note that the starting value estimates of the machines (values before any information has been collected by the algorithm) were in this example not considered very carefully, although this would be an important consideration in practice.
+
+```{r echo=FALSE}
+
+# ---------------------------------------------------------------------------------------------------------------------------- # 
+# this commented code runs the epsilon-greedy algorithm once, storing the result in the file "epsilon_greedy_algorithm_log.csv":
+# ---------------------------------------------------------------------------------------------------------------------------- # 
+
+# epsilon <- 0.1
+# 
+# algorithm_log <-
+#   tibble( iteration = 0,
+#           rand01 = NA,
+#           strategy = "",
+#           choice = NA,
+#           cr1 = 0,
+#           cr2 = 0,
+#           cr3 = 0,
+#           cr4 = 0,
+#           cr5 = 0,
+#           mu1 = 0,
+#           mu2 = 0,
+#           mu3 = 0,
+#           mu4 = 0,
+#           mu5 = 0,
+#            n1 = 0,
+#            n2 = 0,
+#            n3 = 0,
+#            n4 = 0,
+#            n5 = 0
+#         )
+# 
+# for( i in 2:500 ){
+# 
+#   algorithm_log <-
+#     bind_rows( algorithm_log
+#                ,
+#                algorithm_log[i-1,]
+#              )
+# 
+#   # update iteration number:
+#   algorithm_log$iteration[i] <- i
+# 
+#   # get estimated values of arms using latest available information:
+#   estimated_values_end_of_last_iteration <- unlist( algorithm_log[i-1, c("mu1","mu2","mu3","mu4","mu5")] )
+# 
+#   # identify highest value:
+#   current_best <- max( estimated_values_end_of_last_iteration )
+# 
+#   # store all arms tying for highest value:
+#   current_best_options <- which( estimated_values_end_of_last_iteration==current_best )
+# 
+#   explore_options <- setdiff( 1:5, current_best_options )
+# 
+#   # generate a random value in order to make a decision:
+#   rand01 <- runif(1)
+# 
+#   if( rand01 > epsilon | length(explore_options)==0 ){   # if we choose to exploit, or there are no explore options:
+# 
+#       choice <- sample( rep(current_best_options,2), size=1)    # the repeating twice fixes the bug where there is only 1 choice
+#       algorithm_log$strategy[i] <- "EXPLOIT"
+#       
+#   } else{  # otherwise explore:
+# 
+#       choice <- sample( rep(explore_options,2), size=1 )   # the repeating twice fixes the bug where there is only 1 choice
+#       algorithm_log$strategy[i] <- "explore"
+#   }
+# 
+#   # store this choice:
+#   algorithm_log$choice[i] <- choice
+# 
+#   # iterate the count of pulls on this arm:
+#   algorithm_log[i, paste0("n",choice) ] <- algorithm_log[i, paste0("n",choice) ] + 1
+# 
+#   # calculate reward from this choice:
+#   reward <- sample( 0:1,
+#                     size = 1,
+#                     prob = c( 1 - choice/10,
+#                               choice/10
+#                             )
+#                   )
+#   # update cumulative reward for this arm with reward just received:
+#   algorithm_log[i, paste0("cr",choice)] <- algorithm_log[i, paste0("cr",choice)] + reward
+# 
+#   # update estimated value of this arm:
+#   algorithm_log[i, paste0("mu",choice)] <- algorithm_log[i, paste0("cr",choice)] / algorithm_log[i, paste0("n",choice)] # could do this better
+# 
+#   # store the random number used to make the decision:
+#   algorithm_log$rand01[i] <- rand01
+# }
+# 
+# write_csv( algorithm_log,
+#           "c:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_algorithm_log.csv"
+#         )
+# 
+# epsilon_greedy_algorithm_log <-
+# read_csv( "c:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_algorithm_log.csv" )
+# 
+# # save GIF of the choice of the epsilon-greedy at each step:
+# run_anim <- ggplot( data = epsilon_greedy_algorithm_log,
+#                     aes( x = iteration,
+#                          y = choice
+#                        )
+#                    ) +
+#             geom_point( colour = "red" ) +
+#             geom_line( alpha=0.5 ) +
+#             labs( title = "Machine Chosen by Epsilon-Greedy Algorithm at each Iteration",
+#                       x = "Time (Iteration)",
+#                       y = "Choice (Machine Played at this Iteration)"
+#                   ) +
+#             transition_reveal(iteration)
+# 
+# run_anim <- animate( run_anim, height = 500, width = 1000, nframes = 50, fps=5 )
+# anim_save("C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy.gif")
+# 
+# # save GIF of the count of the number of times played each machine by the epsilon-greedy algorithm on this example:
+# run_anim2 <-
+#   epsilon_greedy_algorithm_log %>%
+#     select( iteration, n1, n2, n3, n4, n5 ) %>%
+#     pivot_longer( cols = n1:n5,
+#                   names_to = "machine",
+#                   values_to = "n_pulls"
+#                 ) %>%
+#     ggplot( data = ,
+#                        aes( x = iteration,
+#                             y = n_pulls,
+#                             group = machine,
+#                             colour = machine
+#                          )
+#                      ) +
+#               geom_line( size=1.2 ) +
+#               theme( legend.position = "bottom" ) +
+#               labs( title = "Cumulative Number of Plays on Each Machine",
+#                         x = "Time (Iteration)",
+#                         y = "Cumulative Number of Plays"
+#                     ) +
+#               transition_reveal(iteration) +
+#               view_follow( fixed_x = TRUE )
+# 
+# run_anim2 <- animate(run_anim2, height = 500, width = 1000, nframes = 50, fps=5 )
+# anim_save("C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_armcounts.gif")
+# 
+# d<-image_blank(240,240*2)
+# the_frame<-d
+# for(i in 2:50){
+#   the_frame<-c(the_frame,d)
+# }
+# 
+# a_mgif<-image_read("C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy.gif")
+# b_mgif<-image_read("C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_armcounts.gif")
+# 
+# new_gif<-image_append( c(a_mgif[1], b_mgif[1]), stack=TRUE)
+# for(i in 2:50){
+#   print(i)
+#   combined <- image_append( c( a_mgif[i],
+#                                b_mgif[i]
+#                              ),
+#                             stack = TRUE
+#                           )
+#   new_gif<-c(new_gif,combined)
+# }
+# 
+# magick::image_write( new_gif,
+#                     "C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_ALL.gif"
+#                    )
+```
+
+![](C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_ALL.gif)
+
+# Epsilon Greedy Algorithm with Annealing
+
+As seen above, the *epsilon-greedy* algorithm continues to explore at the same fixed rate for all time, which is likely to be too little exploration near the beginning of the process and too much exploration nearer the end (when enough information has already been collected). This problem can be solved by allowing the $\epsilon$ parameter to vary over time. This is called *annealing*. An example run of the *Epsilon Greedy algorithm with Annealing* is shown below, where $\epsilon$ starts at $\epsilon=1$ (explore 100% of the time) and reduces non-linearly over time, reaching $\epsilon=0$ (explore 0% of the time) after 330 iterations. The algorithm is run for 500 iterations. 
+
+Notice that the algorithm explores all of the machines equally in the beginning, exploring less and gravitating toward the more valuable machines over time. 
+
+The full calculations of the algorithm for this example are shown [at the very end of this article](#epsilongreedyannealing)
+
+```{r echo=FALSE}
+
+# how I chose the epsilon scheme:
+#test <- tibble( x = seq(0,500,100),
+#                y = c(1, 0.5, 0.15, 0.05, 0.05, 0.05 )
+#              )
+#plot( test$y ~ test$x )
+#test_lm <- lm( y ~ 1 + x + I(x^2), data=test )
+
+# ------------------------------------------------------------------------------------------------------------------------------------------------------------ #
+# this commented code runs the epsilon-greedy with annealing algorithm once, storing the result in the file "epsilon_greedy_with_annealing_algorithm_log.csv": #
+# ------------------------------------------------------------------------------------------------------------------------------------------------------------ #
+
+# epsilon_reached_0 <- FALSE
+#
+# algorithm_log <-
+#   tibble( iteration = 0,
+#           rand01 = NA,
+#           epsilon = 1,
+#           strategy = "",
+#           choice = NA,
+#           cr1 = 0,
+#           cr2 = 0,
+#           cr3 = 0,
+#           cr4 = 0,
+#           cr5 = 0,
+#           mu1 = 0,
+#           mu2 = 0,
+#           mu3 = 0,
+#           mu4 = 0,
+#           mu5 = 0,
+#            n1 = 0,
+#            n2 = 0,
+#            n3 = 0,
+#            n4 = 0,
+#            n5 = 0
+#         )
+#
+# for( i in 2:500 ){
+#
+#   algorithm_log <-
+#     bind_rows( algorithm_log
+#                ,
+#                algorithm_log[i-1,]
+#              )
+#
+#   # update iteration number:
+#   algorithm_log$iteration[i] <- i-1
+#
+#   # update epsilon:
+#   epsilon <- 0.975 - 0.005253571 * algorithm_log$iteration[i] + 0.000006964*(algorithm_log$iteration[i])^2
+#   if( epsilon <= 0 ){ epsilon_reached_0 <- TRUE }
+#   if( epsilon_reached_0 ){ epsilon <- 0 }
+#
+#   algorithm_log$epsilon[i] <- epsilon
+#
+#   # get estimated values of arms using latest available information:
+#   estimated_values_end_of_last_iteration <- unlist( algorithm_log[i-1, c("mu1","mu2","mu3","mu4","mu5")] )
+#
+#   # identify highest value:
+#   current_best <- max( estimated_values_end_of_last_iteration )
+#
+#   # store all arms tying for highest value:
+#   current_best_options <- which( estimated_values_end_of_last_iteration==current_best )
+#
+#   explore_options <- setdiff( 1:5, current_best_options )
+#
+#   # generate a random value in order to make a decision:
+#   rand01 <- runif(1)
+#
+#   if( rand01 > epsilon | length(explore_options)==0 ){   # if we choose to exploit, or there are no explore options:
+#
+#       choice <- sample( rep(current_best_options,2), size=1)    # the repeating twice fixes the bug where there is only 1 choice
+#       algorithm_log$strategy[i] <- "EXPLOIT"
+#
+#
+#   } else{  # otherwise explore:
+#
+#       choice <- sample( rep(explore_options,2), size=1 )   # the repeating twice fixes the bug where there is only 1 choice
+#       algorithm_log$strategy[i] <- "explore"
+#   }
+#
+#   # store this choice:
+#   algorithm_log$choice[i] <- choice
+#
+#   # iterate the count of pulls on this arm:
+#   algorithm_log[i, paste0("n",choice) ] <- algorithm_log[i, paste0("n",choice) ] + 1
+#
+#   # calculate reward from this choice:
+#   reward <- sample( 0:1,
+#                     size = 1,
+#                     prob = c( 1 - choice/10,
+#                               choice/10
+#                             )
+#                   )
+#   # update cumulative reward for this arm with reward just received:
+#   algorithm_log[i, paste0("cr",choice)] <- algorithm_log[i, paste0("cr",choice)] + reward
+#
+#   # update estimated value of this arm:
+#   algorithm_log[i, paste0("mu",choice)] <- algorithm_log[i, paste0("cr",choice)] / algorithm_log[i, paste0("n",choice)] # could do this better
+#
+#   # store the random number used to make the decision:
+#   algorithm_log$rand01[i] <- rand01
+# }
+#
+# write_csv( algorithm_log,
+#            "c:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_with_annealing_algorithm_log.csv"
+#          )
+# 
+# epsilon_greedy_with_annealing_algorithm_log <-
+#   read_csv( "c:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_with_annealing_algorithm_log.csv" )
+# 
+# # save GIF of the choice of the epsilon-greedy at each step:
+# run_anim <- ggplot( data = epsilon_greedy_with_annealing_algorithm_log,
+#                      aes( x = iteration,
+#                           y = choice
+#                        )
+#                    ) +
+#             geom_point( colour = "red" ) +
+#             geom_line( alpha=0.5 ) +
+#             labs( title = "Machine Chosen by Epsilon-Greedy with Annealing Algorithm at each Iteration",
+#                       x = "Time (Iteration)",
+#                       y = "Choice (Machine Played at this Iteration)"
+#                   ) +
+#             transition_reveal(iteration)
+# 
+# animate( run_anim, height = 500, width = 1000, nframes = 50, fps=5 )
+# anim_save("C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_with_annealing.gif")
+# 
+# # save GIF of epsilon changing over time:
+# run_anim2 <-
+#   epsilon_greedy_with_annealing_algorithm_log %>%
+#     select( iteration, epsilon ) %>%
+#     ggplot( data = ,
+#                        aes( x = iteration,
+#                             y = epsilon
+#                          )
+#                      ) +
+#               geom_line( size=1.2 ) +
+#               labs( title = "Epsilon Scheme",
+#                         x = "Time (Iteration)",
+#                         y = "Epsilon"
+#                     ) +
+#               transition_reveal(iteration)
+# 
+# animate( run_anim2, height = 250, width = 1000, nframes = 50, fps=5 )
+# anim_save("C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_with_annealing_EPSILON_SCHEME.gif")
+# 
+# # save GIF of the count of the number of times played each machine by the epsilon-greedy algorithm on this example:
+# run_anim3 <-
+#   epsilon_greedy_with_annealing_algorithm_log %>%
+#     select( iteration, n1, n2, n3, n4, n5 ) %>%
+#     pivot_longer( cols = n1:n5,
+#                   names_to = "machine",
+#                   values_to = "n_pulls"
+#                 ) %>%
+#     ggplot( data = ,
+#                        aes( x = iteration,
+#                             y = n_pulls,
+#                             group = machine,
+#                             colour = machine
+#                          )
+#                      ) +
+#               geom_line( size=1.2 ) +
+#               theme( legend.position = "bottom" ) +
+#               labs( title = "Cumulative Number of Plays on Each Machine",
+#                         x = "Time (Iteration)",
+#                         y = "Cumulative Number of Plays"
+#                     ) +
+#               transition_reveal(iteration) +
+#               view_follow( fixed_x = TRUE )
+# 
+# animate(run_anim3, height = 500, width = 1000, nframes = 50, fps=5)
+# anim_save("C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_with_annealing_armcounts.gif")
+# 
+# d<-image_blank(240,240*3)
+# the_frame<-d
+# for(i in 2:50){
+#   the_frame<-c(the_frame,d)
+# }
+# 
+# a_mgif<-image_read("C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_with_annealing.gif")
+# b_mgif<-image_read("C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_with_annealing_EPSILON_SCHEME.gif")
+# c_mgif<-image_read("C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_with_annealing_armcounts.gif")
+# 
+# new_gif<-image_append( c( a_mgif[1],
+#                           b_mgif[1],
+#                           c_mgif[1]
+#                         ),
+#                        stack=TRUE
+#                       )
+# for(i in 2:50){
+#   #print(i)
+#   combined <- image_append( c( a_mgif[i],
+#                                b_mgif[i],
+#                                c_mgif[i]
+#                              ),
+#                             stack = TRUE
+#                           )
+#   new_gif<-c(new_gif,combined)
+# }
+# 
+# magick::image_write( new_gif,
+#                      "C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_with_annealing_ALL.gif"
+#                    )
+
+```
+
+![](C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_with_annealing_ALL.gif)
+
+# Boltzmann Exploration (Softmax)
+For this algorithm, a smoother approach to the decision-making process is taken. The basic premise of this algorithm is that machines are played at random, where the probability that a particular machine is chosen to be played at any given iteration is relative to the estimated value of that machine at that time i.e. machines with higher estimated value are more likely to get chosen (played) by the algorithm, while machines with lower estimated value are less likely to be chosen (played) by the algorithm. This also means that two machines with very similar estimated values will get played equally often.    
+
+Precisely, for this algorithm, the probability of selecting any given arm $i$ at iteration $t+1$, given collected information at time $t$ is:
+
+$$\begin{array}{lcl} \underset{\text{Prob. of selecting arm } i \text{ at iteration } t+1}{\underbrace{p_i(t+1)}}
+&=&
+\displaystyle\frac{exp\Big\{\displaystyle\frac{\hat\mu_i(t)}{\tau}\Big\}}{\displaystyle\sum_{j=1}^k exp\Big\{\displaystyle\frac{\hat\mu_i(t)}{\tau}\Big\}}\hspace{40mm} [2] \\
+\hat\mu_i(t) &=& \text{estimated value of arm } i \text{ from all information gathered up until iteration } t
+\end{array}$$
+
+Notice that the selection probabilities are a function both of the estimated values ($\mu_i$) of the bandit machines, and also of the *temperature* parameter $\tau$.
+
+The *temperature* parameter $\tau$ controls the amount of randomness in the selection decision: $\tau=0$ makes the algorithm select the arm with highest estimated probability on every iteration (i.e. the algorithm becomes the *$\epsilon$psilon greedy* algorithm). In contrast, as $\tau$ tends to infinity the algorithm starts selecting between the arms uniformly at random (pure exploration). Varying $\tau$ between these two extremes results in a continuous gradient of possible models to choose from, where models with larger $\tau$ prefer to explore, while models with smaller $\tau$ prefer to exploit.   
+
+To develop intuition for this formula (as a quick aside), various different selection probabilities for a 3-arm bandit are shown below, showing the behaviour of the formula under different $\mu_i$ and $\tau$ combinations:
+
+```{r echo=FALSE}
+expand_grid( estimated_arm1_value = c(0, 0.1),
+             estimated_arm2_value = c(0.1, 0.3),
+             estimated_arm3_value = c(0.1, 0.3, 0.8),
+             tau = c( 0.002, 0.1, 1, 10)
+          ) %>%
+  mutate( arm1_numerator = ( exp(estimated_arm1_value/tau) ),
+          arm2_numerator = ( exp(estimated_arm2_value/tau) ),
+          arm3_numerator = ( exp(estimated_arm3_value/tau) ),
+         
+          arm1_select_prob = arm1_numerator / (arm1_numerator+arm2_numerator+arm3_numerator),
+          arm2_select_prob = arm2_numerator / (arm1_numerator+arm2_numerator+arm3_numerator),
+          arm3_select_prob = arm3_numerator / (arm1_numerator+arm2_numerator+arm3_numerator)
+        ) %>%
+ 
+  mutate_all( round, digits=3 ) %>%
+ 
+  select( tau,
+          estimated_arm1_value,
+          estimated_arm2_value,
+          estimated_arm3_value,
+         
+          arm1_select_prob,
+          arm2_select_prob,
+          arm3_select_prob
+        ) %>%
+ 
+  sample_n(20) %>%
+ 
+  arrange( tau, estimated_arm1_value, estimated_arm2_value, estimated_arm3_value ) %>% 
+  
+  kable()
+```
+
+500 iterations of this algorithm are shown below, using $\tau=0.13$. 
+
+The full calculations of the algorithm for this example are shown [at the very end of this article](#softmax). 
+
+```{r echo=FALSE}
+# Boltzmann Exploration (Softmax) ----------------------------------
+# tau <- 0.13
+# 
+# algorithm_log <-
+#   tibble( iteration = 0,
+#           choice = NA,
+#           cr1 = 0,
+#           cr2 = 0,
+#           cr3 = 0,
+#           cr4 = 0,
+#           cr5 = 0,
+#           mu1 = 0,
+#           mu2 = 0,
+#           mu3 = 0,
+#           mu4 = 0,
+#           mu5 = 0,
+#           n1 = 10,
+#           n2 = 10,
+#           n3 = 10,
+#           n4 = 10,
+#           n5 = 10,
+#           p1 = 1/5,
+#           p2 = 1/5,
+#           p3 = 1/5,
+#           p4 = 1/5,
+#           p5 = 1/5
+#         )
+# 
+# 
+# for( i in 2:500 ){
+# 
+#   # add extra row to table for this iteration:
+#   algorithm_log <-
+#     bind_rows( algorithm_log
+#                ,
+#                algorithm_log[i-1,]    # add a blank row to the bottom to populate
+#               )
+#   # update iteration number:
+#   algorithm_log$iteration[i] <- i-1
+# 
+#   # get selection probs from previous iteration:
+#   selection_probs <- unlist( algorithm_log[i-1,c("p1","p2","p3","p4","p5")] )
+# 
+#   # choose an arm:
+#   algorithm_log$choice[i] <- sample( 1:5, size=1, prob = selection_probs )
+# 
+#   # update the count of pulls on this arm:
+#   algorithm_log[ i, paste0("n",algorithm_log$choice[i]) ] <- algorithm_log[i-1,paste0("n",algorithm_log$choice[i])] + 1
+# 
+#   # update the cumulative reward for this arm:
+#   algorithm_log[ i, paste0("cr",algorithm_log$choice[i]) ] <-
+#     algorithm_log[ i-1, paste0("cr",algorithm_log$choice[i]) ] + # previous cumulative reward
+#             sample( 0:1,
+#                     size = 1,
+#                     prob = c( 1 - (algorithm_log$choice[i]/10),
+#                               (algorithm_log$choice[i]/10)
+#                             )
+#                    )
+#   # update the estimated value of selected arm:
+#   algorithm_log[ i,paste0("mu",algorithm_log$choice[i]) ] <-
+#     algorithm_log[ i,paste0("cr",algorithm_log$choice[i]) ] / algorithm_log[ i,paste0("n",algorithm_log$choice[i]) ]
+# 
+#   # update selection probabilies (based on current value estimates after taking into account choice this round):
+#   mu_vec <- unlist( algorithm_log[ i, c("mu1","mu2","mu3","mu4","mu5") ] )
+#   numerators <- exp( mu_vec / tau )
+#   updated_probs <- numerators / sum(numerators)
+#   algorithm_log$p1[ i ] <- updated_probs[1]
+#   algorithm_log$p2[ i ] <- updated_probs[2]
+#   algorithm_log$p3[ i ] <- updated_probs[3]
+#   algorithm_log$p4[ i ] <- updated_probs[4]
+#   algorithm_log$p5[ i ] <- updated_probs[5]
+# 
+# }
+# 
+# write_csv( algorithm_log,
+#            "c:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/softmax_algorithm_log.csv"
+#          )
+# 
+# softmax_algorithm_log <-
+#   read_csv( "c:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/softmax_algorithm_log.csv" )
+# 
+# run_anim69 <-
+#      ggplot( data = softmax_algorithm_log,
+#                      aes( x = iteration,
+#                           y = choice
+#                         )
+#                     ) +
+#              geom_point( colour = "red" ) +
+#              geom_line( alpha=0.5 ) +
+#              transition_reveal(iteration)
+# 
+# animate( run_anim69, height = 500, width = 1000, nframes = 50, fps=5)
+# anim_save("C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/boltzmann_softmax.gif")
+# 
+# # save GIF of the count of the number of times played each machine:
+# run_anim420 <-
+#    softmax_algorithm_log %>%
+#      select( iteration, n1, n2, n3, n4, n5 ) %>%
+#      pivot_longer( cols = n1:n5,
+#                   names_to = "machine",
+#                   values_to = "n_pulls"
+#                 ) %>%
+#     ggplot( data = ,
+#                        aes( x = iteration,
+#                             y = n_pulls,
+#                             group = machine,
+#                             colour = machine
+#                          )
+#                      ) +
+#               geom_line( size=1.2 ) +
+#               theme( legend.position = "bottom" ) +
+#               labs( title = "Cumulative Number of Plays on Each Machine",
+#                         x = "Time (Iteration)",
+#                         y = "Cumulative Number of Plays"
+#                     ) +
+#               transition_reveal(iteration) +
+#               view_follow( fixed_x = TRUE )
+# 
+# animate( run_anim420, height = 500, width = 1000, nframes = 50, fps=5 )
+# anim_save( "C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/boltzmann_softmax_armcounts.gif" )
+# 
+# d<-image_blank(240,240*2)
+# the_frame<-d
+# for(i in 2:50){
+#   the_frame<-c(the_frame,d)
+# }
+# 
+# a_mgif<-image_read("C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/boltzmann_softmax.gif")
+# b_mgif<-image_read("C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/boltzmann_softmax_armcounts.gif")
+# 
+# new_gif<-image_append( c( a_mgif[1],
+#                           b_mgif[1]
+#                         ),
+#                        stack=TRUE
+#                       )
+# for(i in 2:50){
+#   #print(i)
+#   combined <- image_append( c( a_mgif[i],
+#                                b_mgif[i]
+#                              ),
+#                             stack = TRUE
+#                           )
+#   new_gif<-c(new_gif,combined)
+# }
+# 
+# magick::image_write( new_gif,
+#                      "C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/softmax_ALL.gif"
+#                    )
+```
+
+![](C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/softmax_ALL.gif)
+
+Note that as the $\epsilon$ hyperparameter in the *Epsilon Greedy* algorithm can be varied over time to adapt it's explore/exploit priorities, so too can the $\tau$ hyperparameter in the *Boltzmann/Softmax* algorithm be modified over time to make the *Boltzmann/Softmax* change it's explore/exploit behaviour over time. I haven't illustrated this here, but the effect of this *annealing* will be very similar to that of the *Epsilon Greedy with Annealing* example (greater exploration at the beginning, with increased exploitation over time).      
+
+# Thompson Sampling
+
+The Thompson algorithm is a framework within the [Bayesian](https://en.wikipedia.org/wiki/Bayesian_statistics) paradigm, maintaining a distribution of likely *win* probabilities $\theta_j$ for each bandit machine $j$. Each time a machine is played and a reward observed, the distribution for that machine is updated. For a good introduction to [Bayesian](https://en.wikipedia.org/wiki/Bayesian_statistics) statistics, refer to the (wonderful and accessible) book [Introduction to Empirical Bayes - Examples from Baseball Statistics](http://varianceexplained.org/r/empirical-bayes-book/).
+
+The **Thompson Sampling** algorithm is as follows:
+
+1. The *win* probability for machine $j$ is denoted $\theta_j$. $\quad\theta_j$ is considered to be a random variable. 
+
+2. Initially, each $\theta_j$ is assumed uniformly distributed over $[0,1]$ i.e. $\theta_j\sim Beta_j(\alpha=1,\beta=1)$. This is the **prior distribution** of each $\theta_j$. This means that we are assuming that any win probability is equally likely prior to playing any games on the machines. 
+
+3. Each time a bandit machine $j$ is played, and a reward $r_t \in \{0,1\}$ observed from that play, the distribution of $\theta_j$ is updated: $\theta_j \overset{update}{\sim} Beta_j(\alpha_{old} + r_t \space,\space \beta_{old} +1 - r_t)$. This update assumes that $r_t$ is distributed $Bernoulli(\theta_j)$ for each machine $j$, where the ([conjugate](https://en.wikipedia.org/wiki/Conjugate_prior)) prior distribution of $\theta_j$ is $Beta_j(\alpha_{old},\beta_{old})$. As more games are played on a particular machine $j$, the distribution of $\theta_j$ will become taller and more narrow (i.e. we become more certain about which values of $\theta_j$ are plausible, given the rewards that we have observed from machine $j$).
+
+4. To decide which machine to play at each step, a value $\theta_j$ is randomly sampled for each machine from it's most up-to-date distribution $Beta_j()$. The machine for which the highest observed value $\theta_j$ was drawn is then played in that round, and the distribution $Beta_j()$ updated. 
+
+This distribution-based bandit-machine selection strategy is nice since it means that each machine has at least some probability of being played, but that machines with higher likely *win* probabilities $\theta_j$ will be played more often. It also means that machines about which not much is known will continue to be played quite often (since their $Beta_j()$ distributions will have very wide variance) until sufficient information about them has been observed to make a good estimate of their value.  
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+# thompson_alg_log <-
+#   tibble( iteration = 0,
+#              choice = NA,
+#                 cr1 = 0,
+#                 cr2 = 0,
+#                 cr3 = 0,
+#                 cr4 = 0,
+#                 cr5 = 0,
+#                b1.1 = 1,
+#                b1.2 = 1,
+#                b2.1 = 1,
+#                b2.2 = 1,
+#                b3.1 = 1,
+#                b3.2 = 1,
+#                b4.1 = 1,
+#                b4.2 = 1,
+#                b5.1 = 1,
+#                b5.2 = 1,
+#                 pd1 = rbeta(n=1, shape1=1, shape2=1),
+#                 pd2 = rbeta(n=1, shape1=1, shape2=1),
+#                 pd3 = rbeta(n=1, shape1=1, shape2=1),
+#                 pd4 = rbeta(n=1, shape1=1, shape2=1),
+#                 pd5 = rbeta(n=1, shape1=1, shape2=1),
+#                  n1 = 0,
+#                  n2 = 0,
+#                  n3 = 0,
+#                  n4 = 0,
+#                  n5 = 0
+#         )
+# 
+# for( i in 1:500 ){
+#   thompson_alg_log <-
+#     bind_rows( thompson_alg_log,
+#                thompson_alg_log[i,]
+#              )
+# 
+#   # update iteration number:
+#   thompson_alg_log$iteration[i+1] <- i
+# 
+#   # choose a machine:
+#   machine_chosen <- which.max( thompson_alg_log[i, c("pd1","pd2","pd3","pd4","pd5")] )
+#   thompson_alg_log$choice[i+1] <- machine_chosen
+# 
+#   # update the count of machine played:
+#   thompson_alg_log[i+1, paste0("n",machine_chosen) ] <- thompson_alg_log[i, paste0("n",machine_chosen) ] + 1
+# 
+#   # generate a reward:
+#   reward <- sample( 0:1,
+#                     size = 1,
+#                     prob = c( 1 - thompson_alg_log$choice[i+1]/10,
+#                               thompson_alg_log$choice[i+1]/10
+#                             )
+#                     )
+# 
+#   # store the reward:
+#   thompson_alg_log[i+1, paste0("cr",machine_chosen) ] <- thompson_alg_log[i, paste0("cr",machine_chosen) ] + reward
+# 
+#   # update the posterior (beta) distribution parameters for the chosen machine:
+#   if( reward == 1 ){
+#       thompson_alg_log[i+1, paste0("b",machine_chosen,".1")] <- thompson_alg_log[i, paste0("b",machine_chosen,".1")] +1
+#   } else{
+#       thompson_alg_log[i+1, paste0("b",machine_chosen,".2")] <- thompson_alg_log[i, paste0("b",machine_chosen,".2")] +1
+#   }
+# 
+#   # generate random draws from the posterior distributions:
+#   thompson_alg_log[i+1, "pd1"] <- rbeta( n=1, shape1=thompson_alg_log$b1.1[i+1], shape2=thompson_alg_log$b1.2[i+1] )
+#   thompson_alg_log[i+1, "pd2"] <- rbeta( n=1, shape1=thompson_alg_log$b2.1[i+1], shape2=thompson_alg_log$b2.2[i+1] )
+#   thompson_alg_log[i+1, "pd3"] <- rbeta( n=1, shape1=thompson_alg_log$b3.1[i+1], shape2=thompson_alg_log$b3.2[i+1] )
+#   thompson_alg_log[i+1, "pd4"] <- rbeta( n=1, shape1=thompson_alg_log$b4.1[i+1], shape2=thompson_alg_log$b4.2[i+1] )
+#   thompson_alg_log[i+1, "pd5"] <- rbeta( n=1, shape1=thompson_alg_log$b5.1[i+1], shape2=thompson_alg_log$b5.2[i+1] )
+# 
+# }
+#
+#write_csv( thompson_alg_log,
+#          "c:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/thompson_alg_log.csv"
+#         )
+
+thompson_alg_log <-
+  read_csv( "c:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/thompson_alg_log.csv" )
+
+# run_anim69 <-
+#       ggplot( data = thompson_alg_log,
+#                       aes( x = iteration,
+#                            y = choice
+#                          )
+#             ) +
+#               geom_point( colour = "red" ) +
+#               geom_line( alpha=0.5 ) +
+#               transition_reveal(iteration)
+#  
+# animate( run_anim69, height = 500, width = 1000, nframes = 50, fps=5)
+# anim_save("C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/thompson.gif")
+
+# # save GIF of the count of the number of times played each machine:
+# run_anim420 <-
+#    thompson_alg_log %>%
+#      select( iteration, n1, n2, n3, n4, n5 ) %>%
+#      pivot_longer( cols = n1:n5,
+#                   names_to = "machine",
+#                   values_to = "n_pulls"
+#                 ) %>%
+#     ggplot( data = ,
+#                        aes( x = iteration,
+#                             y = n_pulls,
+#                             group = machine,
+#                             colour = machine
+#                          )
+#                      ) +
+#               geom_line( size=1.2 ) +
+#               theme( legend.position = "bottom" ) +
+#               labs( title = "Cumulative Number of Plays on Each Machine",
+#                         x = "Time (Iteration)",
+#                         y = "Cumulative Number of Plays"
+#                     ) +
+#               transition_reveal(iteration) +
+#               view_follow( fixed_x = TRUE )
+# 
+# animate( run_anim420, height = 500, width = 1000, nframes = 50, fps=5 )
+# anim_save( "C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/thompson_armcounts.gif" )
+
+# d<-image_blank(240,240*2)
+# the_frame<-d
+# for(i in 2:50){
+#   the_frame<-c(the_frame,d)
+# }
+# 
+# a_mgif<-image_read("C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/thompson.gif")
+# b_mgif<-image_read("C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/thompson_armcounts.gif")
+# 
+# new_gif<-image_append( c( a_mgif[1],
+#                           b_mgif[1]
+#                         ),
+#                        stack=TRUE
+#                       )
+# for(i in 2:50){
+#   #print(i)
+#   combined <- image_append( c( a_mgif[i],
+#                                b_mgif[i]
+#                              ),
+#                             stack = TRUE
+#                           )
+#   new_gif<-c(new_gif,combined)
+# }
+# 
+# magick::image_write( new_gif,
+#                      "C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/thompson_ALL.gif"
+#                    )
+
+```
+
+![](C:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/thompson_ALL.gif)
+
+```{r echo=FALSE, fig.width=12, fig.height=8}
+# plot the posterior distributions:
+par( mfrow = c(2,2) )
+for( j in 1:5 ){
+
+  x_seq <- seq(0,1,0.01)
+  plot( x = x_seq,
+        y = dbeta( x = x_seq,
+                   shape1 = thompson_alg_log[paste0("b",j,".1")] %>% tail(1) %>% unlist(),
+                   shape2 = thompson_alg_log[paste0("b",j,".2")] %>% tail(1) %>% unlist()
+                 ),
+        type = "l",
+        main = bquote("Estimated Posterior Probability of "*theta*" for Machine "*.(j) ),
+        xlab = bquote(theta),
+        ylab = bquote(p(theta))
+      )
+  abline( v = j/10, lty=3, col=2 )
+  legend( "topright",
+          lty = 3,
+          col = 2,
+          legend = bquote("True "*theta*" value")
+        )
+}
+```
+
+# References
+
+[1] Bandit Algorithms for Website Optimization
+
+[2] Algorithms for the multi-armed bandit problem https://www.cs.mcgill.ca/~vkules/bandits.pdf
+
+[3] https://www.datanovia.com/en/blog/gganimate-how-to-create-plots-with-beautiful-animation-in-r/
+
+[4] combining gganimate gifs https://github.com/thomasp85/gganimate/issues/226
+
+[5] https://web.stanford.edu/~bvr/pubs/TS_Tutorial.pdf
+
+# Appendix: Epsilon-Greedy Algorithm {#epsilongreedy}
+
+Column         Description
+-------------- -------------------------------------
+rand01         Random number in [0,1], which is used to make the explore/exploit decision (explore if $\text{rand01}<\epsilon$)
+stategy        Strategy employed at this iteration (*explore* or *exploit*)  
+choice         Machine played at this iteration
+$\text{cr}_i$  Cumulative Total Wins on Machine $i$, including the play at this iteration. 
+$\text{mu}_i$  Estimated Value (win probability) of Machine $i$, including the play at this iteration. 
+$\text{n}_i$   Cumulative Total Plays on Machine $i$, including the play at this iteration.
+-------------- -------------------------------------
+
+Note: where all machines have equal estimated value, a machine to play will be chosen at random (strategy will be reported as "EXPLOIT").
+
+This run used $\epsilon=0.1$ (i.e. will explore if $\epsilon < 0.1$). 
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+read_csv( "c:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_algorithm_log.csv" ) %>% 
+  # some manual fixes because I didn't number iterations nicely, but I want to keep this particular run:
+  mutate( iteration = iteration-1 ) %>% 
+  mutate( iteration = as.character(iteration) ) %>% 
+  mutate( iteration = if_else( iteration==-1,
+                              "initialisation",
+                              iteration 
+                             )
+        ) %>% 
+  kable()
+```
+
+# Appendix: Epsilon-Greedy Algorithm with Annealing {#epsilongreedyannealing}
+
+Column         Description
+-------------- -------------------------------------
+rand01         Random number in [0,1], which is used to make the explore/exploit decision (explore if $\text{rand01}<\epsilon$) 
+epsilon        Value of epsilon used to decide whether to explore/EXPLOIT on this iteration
+stategy        Strategy employed at this iteration (*explore* or *exploit*)  
+choice         Machine played at this iteration
+$\text{cr}_i$  Cumulative Total Wins on Machine $i$, including the play at this iteration. 
+$\text{mu}_i$  Estimated Value (win probability) of Machine $i$, including the play at this iteration. 
+$\text{n}_i$   Cumulative Total Plays on Machine $i$, including the play at this iteration.
+-------------- -------------------------------------
+
+Note: where all machines have equal estimated value, a machine to play will be chosen at random (strategy will be reported as "EXPLOIT")
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+read_csv( "c:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/epsilon_greedy_with_annealing_algorithm_log.csv" ) %>%
+  mutate( iteration = as.character(iteration) ) %>% 
+  mutate( iteration = if_else( iteration==0,
+                              "initialisation",
+                              iteration 
+                             )
+        ) %>% 
+  kable()
+```
+
+# Appendix: Boltzmann Exploration (Softmax) {#softmax}
+
+Column         Description
+-------------- ---------------------------------------------------------------
+choice         Machine played at this iteration
+$\text{cr}_i$  Cumulative Total Wins on Machine $i$, including the play at this iteration. 
+$\text{mu}_i$  Estimated Value (win probability) of Machine $i$, including the play at this iteration. 
+$\text{n}_i$   Cumulative Total Plays on Machine $i$, including the play at this iteration.
+$\text{p}_i$   Probability of Selecting Machine $i$ on the next iteration
+-------------- ---------------------------------------------------------------
+
+Note the initial values $n_1=n_2=n_3=n_4=n_5=10$, chosen in order to stabilise the starting behaviour of the algorithm.
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+read_csv( "c:/Users/Joe/Desktop/Joe/finished_blogs/bandit_algorithm_gifs/softmax_algorithm_log.csv" ) %>% 
+    mutate( iteration = as.character(iteration) ) %>% 
+    mutate( iteration = if_else( iteration==0,
+                                "initialisation",
+                                iteration 
+                               )
+          ) %>% 
+    kable()
+```
+
+

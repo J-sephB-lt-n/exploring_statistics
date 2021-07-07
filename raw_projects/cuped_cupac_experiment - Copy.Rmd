@@ -1,0 +1,460 @@
+---
+title: "cuped_cupac_experiment"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(MASS)
+library(tidyverse)
+library(ranger)
+```
+
+interesting to add:
+
+* reduce variance using a regression model $y = \beta_0 + \text{treatment effect} + \beta_1X_1 + \beta_2X_2+...$ 
+
+* reduce variance with a more complex regression model 
+
+* add ranger CUPAC
+
+* is propensity score matching working correctly?
+
+* simulate y by partitioning the feature space
+
+* simulate y by nearest neighbour method
+
+# CUPED (*Controlled-experiment Using Pre-Experiment Data*)
+
+https://www.exp-platform.com/Documents/2013-02-CUPED-ImprovingSensitivityOfControlledExperiments.pdf
+
+$\hat{Y}_{cv}=\overline{Y}-\theta\overline{X} + \theta E\Big[X\Big]$ is an unbiased estimator of $E\Big[Y\Big]$. However, it requires us to know $E\Big[X\Big]$.
+
+The variance of $\hat{Y}_{cv}$ is minimized where $\theta=\displaystyle\frac{COV(Y,X)}{VAR(X)}$. Using this $\theta$, the variance of the estimator is $VAR\Big[\hat{Y}_{cv}\Big]=VAR[\overline{Y}](1-\rho^2)$, where $\rho$ is the correlation between $Y$ and $X$.  
+
+Given that $E\Big[X^{(t)}\Big]=E\Big[X^{(c)}\Big]$, then $\Delta_{cv}=\hat{Y}_{cv}^{(t)}-\hat{Y}_{cv}^{(c)}$ is an unbiased estimator of $\delta=E\Big[\Delta\Big]=E\Big[\overline{Y}^{(t)}-\overline{Y}^{(c)}\Big]$. The variance of this estimator is $VAR\Big[\Delta_{cv}\Big]=VAR\Big[\Delta\Big](1-\rho^2)$, where $\rho$ is the correlation between $Y$ and $X$. In order for the estimate to be unbiased, the same $\theta$ must be used for both control and treatment - it can be estimated on both groups pooled together. 
+
+# CUPAC (*Control Using Predictions As Covariates*)
+
+https://doordash.engineering/2020/06/08/improving-experimental-power-through-control-using-predictions-as-covariate-cupac/
+
+**CUPAC** is **CUPED**, where the control variable $X$ is a prediction $\hat{Y}$ of $Y$ produced by a predictive model trained on pre-experiment (i.e. pre-treatment) data.  
+
+```{r}
+run_1_experiment <- function( n_control_group,
+                              n_target_group,
+                              n_training_group,
+                              population_sim_method = c( 
+                                                         "multivariate_normal",
+                                                         "linear_model_with_interactions",
+                                                         "tree"        # not implemented yet
+                                                       ),
+                              effect_size
+                            ){
+
+   results_this_experiment <- c( true_difference = effect_size )
+  
+   # simulate populations --------------------------------------------------------------------------------
+   if( population_sim_method == "multivariate_normal" ){
+     
+       control_mu <- c( y  = 5,
+                        x1 = 2,
+                        x2 = -1,
+                        x3 = 0
+                      )
+       
+       target_mu <- c( y  = control_mu["y"] + effect_size,
+                       x1 = 2,
+                       x2 = -1,
+                       x3 = 0
+                     )
+       names(target_mu) <- c("y","x1","x2","x3")
+       
+       shared_sigma <- matrix( c(    # y     x1     x2     x3 
+                                      1  ,   0.2,   0.5,   0.3, # y 
+                                      0.2,   1  ,   0.7,   0.1, # x1 
+                                      0.5,   0.7,   1  ,   0.6, # x2 
+                                      0.3,   0.1,   0.6,   1     # x3 
+                                 ),
+                               byrow = TRUE,
+                               nrow = 4,
+                               ncol = 4
+                              )
+       colnames(shared_sigma) <- c("y","x1","x2","x3")
+       rownames(shared_sigma) <- colnames(shared_sigma)
+       
+       control_group <- 
+         MASS::mvrnorm( n     = n_control_group,
+                        mu    = control_mu,
+                        Sigma = shared_sigma
+                       ) %>% 
+         as_tibble()
+       
+       target_group <- 
+         MASS::mvrnorm( n     = n_target_group,
+                        mu    = target_mu,
+                        Sigma = shared_sigma
+                       ) %>% 
+         as_tibble()
+      
+       training_data <- 
+         MASS::mvrnorm( n     = n_training_group,
+                        mu    = control_mu,
+                        Sigma = shared_sigma
+                       ) %>% 
+         as_tibble()
+   } else if( population_sim_method == "linear_model_with_interactions" ){
+    
+      x1_effect <- sample(0:10, size=1) 
+      x2_effect <- sample(0:10, size=1)
+      x3_effect <- sample(0:10, size=1)
+      x1_x2_effect <- sample(0:10, size=1)
+      x1_x3_effect <- sample(0:10, size=1)
+      x2_x3_effect <- sample(0:10, size=1)
+      x1_x2_x3_effect <- sample(0:10, size=1)
+      
+      control_group <- tibble( x1 = runif( n=n_control_group, min=-5, max=5 ),
+                               x2 = runif( n=n_control_group, min=-5, max=5 ),
+                               x3 = runif( n=n_control_group, min=-5, max=5 )
+                             ) 
+      control_group$y <- 
+            x1_effect*control_group$x1 + 
+            x2_effect*control_group$x2 + 
+            x3_effect*control_group$x3 +
+            x1_x2_effect*control_group$x1*control_group$x2 +
+            x1_x3_effect*control_group$x1*control_group$x3 +
+            x2_x3_effect*control_group$x2*control_group$x3 +
+            x1_x2_x3_effect*control_group$x1*control_group$x2*control_group$x3 +
+            rnorm( nrow(control_group), mean=0, sd=1 )
+      control_group <- control_group %>% dplyr::select(y, x1, x2, x3)
+      target_group <- tibble( x1 = runif( n=n_target_group, min=-5, max=5 ),
+                               x2 = runif( n=n_target_group, min=-5, max=5 ),
+                               x3 = runif( n=n_target_group, min=-5, max=5 )
+                             ) 
+      target_group$y <- 
+            effect_size +
+            x1_effect*target_group$x1 + 
+            x2_effect*target_group$x2 + 
+            x3_effect*target_group$x3 +
+            x1_x2_effect*target_group$x1*target_group$x2 +
+            x1_x3_effect*target_group$x1*target_group$x3 +
+            x2_x3_effect*target_group$x2*target_group$x3 +
+            x1_x2_x3_effect*target_group$x1*target_group$x2*target_group$x3 +
+            rnorm( nrow(target_group), mean=0, sd=1 )  
+      target_group <- target_group %>% dplyr::select(y, x1, x2, x3)
+      training_data <- tibble( x1 = runif( n=n_training_group, min=-5, max=5 ),
+                               x2 = runif( n=n_training_group, min=-5, max=5 ),
+                               x3 = runif( n=n_training_group, min=-5, max=5 )
+                             ) 
+      training_data$y <- 
+            x1_effect*training_data$x1 + 
+            x2_effect*training_data$x2 + 
+            x3_effect*training_data$x3 +
+            x1_x2_effect*training_data$x1*training_data$x2 +
+            x1_x3_effect*training_data$x1*training_data$x3 +
+            x2_x3_effect*training_data$x2*training_data$x3 +
+            x1_x2_x3_effect*training_data$x1*training_data$x2*training_data$x3 +
+            rnorm( nrow(training_data), mean=0, sd=1 )     
+      training_data <- training_data %>% dplyr::select(y, x1, x2, x3) 
+  }
+   
+  # calculate estimators of E[Y|target] - E[Y|control] --------------------------------------------------
+   
+  # calculate simple difference mean(target y) - mean(control y):
+  results_this_experiment["simple_difference"] <- mean(target_group$y) - mean(control_group$y)
+   
+  # using control variate X2, with unknown distribution (i.e. must estimate COV[Y,X2] and VAR[X2]): 
+  pooled_y <- c( control_group$y, target_group$y ) 
+  pooled_x2 <- c( control_group$x2, target_group$x2 ) 
+  theta <- cov( pooled_y, pooled_x2 ) /
+           var( pooled_x2 )
+  results_this_experiment["cv_x2_UNknown_dbn"] <- 
+             mean(target_group$y) -
+             mean(control_group$y) -    
+             ( theta * mean(target_group$x2) ) + 
+             ( theta * mean(control_group$x2) ) 
+  
+  # create matched control group:
+  # (sample with replacement)
+  combined_target_control <- 
+    bind_rows( target_group %>% dplyr::select(x1, x2, x3) %>% dplyr::mutate(test_control="test")
+               ,
+               control_group %>% dplyr::select(x1, x2, x3) %>% dplyr::mutate(test_control="control")  
+            )
+  distmat <- dist(      x = combined_target_control[, c("x1","x2","x3")],
+                   method = "euclidean"
+                 ) %>% 
+              as.matrix()
+  target_indices <- which(combined_target_control$test_control=="test")
+  control_indices <- which(combined_target_control$test_control=="control")
+  distmat <- distmat[ target_indices, control_indices ] # rows as only target, columns as only control 
+  closest_control_indices <- apply(      X = distmat,
+                                    MARGIN = 1,                       # apply function to each row
+                                       FUN = function(row){ which.min(row) }
+                                    )
+  matched_control_group <- control_group[closest_control_indices, ]
+  results_this_experiment["matched_control"] <- mean(target_group$y) - mean(matched_control_group$y)
+  
+  # CUPAC linear model
+  training_data_for_model <- data.frame( y  = training_data$y,
+                                         x1 = training_data$x1,
+                                         x2 = training_data$x2,
+                                         x3 = training_data$x3
+                                       )
+  fit_lm <- lm( y ~ x1 + x2 + x3 + .*., data=training_data_for_model  )      # including all degree-2 interactions too
+  yhat_control <- predict(  object = fit_lm,
+                           newdata = control_group
+                         )
+  yhat_target <- predict(  object = fit_lm,
+                          newdata = target_group
+                        )
+  pooled_y <- c( control_group$y, target_group$y ) 
+  pooled_yhat <- c( yhat_control, yhat_target ) 
+  # estimate theta:
+  theta <- cov( pooled_y, pooled_yhat ) /
+           var( pooled_yhat )
+  results_this_experiment["cupac_lm"] <- 
+             mean(target_group$y) -
+             mean(control_group$y) -    
+             ( theta * mean(yhat_target) ) + 
+             ( theta * mean(yhat_control) ) 
+  
+  # stratify y based on quantiles of X:
+  combined_target_control <- 
+      bind_rows( target_group %>% dplyr::mutate(test_control="test")
+                 ,
+                 control_group %>% dplyr::mutate(test_control="control")  
+              ) %>% 
+      mutate( x1_median = median(x1),
+              x2_median = median(x2),
+              x3_median = median(x3)
+            ) %>% 
+      mutate( stratum = paste0( as.numeric(x1>x1_median),
+                                as.numeric(x2>x2_median),
+                                as.numeric(x3>x3_median)
+                              )
+            ) 
+  within_strata_calc <- 
+    combined_target_control %>% 
+        group_by( stratum ) %>% 
+        summarise( n_test_in_stratum = sum( if_else(test_control=="test",1,0) ),
+                   n_control_in_stratum = sum( if_else(test_control=="control",1,0) ),
+                   sum_test_y_in_stratum = sum( if_else(test_control=="test",y,0) ),
+                   sum_control_y_in_stratum = sum( if_else(test_control=="control",y,0) ),
+                   .groups = "drop"     # drop grouping after summarise
+                 ) %>% 
+        filter( n_test_in_stratum > 0 & n_control_in_stratum > 0 ) %>%     # discard strata without both test & control
+        mutate( # estimate treatment effect on y in each stratum:
+                y_diff_est_in_stratum = sum_test_y_in_stratum/n_test_in_stratum - 
+                                        sum_control_y_in_stratum/n_control_in_stratum
+              ) 
+  within_strata_calc$stratum_weight <- 
+    ( within_strata_calc$n_test_in_stratum + within_strata_calc$n_control_in_stratum ) /
+    ( sum(within_strata_calc$n_test_in_stratum) + sum(within_strata_calc$n_control_in_stratum) )
+  
+  results_this_experiment["y_stratified"] <- sum( within_strata_calc$y_diff_est_in_stratum * within_strata_calc$stratum_weight )
+  
+  # propensity score matching
+  combined_target_control <- 
+      bind_rows( target_group %>% dplyr::mutate(test_control="test")
+                 ,
+                 control_group %>% dplyr::mutate(test_control="control")  
+              ) 
+  propensity_model_logreg <- glm( formula = test_control ~ x1+x2+x3,
+                                     data = combined_target_control %>% mutate( test_control = if_else(test_control=="test",1,0) ),
+                                   family = binomial(link="logit") 
+                                )
+  target_group_propensity_scores <- predict(  object = propensity_model_logreg,
+                                             newdata = target_group,
+                                                type = "link"                # return scores on the link scale 
+                                    )
+  holdout_group_propensity_scores <- predict(  object = propensity_model_logreg,
+                                              newdata = control_group,
+                                                 type = "link"                # return scores on the link scale 
+                                    )
+  y_diff_vec <- rep( as.numeric(NA), n_target_group )
+  for( target_customer_i in 1:n_target_group ){
+      this_target_customer_propensity_score <- target_group_propensity_scores[ target_customer_i ]
+      this_target_customer_y <- target_group$y[target_customer_i]
+      closest_holdout_propensity_score <- which.min( abs(this_target_customer_propensity_score-holdout_group_propensity_scores) )
+      propensity_matched_control_customer_y <- control_group$y[closest_holdout_propensity_score] 
+      y_diff_vec[target_customer_i] <- this_target_customer_y - propensity_matched_control_customer_y     
+  }
+  results_this_experiment["y_matched_propensity_score"] <- mean(y_diff_vec)
+  
+  # reduce variance with linear regression model:
+  combined_target_control <- 
+    bind_rows( target_group %>% dplyr::mutate(test_control="test")
+               ,
+               control_group %>% dplyr::mutate(test_control="control")  
+             ) %>% 
+    mutate( test_control = factor(test_control, levels=c("control","test")) )
+  fit_lm <- lm( formula = y ~ x1 + x2 + x3 + test_control,
+                   data = combined_target_control    
+              )
+  results_this_experiment["reduce_variance_by_lm"] <- coef(fit_lm)["test_controltest"] 
+  
+  # repeated CUPED (one covariate at a time):
+  # (note: could only include covariates X passing a chosen correlation threshold with Y)
+  for( X_j in 1:3 ){
+    
+    
+  }
+  
+  return( results_this_experiment )                   
+}
+```
+
+run multiple experiments, and look at the distribution of the results:
+
+```{r}
+
+# user inputs ------------------------------------------
+n_experiments_to_run <- 1000
+n_control_group <- 50
+n_target_group <- 200
+n_training_group <- 200
+population_simulation_method <- "multivariate_normal" 
+true_effect_size <- 2
+# ------------------------------------------------------
+
+store_experiment_results_matrix <- matrix( 
+                                           rep( as.numeric(NA), 8 * n_experiments_to_run ),
+                                           ncol = 8
+                                        )
+colnames( store_experiment_results_matrix ) <- 
+  c( "true_difference", 
+     "simple_difference",
+     "cv_x2_UNknown_dbn",
+     "matched_control",
+     "cupac_lm",
+     "y_stratified",
+     "y_matched_propensity_score",
+     "reduce_variance_by_lm"
+    )
+rownames( store_experiment_results_matrix ) <- 
+  paste( "experiment", 1:n_experiments_to_run ) 
+
+for( i in 1:n_experiments_to_run ){
+  
+  store_experiment_results_matrix[i,] <-  
+        run_1_experiment(       
+                                n_control_group = n_control_group,
+                                 n_target_group = n_target_group,
+                               n_training_group = n_training_group,
+                          population_sim_method = population_simulation_method,
+                                    effect_size = true_effect_size
+                        )  
+}
+
+head(store_experiment_results_matrix)
+```
+
+```{r fig.width=12, fig.height=5}
+
+data_for_plot <- 
+  tibble(            estimator = "simple_difference",
+          estimated_difference = store_experiment_results_matrix[,"simple_difference"]  
+        )
+for( col_j in 3:ncol(store_experiment_results_matrix) ){
+  
+  estimator_name <- colnames(store_experiment_results_matrix)[col_j]
+  data_for_plot <- bind_rows(
+                              data_for_plot
+                              ,
+                              tibble(            estimator = estimator_name,
+                                      estimated_difference = store_experiment_results_matrix[,estimator_name]
+                                     )
+                   )
+}
+ 
+ggplot( data = data_for_plot,
+        aes(  
+                    x = estimated_difference,
+             group    = estimator,
+             fill     = estimator,
+             colour   = estimator,
+             linetype = estimator
+           )  
+      ) + 
+  geom_density( alpha=0.1 ) +
+  labs( title = "Multivariate Normal y" )
+  
+```
+
+do the same thing with a different y=1 simulation style:
+
+```{r}
+# user inputs ------------------------------------------
+n_experiments_to_run <- 1000
+n_control_group <- 50
+n_target_group <- 200
+n_training_group <- 200
+population_simulation_method <- "linear_model_with_interactions" 
+true_effect_size <- 2
+# ------------------------------------------------------
+
+store_experiment_results_matrix <- matrix( 
+                                           rep( as.numeric(NA), 8 * n_experiments_to_run ),
+                                           ncol = 8
+                                        )
+colnames( store_experiment_results_matrix ) <- 
+  c( "true_difference", 
+     "simple_difference",
+     "cv_x2_UNknown_dbn",
+     "matched_control",
+     "cupac_lm",
+     "y_stratified",
+     "y_matched_propensity_score",
+     "reduce_variance_by_lm"
+    )
+rownames( store_experiment_results_matrix ) <- 
+  paste( "experiment", 1:n_experiments_to_run ) 
+
+for( i in 1:n_experiments_to_run ){
+  
+  store_experiment_results_matrix[i,] <-  
+        run_1_experiment(       
+                                n_control_group = n_control_group,
+                                 n_target_group = n_target_group,
+                               n_training_group = n_training_group,
+                          population_sim_method = population_simulation_method,
+                                    effect_size = true_effect_size
+                        )  
+}
+
+head(store_experiment_results_matrix)
+
+```
+
+```{r fig.width=10, fig.height=5}
+data_for_plot <- 
+  tibble(            estimator = "simple_difference",
+          estimated_difference = store_experiment_results_matrix[,"simple_difference"]  
+        )
+for( col_j in 3:ncol(store_experiment_results_matrix) ){
+  
+  estimator_name <- colnames(store_experiment_results_matrix)[col_j]
+  data_for_plot <- bind_rows(
+                              data_for_plot
+                              ,
+                              tibble(            estimator = estimator_name,
+                                      estimated_difference = store_experiment_results_matrix[,estimator_name]
+                                     )
+                   )
+}
+ 
+ggplot( data = data_for_plot,
+        aes(        x = estimated_difference,
+               group  = estimator,
+               fill   = estimator,
+               colour = estimator,
+             linetype = estimator
+           )  
+      ) + 
+  geom_density( alpha=0.1 ) +
+  labs( title = "y Simulated by Linear Model" )
+```
+
+

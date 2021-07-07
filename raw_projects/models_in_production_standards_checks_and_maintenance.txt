@@ -1,0 +1,6 @@
+
+
+
+* Every run, run automatic checks that input data is available for the dates specified (e.g. "order-based" features mean that the "orders" table must be up to date) 
+
+* 

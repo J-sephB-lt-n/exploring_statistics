@@ -1,0 +1,17 @@
+---
+title: "Model Evaluation"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+
+# Joint Distribution of Fitted Values vs. True Values
+
+For regression, a **scatterplot of fitted values vs. observed values**.
+
+For classification, a **confusion matrix** and **ROC curve**.
+

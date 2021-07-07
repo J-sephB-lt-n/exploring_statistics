@@ -1,0 +1,128 @@
+---
+title: "Chi-Squared Tests Theory"
+author: "Joseph Bolton"
+date: "03/05/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Multinomial Distribution 
+The multinomial distribution is a discrete distribution that is an extension of the binomial distribution. 
+It can be considered to model [the distribution of counts of each face arising from n throws of a k-sided die](https://en.wikipedia.org/wiki/Multinomial_distribution), or *the distribution of outcomes observed over multiple independent trials where the probability of each outcome is the same in each trial*. 
+
+The probability mass function of the multinomial distribution is:
+
+$$\begin{array}{lcl}
+p(\mathbf{x}) 
+&=&
+Pr\Big[X_1=x_1, X_2=x_2, ..., X_k=x_k\Big] \\
+\\
+k &=& \text{number of possible discrete outcomes (categories)} \\
+X_j &=& \text{number of trials which showed outcome } j \\
+n &=& \text{total number of trials} \\
+\displaystyle\sum_{j=1}^k x_j &=& n \\
+\end{array}$$
+
+
+# Chi-Squared Distribution
+
+The probability density function of a $\chi^2$ distribution with degrees of freedom $k$ is: 
+
+$$\begin{array}{lcl} 
+f(x) 
+&=&
+\displaystyle\frac{x^{\frac{k}{2}-1}e^{-\frac{x}{2}}}{2^{\frac{k}{2}}\Gamma(\frac{k}{2})}
+\end{array}$$
+
+The following is a very useful result:
+
+$$\begin{array}{lcl} 
+\displaystyle\sum_{i=1}^k Z_i^2 
+&\sim&
+\chi^2_k \\
+Z_i &\overset{i.i.d.}{\sim}& N(0,1)\\
+\end{array}$$
+
+Here is another useful result:
+
+If we have $n$ draws from a multinomial distribution $X\sim\text{multinomial}(p_1,p_2,...,p_k)$ distribution, for example our observed data might look like this:
+
+$$\begin{array}{lcl}
+x_1 &=& (0,1,0,0) \\
+x_2 &=& (1,0,0,0) \\
+x_3 &=& (0,0,0,1) \\
+\space &.& \space \\
+\space &.& \space \\
+x_n &=& (0,0,1,0) \\
+\end{array}$$
+
+then the quantity 
+
+$$\begin{array}{lcl} 
+X^2
+&=& 
+\displaystyle\sum_{j=1}^k \frac{(N_j-n \space p_j)^2}{n \space p_j} \\
+N_j &=& \text{observed count of trials with outcome } j \\
+p_j &=& Pr\Big[X_j=1] \\
+    &=& \text{probability that a single random draw of } X \text{ will show outcome } j \\
+n p_j &=& \text{expected count of trials with outcome } j \text{ under distribution} \hspace{3mm} X\sim\text{multinomial}(p_1,p_2,...,p_k) \\
+\end{array}$$
+
+..converges in distribution to a chi-squared distribution with k-1 degrees of freedom. This means that the larger the value of $n$ (the size of our sample), the closer this distribution will resemble a $\chi^2_{k-1}$ distribution.
+
+```{r}
+probvec <- c(0.05, 0.4, 0.15, 0.25, 0.15)
+
+par( mfrow = c(2,2) )
+
+for( n in c(30,50,100,1000) ){
+  gen_samples <- 
+      rmultinom(
+          n = 1e5L,
+          size = n,
+          prob = probvec
+      )
+  
+  ftn_2apply2_cols <- 
+    function( colvec ){
+        sum( 
+              (colvec - n*probvec)^2 / (n*probvec)
+        )
+    }
+  Xsquared_each_sample <-
+    apply( gen_samples,
+           MARGIN = 2,
+           FUN = ftn_2apply2_cols 
+          )
+  
+  hist( 
+        Xsquared_each_sample,
+        xlab = bquote(X**2),
+        main = paste0("n = ", n),
+        freq = FALSE,
+        breaks = 100
+      )
+  curve( dchisq(x, df=length(probvec)-1), add=TRUE, col="red" )
+  
+}
+
+
+```
+
+# Chi-Squared Goodness of Fit Test for a Multinomial Distribution
+This test is for assessing whether observed data matches a proposed multinomial distribution. The same test can be applied to see whether observed data fit a chosen *continuous* distribution by binning the continuous outcome. 
+
+If $X_1,X_2,...,X_n$ are $n$ independent samples from a multinomial distribution with $k$ possible categories, then the quantity..
+
+
+ 
+
+
+
+[Seven proofs of the Pearson Chi-squared independence test and its graphical interpretation](https://arxiv.org/pdf/1808.09171.pdf)
+
+
+

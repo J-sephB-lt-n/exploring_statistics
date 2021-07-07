@@ -1,0 +1,92 @@
+---
+title: "Shapley Values, SHAP and Model Interpretability"
+output: html_document
+---
+
+```{r setup, results='hide'}
+# [R]
+knitr::opts_chunk$set(echo = TRUE)
+library(reticulate)
+reticulate::use_python("C:/Program Files (x86)/Microsoft Visual Studio/Shared/Python37_64/")
+```
+
+```{python results='hide'}
+# [python]
+# import packages:
+
+import pandas as pd
+```
+
+```{r results='hide'}
+# [R]
+# import R libraries:
+library(tidyverse)
+library(kableExtra)
+```
+
+# Shapley Values
+
+[Shapley values](https://en.wikipedia.org/wiki/Shapley_value), a concept from [game theory](https://en.wikipedia.org/wiki/Game_theory), are a particular method of 'fairly' apportioning (sharing out) profit between multiple players collaborating toward a shared goal within the same game.  
+
+Consider the following 2 games (*Game 1* and *Game 2*), in each of which 4 players $\{A,B,C,D\}$ can combine (pool) their individual powers in order to generate a total reward.  
+
+```{r echo=FALSE}
+tibble( 
+        player = c("A","B","C","D"),
+         power = c(5,2,3,1),                    # game 1
+         `power ` = c(5,3,2,1),
+      ) %>% 
+  kbl() %>% 
+  kable_classic() %>% 
+  add_header_above( c(" "=1, "Game 1"=1, "Game 2"=1 ) )
+```
+
+```{r echo=FALSE}
+tibble( 
+        required_power = c(5,7,8,10,11),
+        reward = c(50, 100, 200, 400, 800),       # game 1
+        `reward ` = c(100, 150, 300, 600, 1000)                           # game 2
+      ) %>% 
+  kbl() %>% 
+  kable_classic() %>% 
+  add_header_above( c(" "=1, "Game 1"=1, "Game 2"=1 ) )
+```
+
+For example, in *Game 1*, all four players can combine their powers ($5+2+3+1=11$) in order to get generate a reward of 800. 
+
+Suppose that all of the players collaborated in both games, generating reward of $800$ in *Game 1* and $1000$ in *Game 2*. 
+
+What, then, is a fair method of sharing out the rewards? Using [Shapley Values](https://en.wikipedia.org/wiki/Shapley_value) is one possible way. 
+
+The notation of the [Shapley Value](https://en.wikipedia.org/wiki/Shapley_value) function is as follows:
+
+$$\begin{array}{lcl}
+\phi_i(v) &=& \text{reward earned by (Shapley Value of) player } i \text{ in a game with reward/value function } v  \\
+v:2^N\rightarrow{}\mathbb{R}         &\space& v(S) \text{ is a function assigning a value/reward to any given coalition (group) of players } S
+\end{array}$$
+
+For example, if $v$ is the reward function in game 1 then $v\Big(\{A,B,D\}\Big)=8$ tells us that only players $A$, $B$ and $D$ played *Game 1*, then they would generate a total reward of $8$ to share between them. 
+
+Assuming that all players in the game collaborate (to generate the largest possible reward), then using a [Shapley Values](https://en.wikipedia.org/wiki/Shapley_value) function $\phi_i(v)$ to divide the total rewards amongst the players ensures that the following *fairness axioms* are satisfied:
+
+1. **Efficiency**: $\quad \displaystyle \sum_{i\in N} \phi_i(v) \quad=\quad v(N) \hspace{20mm} (N=\{A,B,C,D\} \text{ is the set of all players})$ 
+
+$\hspace{15mm}$ i.e. the sum of the [Shapley values](https://en.wikipedia.org/wiki/Shapley_value) (reward portion given to each player) is equal to the total rewards to be shared
+
+2. **Symmetry**: $\quad \text{if } v(S\cup\{i\})=v(S\cup\{j\}) \text{ for every subset } S \text{ of } N \text{ containing neither player } i \text{ nor player } j \text{, then } \phi_i(v)=\phi_j(v)$
+
+$\hspace{15mm}$ i.e. any 2 players contributing the same value to every possible coalition (combination of players) are given the same share of the reward 
+
+3. **Null/Dummy Player**: $\quad \text{if } v(S\cup\{i\})=v(S) $ for all coalitions (combinations of players) $S$ that do not contain player $i$ then $ \phi_i(v)=0$
+
+$\hspace{15mm}$ i.e. a player contributing no value to any possible grouping of players is given no share of the reward
+
+4. **Linearity**: $\quad \phi_i(v+w)=\phi_i(v)+\phi_i(w) \quad$ and $\quad \phi_i(\text{a}v)=\text{a}\phi_i(v)$ for a scalar $\text{a}$.
+
+$\hspace{15mm}$ i.e. the input/reward structures of 2 different games with the same players can be combined into a single game, 
+
+$\hspace{15mm}$ and the [Shapley value](https://en.wikipedia.org/wiki/Shapley_value) calculation for the combined game gives the same result as summing the [Shapley values](https://en.wikipedia.org/wiki/Shapley_value) of the separate games. 
+
+In fact, the [Shapley value](https://en.wikipedia.org/wiki/Shapley_value) sharing rule is the only sharing rule satisfying all four of these axioms. 
+
+The [Shapley value](https://en.wikipedia.org/wiki/Shapley_value) calculation itself is very intuitive: the share of total reward to be given to a particular player is the average marginal reward contributed by that player, averaged over all possible coalitions (all possible players combinations/all possible unique teams of players). The average is in fact a weighted average, 

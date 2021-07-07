@@ -1,0 +1,28 @@
+---
+title: "Q-Learning Theory"
+author: "Joseph Bolton"
+output: html_notebook
+---
+
+The **Q-Learning** algorithm keeps running estimates $Q(S,A)$ of the relative value of every possible action $A$ for ever state $S$. This value estimate takes into account both the reward/penalty incurred immediately from taking the action, but also the value of the next state that the action takes us to. $Q(S,A)$ therefore estimates the total rewards we'd get if we were in state $S$, we took action $A$, and then acted optimally thereafter. Future rewards are discounted using a discount rate of $\gamma$. For example, a reward of 10 that we'll attain in 3 steps time, discounted using $\gamma=0.9$ is worth the same as a reward of $7.29 = 10 \cdot 0.9^3$ right now.    
+
+Explicitly, the **Q-Learning** algorithm is as follows:
+
+$$\begin{array}{lcl} 
+\text{Initialise } Q(s,a) \quad \forall s\in \mathcal{S}, a \in \mathcal{A}(s) \text{ arbitrarily} \quad
+\text{and } \quad Q(\text{terminal-state}, \space\cdot)=0 \\
+\text{Repeat (for each episode):} \\
+\hspace{10mm} \text{choose an initial state } S \\
+\hspace{10mm} \text{Repeat (for each step of the episode):} \\ 
+\hspace{20mm} \text{choose an action } A \text{ to take, using a policy based on } Q \text{ (e.g. } \epsilon\text{-greedy or } \epsilon\text{-soft)} \\
+\hspace{20mm} \text{take action } A \text{, observing the resulting reward } R \text{ and next state } S' \\
+\hspace{20mm} \text{update estimate of Q(S,A): } \quad Q(S,A) \leftarrow{} Q(S,A) + \alpha\Big[R + \gamma \space \underset{\text{a}}{\text{max}} \space Q(S',\text{a}) - Q(S,A) \Big]
+\end{array}$$
+
+$$\begin{array}{lcl} 
+\mathcal{S} &=& ? \\
+\mathcal{A} &=& ? \\
+Q(s,a) &=& \text{estimated expected total rewards we'd earn if we were in state } s \text{ now, we took action } a \text{, then we acted optimally thereafter} \\
+\end{array}$$
+
+

@@ -1,0 +1,1191 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reticulate)
+reticulate::use_python("C:/Program Files (x86)/Microsoft Visual Studio/Shared/Python37_64/")
+library(tidyverse)
+library(knitr)
+```
+
+```{python}
+# [python]
+# import packages:
+
+import pandas as pd
+import random
+from collections import deque  
+import numpy as np
+import re
+
+from sklearn.preprocessing import OneHotEncoder     
+
+import cupy as cp
+import cupyx
+```
+
+```{python}
+n_customers = 1000
+n_products = 80
+```
+
+```{python}
+class product:
+  def __init__(self, product_id):
+    self.product_id = product_id
+    self.category = random.sample( ['clothing','tech','kitchen','bedding','appliances','furniture','shoes'], k=1 )[0]
+    self.price = random.sample( range(50,2000,50), k=1 )[0]
+    # this product can only be bought in these seasons:
+    self.seasons_sold = random.sample( ['winter','spring','summer','autumn'], k = random.randint(2,4) )
+    # only customers in this age range will like this product:
+    age_min = random.randint(18,80)
+    age_max = age_min + random.randint( 5, 30 )
+    age_max = min( 100, age_max )
+    if random.uniform(0,1) > 0.5:  # with 50% chance, bottom of age range is 18 
+      age_min = 18
+    if random.uniform(0,1) > 0.5:  # with 50% chance, top of age range is 100
+      age_max = 100
+    self.age_range = (age_min, age_max)
+    # only customers with this gender will buy this product (can be both):
+    self.gender_target = random.sample( ['male','female'], k=random.randint(1,2) )
+    
+test = product(420)
+test.__dict__
+
+```
+
+```{python}
+product_list = {}
+for i in range(1,n_products+1):
+  product_list[f'product_{i}'] = product(product_id=i)
+  
+product_list['product_1'].__dict__
+print('\n')
+product_list['product_2'].__dict__
+print('\n')
+product_list['product_3'].__dict__
+
+```
+
+```{python}
+# define current enviroment:
+CURRENT_SEASON = random.sample( ['winter','spring','summer','autumn'], k=1 )[0]
+CURRENT_SEASON
+
+```
+
+```{python}
+class customer:
+  def __init__(self, customer_id):
+    self.customer_id = customer_id
+    
+    # select an age for this customer:
+    age_range = random.sample( ( 
+                 [ (19,29) for i in range(25) ] +   # 25% chance 
+                 [ (30,39) for i in range(30) ] +   # 30% chance
+                 [ (40,49) for i in range(20) ] +   # 20% chance
+                 [ (50,59) for i in range(12) ] +   # 12% chance  
+                 [ (60,69) for i in range(8) ] +    #  8 % chance
+                 [ (70,100) for i in range(5) ]     #  5 % chance 
+               ),
+               k = 1
+            )[0]
+    self.age = random.randint( age_range[0], age_range[1] )
+
+    # customer will only purchase from these categories:
+    self.categories_interested_in = random.sample( ['clothing','tech','kitchen','bedding','appliances','furniture','shoes'],
+                                                   k = random.randint(1,7)
+                                                 )
+    # record of customer's past 3 purchases (product IDs of last 3 purchases):
+    self.recent_purchase_history = deque([], maxlen=3)
+    # categories of past 3 products purchased:
+    self.recent_category_history = deque([], maxlen=3)
+    # record of historic spend (spend on last 3 purchases):
+    self.recent_spend_history = deque([], maxlen=3)
+    # full history of products shown:
+    self.full_products_viewed_history = []
+    # full history of products bought:
+    # (list same length as self.full_products_viewed_history, containing product ID if bought, otherwise NaN)
+    self.full_products_bought_history = []
+    # store the reason that a customer didn't buy each product that they didn't buy
+    # (matches entries in self.full_products_viewed_history, with empty entries where a viewed product was bought)
+    self.product_rejection_reasons = []
+    # customer will not buy a product cheaper than this:
+    self.price_limit_min = random.sample( range(0,500,50), k=1 )[0]
+    # customer will not buy a product more expensive than this:
+    self.price_limit_max = self.price_limit_min + random.sample( range(500, 2000, 50), k=1 )[0]
+    # gender of customer:
+    self.gender = random.sample( ['male']*4 +['female']*6, k=1 )[0]        # 60% chance of being female
+    # season history: (history of season product was shown to customer in):
+    self.season_shown_history = []
+
+
+  def show_customer_product(self, product_id):
+    product_shown = product_list[f'product_{product_id}']
+
+    # record that they've seen it:
+    self.full_products_viewed_history.append(product_id)
+    # record which season they were shown the product in
+    self.season_shown_history.append(CURRENT_SEASON)
+
+    # decide if customer buys product or not, and store this information for this customer:
+    bought_product = 'yes'
+    rejection_reasons_this_prod = []
+    if CURRENT_SEASON not in product_shown.seasons_sold:
+      rejection_reasons_this_prod.append( f'product not sold in current season ({CURRENT_SEASON})' )
+      bought_product = 'no'
+    if product_shown.category not in self.categories_interested_in:
+      rejection_reasons_this_prod.append( f'customer not interested in category [{product_shown.category}]' )
+      bought_product = 'no'
+    if product_shown.price > self.price_limit_max:
+      rejection_reasons_this_prod.append( f'product is too expensive for this customer' )
+      bought_product = 'no'
+    if product_shown.price < self.price_limit_min:
+      rejection_reasons_this_prod.append( f'product is too cheap for this customer' )
+      bought_product = 'no'
+    if product_id in self.full_products_bought_history:
+      rejection_reasons_this_prod.append( f'customer will not buy the same product twice' )
+      bought_product = 'no'
+    if self.age < product_shown.age_range[0] or self.age > product_shown.age_range[1]:
+      rejection_reasons_this_prod.append( f'product does not suit age of customer' )
+      bought_product = 'no'
+    if self.gender not in product_shown.gender_target:
+      rejection_reasons_this_prod.append( f'product does not suit gender of customer' )
+      bought_product = 'no'
+
+    # record if the customer bought the product or not, and possibly details about the product:
+    if bought_product == 'no':
+      self.full_products_bought_history.append(None)
+    else:
+      self.full_products_bought_history.append(product_id)
+      self.recent_purchase_history.append(product_id)
+      self.recent_spend_history.append(product_shown.price)
+      self.recent_category_history.append(product_shown.category)
+
+    # add rejection reasons for this product to customer's full history of product rejection reasons:
+    self.product_rejection_reasons.append( rejection_reasons_this_prod )
+    
+```
+
+Let's create 1000 customers:
+```{python}
+customer_list = {}
+for i in range(1,n_customers+1):
+  customer_list[f'customer_{i}'] = customer(i)
+```
+
+Customer 1 has the following attributes/preferences:
+```{python}
+for i in range(len(customer_list['customer_1'].__dict__)):
+  print( list(customer_list['customer_1'].__dict__.keys())[i] + ':  ' + str( list(customer_list['customer_1'].__dict__.values())[i]) )
+```
+
+Let's make the current season **spring**:
+```{python}
+CURRENT_SEASON = 'spring'
+print( f'current season is {CURRENT_SEASON}' )
+```
+Here are the attributes of product 1:
+```{python}
+for i in range(len(product_list['product_1'].__dict__)):
+  print( list(product_list['product_1'].__dict__.keys())[i] + ':  ' + str( list(product_list['product_1'].__dict__.values())[i]) )
+```
+
+Let's try showing product 1 to customer 1 and see if they buy it:
+```{python}
+customer_list['customer_1'].show_customer_product(1)
+
+if customer_list['customer_1'].full_products_bought_history[0] is None:
+  print('customer 1 does not buy product 1')
+  print('here are the reason(s):')
+  print( '\n'.join( customer_list['customer_1'].product_rejection_reasons[0] ) )
+else: 
+  print( 'customer 1 buys product 1!' )
+  print( 'here is their updated attributes:' )
+  for i in range(len(customer_list['customer_1'].__dict__)):
+    print( list(customer_list['customer_1'].__dict__.keys())[i] + ':  ' + str( list(customer_list['customer_1'].__dict__.values())[i]) )
+```
+Let's trying showing them products 2-20 and see if they buy any of them:
+
+```{python}
+for product_i in range(2,21):
+  print( f'attributes of product {product_i} are:' )
+  for j in range( len(product_list[f'product_{product_i}'].__dict__ ) ):
+    print( list(product_list[f'product_{product_i}'].__dict__.keys())[j] + ':  ' + str( list(product_list[f'product_{product_i}'].__dict__.values())[j]) )
+  
+  print('\n')
+  print( f'show customer 1 product {product_i}:' )
+  customer_list['customer_1'].show_customer_product( product_i )
+  
+  if customer_list['customer_1'].full_products_bought_history[ len(customer_list['customer_1'].full_products_bought_history)-1] is None:
+    print( f'customer 1 does not buy product {product_i}' )
+    print('here are the reason(s):')
+    print( '\n'.join( customer_list['customer_1'].product_rejection_reasons[ len(customer_list['customer_1'].product_rejection_reasons)-1 ] ) )
+  else: 
+    print( f'customer 1 buys product {product_i}!' )
+    print( 'here are customer 1s updated attributes:' )
+    for i in range(len(customer_list['customer_1'].__dict__)):
+      print( list(customer_list['customer_1'].__dict__.keys())[i] + ':  ' + str( list(customer_list['customer_1'].__dict__.values())[i]) )
+
+  print('\n')
+  
+```
+
+Here are the full attributes/history of customer 1 after showing them the first 20 products:
+
+```{python}
+for i in range(len(customer_list['customer_1'].__dict__)):
+  print( list(customer_list['customer_1'].__dict__.keys())[i] + ':  ' + str( list(customer_list['customer_1'].__dict__.values())[i]) )
+```
+
+# Creating a training dataset
+Now, let's randomly show 20,000 products to our 1,000 customers (choosing from our pool of 80 unique products) and store the customer responses in a dataframe:
+
+```{python}
+# python
+
+for i in range(20_000):
+  # choose a random season: 
+  CURRENT_SEASON = random.sample( ['winter','spring','summer','autumn'], k=1 )[0]
+  # choose a random customer:
+  random_customer = random.randint(1,n_customers)
+  # choose a random product
+  random_product = random.randint(1,n_products)
+
+  customer_list[f'customer_{random_customer}'].show_customer_product(random_product)
+```
+
+```{python}
+# python
+
+traindat_entries = []
+
+for customer_i in range(1,n_customers+1):
+    
+    customer_record = customer_list[f'customer_{customer_i}']
+    
+    traindat_entries.append( 
+      pd.DataFrame(
+                   { 
+      'customer_id':customer_i,             
+      'y_bought':[ 1 if x is not None else 0 for x in customer_record.full_products_bought_history ],
+      'product_id_shown':customer_record.full_products_viewed_history,
+      'current_season':customer_record.season_shown_history,
+      'customer_gender':customer_record.gender,
+      'customer_age':customer_record.age,
+      'product_category':[ product_list[f'product_{x}'].category for x in customer_record.full_products_viewed_history ],
+      'product_price':[ product_list[f'product_{x}'].price for x in customer_record.full_products_viewed_history ]
+                   }
+                  ) 
+)
+
+pd.set_option('display.max_columns', None)  
+pd.set_option('display.max_rows', None)  
+traindat = pd.concat( traindat_entries )
+```
+
+
+# Augment training data with calculated features
+
+create some calculated features from the purchase data:
+
+Note that all feature calculations are cumulative, at each time point looking only backward in order to create features. The model must not be allowed to see into the future, it must learn to make decisions based on past observations of customer behaviour. 
+
+```{python}
+# python
+
+# keep a history of which product categories the customer has been shown:
+for product_category in ['clothing','tech','kitchen','bedding','appliances','furniture','shoes']:
+  traindat[f'shown_{product_category}_before'] = ( traindat
+                                                    .groupby('customer_id')
+                                                    .apply( lambda x: np.cumsum( 
+                                                                                 (x['product_category'].shift(1)==product_category)
+                                                                               ) > 0
+                                                          )
+                                                    .values
+                                                    .astype(int)
+                                                  )
+
+# keep a history of which product categories the customer has bought:
+for product_category in ['clothing','tech','kitchen','bedding','appliances','furniture','shoes']:
+  traindat[f'bought_{product_category}_before'] = ( traindat
+                                                    .groupby('customer_id')
+                                                    .apply( lambda x: np.cumsum( 
+                                                                                 (x['product_category'].shift(1)==product_category) & 
+                                                                                 (x['y_bought'].shift(1)==1)
+                                                                               ) > 0
+                                                          )
+                                                    .values
+                                                    .astype(int)
+                                                  )
+                                                  
+```
+
+record (cumulative) max spend for each customer:
+
+```{python}
+# python 
+
+# record the most that each customer has ever spent:
+traindat['TEMP_COL_money_spent'] = traindat['product_price']*traindat['y_bought']   # contains product price only if the product was bought
+# per customer lagged version of 'TEMP_COL_money_spent' column:
+traindat['historic_max_spend'] = traindat.groupby('customer_id').TEMP_COL_money_spent.shift(1).fillna(0).astype(int)  
+# calculate cumulative maximum spend:
+traindat['historic_max_spend'] = traindat.groupby('customer_id').historic_max_spend.cummax()
+# drop the temporary calculation column:
+traindat = traindat.drop( columns=['TEMP_COL_money_spent'], inplace=False )
+```
+
+record age-band of each customer:
+
+```{python}
+# python
+
+traindat['customer_age_band'] = pd.cut( x = traindat['customer_age'],
+                                        bins = [0,19,29,39,49,59,69,79,89,99,109]
+                                      ).astype(str)    # this is a little hack required to make R understand the data-frame 
+
+# let's look at 10 random customers:                                      
+traindat[['customer_age','customer_age_band']].drop_duplicates().sample(10)
+```
+
+
+calculate the buyer distribution by age-band for each product:
+(normalise by population distribution of ages?)
+
+```{python}
+# python 
+
+# calculate distribution of age bands in population:
+traindat_customer_age_dbn = (
+  traindat
+  [['customer_id','customer_age_band']]
+  .drop_duplicates()             # only keep a single row per customer
+  .groupby('customer_age_band')
+  .agg( n_unique_customers = ('customer_id', 'count') )
+  .reset_index()
+)
+
+traindat_customer_age_dbn['train_population_proportion'] = (
+      traindat_customer_age_dbn['n_unique_customers'] / sum(traindat_customer_age_dbn['n_unique_customers'] ) 
+)
+
+# store all possible combinations of age_band and product_id in a pandas dataframe:
+product_IDs_list = traindat['product_id_shown'].drop_duplicates().values
+age_bands = traindat['customer_age_band'].drop_duplicates().values 
+all_age_band_product_id_combinations = pd.DataFrame( 
+                                                     [ (x,y) for x in product_IDs_list for y in age_bands ],
+                                                     columns = ['product_id_shown','customer_age_band']  
+                                                   )
+
+# count number of buyers by age band for each product:
+product_distribution_of_buyer_ages = ( 
+  traindat
+  .query( 'y_bought==1' )        # only consider products that were bought
+  [['customer_id','product_id_shown','customer_age_band']]
+  .drop_duplicates()            # only keep a record of a customer buying the same product once
+  .groupby( ['product_id_shown', 'customer_age_band'] )
+  .agg( n_unique_buyers = ('customer_id','count') )
+  .reset_index()
+)
+
+# add in missing age-bands to each product (i.e. age bands for which there were no buyers ) 
+product_distribution_of_buyer_ages = pd.merge( 
+    all_age_band_product_id_combinations,
+    product_distribution_of_buyer_ages,
+    on = ['product_id_shown','customer_age_band'],
+    how = 'outer'
+).fillna(0)    # this gives n_unique_buyers=0 for age-bands which were not present
+
+product_distribution_of_buyer_ages['n_unique_buyers'] = product_distribution_of_buyer_ages['n_unique_buyers'].astype(int) 
+
+# calculate total buyers per product, and distribution of buyer age bands per product: 
+product_distribution_of_buyer_ages = (  
+  product_distribution_of_buyer_ages
+  # calculate the total number of customers who bought this product: -
+  .assign( total_buyers_of_this_product = lambda x: x.groupby('product_id_shown').n_unique_buyers.transform('sum'),
+                   proportion_of_buyers = lambda x: x['n_unique_buyers'] / x['total_buyers_of_this_product'] 
+         )
+)
+
+# add the population proportion of customers in each age band to the product table:
+product_distribution_of_buyer_ages = (
+pd.merge(
+    product_distribution_of_buyer_ages,
+    traindat_customer_age_dbn[['customer_age_band','train_population_proportion']],
+    on = 'customer_age_band',
+    how = 'left'
+   )
+   .sort_values( ['product_id_shown','customer_age_band'] )
+   .fillna(0)     # this makes proportion_of_buyers=0 instead of proportion_of_buyers=NaN where there were no buyers for a product
+)
+
+# make a proportion_of_buyers column that is adjusted for the population proportions of each age band:
+product_distribution_of_buyer_ages['scaled_proportion_of_buyers'] = ( product_distribution_of_buyer_ages['proportion_of_buyers'] /
+                                                                      product_distribution_of_buyer_ages['train_population_proportion']
+).fillna(0)        # fillna(0) makes 0/0 into 0 rather than NaN
+```
+
+Here is the age-of-buyers breakdown for a random product: 
+
+metric                       | description
+-----------------------------|--------------------------------------------------------------
+n_unique_buyers              | number of unique customers in this age band who bought this product in the training data
+total_buyers_of_this_product | number of unique customers who bought this product in the training data (all age bands)
+proportion_of_buyers         | proportion of the total buyers of this product who are in this age band
+train_population_proportion  | the proportion of the total customers in the training data who are in this age band 
+scaled_proportion_of_buyers  | *proportion_of_buyers*, but adjusted for the sizes of the age-band groups in the training data 
+
+```{python}
+product_distribution_of_buyer_ages.head()
+```
+
+
+```{r}
+# R
+
+random_product_id <- sample( py$product_distribution_of_buyer_ages$product_id_shown, size=1 )
+
+py$product_distribution_of_buyer_ages %>% 
+  filter( product_id_shown == random_product_id ) %>% View 
+  #kable()
+```
+
+The model will be given as features the number of buyers per age group, and the scaled proportion of buyers per age group:
+
+```{python}
+wide_product_ageband_features = ( 
+      product_distribution_of_buyer_ages
+        [['product_id_shown','customer_age_band','n_unique_buyers','scaled_proportion_of_buyers']]
+        .pivot_table( index = 'product_id_shown',
+                    columns = 'customer_age_band',
+                     values = ['n_unique_buyers','scaled_proportion_of_buyers']
+                    )
+)
+
+wide_product_ageband_features.columns = [s1 + '_ageband' + str(s2) for (s1,s2) in wide_product_ageband_features.columns.tolist()]
+wide_product_ageband_features.reset_index( inplace = True )
+```
+
+Here is an example row of these product buyer age-band features as the model will receive them:
+
+```{r}
+# R
+
+py$wide_product_ageband_features %>% 
+  sample_n(1) %>% 
+  kable()
+```
+
+add the product-age features to the training data:
+
+```{python}
+# python
+
+traindat = pd.merge( 
+                      traindat,
+                      wide_product_ageband_features,
+                      on = 'product_id_shown',
+                      how = 'left'                # although inner, outer etc. would give the same result
+                   )
+```
+
+here is a look at a random customer:
+
+```{r echo=FALSE}
+# R
+py$traindat %>% 
+  filter( customer_id == sample(py$traindat$customer_id,size=1) ) %>% 
+  kable()
+
+```
+
+
+# Wide & Deep Model 
+
+```{python}
+# python
+
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Embedding, concatenate, Dense, DenseFeatures
+from tensorflow import feature_column
+```
+
+```{python}
+#traindat.sample(3)
+traindat.columns
+```
+
+Define all features that are going to be included in the model (in both wide and deep parts):
+
+```{python}
+# python
+input_tensor = {
+    "customer_id": Input(name="customer_id", shape=(), dtype="int32"),    # to be 1-hot encoded the embedded
+    "product_id_shown": Input(name="product_id_shown", shape=(), dtype="int32"), # to be 1-hot encoded the embedded
+    "customer_age": Input(name="customer_age", shape=(1), dtype="float32"), # directly into model as numeric feature
+    "customer_gender": Input(name="customer_gender", shape=(), dtype="int32"),    # to be 1-hot encoded
+    "current_season": Input(name="current_season", shape=(), dtype="int32"),    # to be 1-hot encoded
+    "product_price": Input(name="product_price", shape=(1), dtype="float32"),  # directly into model as numeric feature
+    "product_category": Input(name="product_category", shape=(), dtype="int32")  # to be 1-hot encoded
+    
+    #,    
+    #"bought_clothing_before": Input(name="bought_clothing_before", shape=(1), dtype="int32"), # directly into model as numeric feature
+    #"bought_tech_before": Input(name="bought_tech_before", shape=(1), dtype="int32"), # directly into model as numeric feature
+    #"bought_kitchen_before": Input(name="bought_kitchen_before", shape=(1), dtype="int32"), # directly into model as numeric feature
+    #"bought_bedding_before": Input(name="bought_bedding_before", shape=(1), dtype="int32"), # directly into model as numeric feature
+    #"bought_appliances_before": Input(name="bought_appliances_before", shape=(1), dtype="int32"), # directly into model as numeric feature
+    #"bought_furniture_before": Input(name="bought_furniture_before", shape=(1), dtype="int32"), # directly into model as numeric feature
+    #"bought_shoes_before": Input(name="bought_shoes_before", shape=(1), dtype="int32") # directly into model as numeric feature
+}
+```
+
+use **categorical_column_with_identity** *when your inputs are integers in the range [0, num_buckets)*  (https://www.tensorflow.org/api_docs/python/tf/feature_column/categorical_column_with_identity) 
+
+
+
+
+```{python}
+# python
+# x_customer_id = tf.feature_column.categorical_column_with_identity( 
+#                                                                             key = 'customer_id', 
+#                                                                     num_buckets = traindat['customer_id'].drop_duplicates().shape[0]        
+#                                                                   )
+# x_product_id = tf.feature_column.categorical_column_with_identity( 
+#                                                                             key = 'product_id_shown',
+#                                                                     num_buckets = traindat['product_id_shown'].drop_duplicates().shape[0]
+#                                                                  )
+```
+
+
+construct deep part of model: 
+
+```{python}
+# python
+deep__varnames_to_embed = ['customer_id', 'product_id_shown']
+deep__numeric_varnames = ['customer_age', 'product_price']
+
+deep__embedding_inputs = { x: input_tensor[x] for x in deep__varnames_to_embed }
+deep__numeric_inputs = [ input_tensor[x] for x in deep__numeric_varnames ]
+
+# define embedding layers ----------------------------------------
+deep__embeddings = []
+embed_dim = 10                   # user-specified dimension to use for all of the embeddings
+for x in deep__embedding_inputs:
+  embedding_layer_x = Embedding(  input_dim = int( traindat[x].drop_duplicates().shape[0] ),
+                                 output_dim = embed_dim,            # user-specified dimension of embedding
+                                       name = f'embed_{x}' 
+                               )
+  deep__embeddings.append( 
+                            embedding_layer_x( 
+                                                deep__embedding_inputs[x]
+                                              ) 
+                          )
+  
+# define the sequential network --------------------------------------------------------------------  
+choose_hidden_layer_structure = [ 50,           # number of nodes in 1st hidden layer
+                                  40,           # number of nodes in 2nd hidden layer
+                                  20            # number of nodes in 3rd hidden layer
+                                ] 
+
+end_layer = concatenate( deep__numeric_inputs + deep__embeddings, axis=1 ) 
+
+for layernum_i, n_hidden_nodes_i in enumerate(choose_hidden_layer_structure):
+  end_layer = Dense(      units = n_hidden_nodes_i,
+                     activation = 'relu',
+                           name = f'dnn_{layernum_i}'
+                   )(end_layer) 
+                   
+
+output_tensor_deep = Dense(      
+            units = 1, 
+       activation = None,
+             name = 'pred'
+     )(end_layer)  
+     
+deep_model = tf.keras.Model( input_tensor, output_tensor_deep )     
+```
+
+Here is how the deep model looks:
+( had to draw this plot in a jupyter notebook because struggled to get pydot working in RStudio with reticulate())
+```{python eval=FALSE}
+# python 
+
+tf.keras.utils.plot_model( deep_model, show_shapes=True, rankdir="LR" )
+# had to export run this python code in jupyterlab, because it would not work in R using reticulate()
+```
+
+
+```{r}
+# tf.keras.utils.plot_model( deep_model, show_shapes=True, rankdir="LR" )
+# had to install graphviz etc. and it was a lussssss 
+knitr::include_graphics( "C://Users//jbolton//Documents//blogs//deep_part_via_jupyter.png" )
+```
+
+Wide part of the model: 
+
+```{r label, options}
+py$traindat %>% sample_n(5) 
+```
+
+```{python}
+# python
+
+categorical_colnames = [
+                          'customer_gender',
+                          'product_category',
+                          'current_season'
+                       ]
+
+binary_feature_colnames = [
+        'bought_clothing_before'   ,  
+        'bought_tech_before'       ,
+        'bought_kitchen_before'    ,
+        'bought_bedding_before'    ,
+        'bought_appliances_before' ,
+        'bought_furniture_before'  , 
+        'bought_shoes_before'
+      ]
+      
+one_hot_cols_for_wide_part = {}
+
+for col_j in categorical_colnames:
+  one_hot_cols_for_wide_part[col_j] = tf.feature_column.categorical_column_with_identity(
+                                                  key = col_j,
+                                          num_buckets = traindat[col_j].drop_duplicates().shape[0],
+                                        default_value = None
+                                      )
+
+# 1-hot encode                                         
+one_hot_cols_for_wide_part_1hot = { col_j: tf.feature_column.indicator_column( one_hot_cols_for_wide_part[col_j] )
+                                           for col_j in one_hot_cols_for_wide_part
+                                  }
+
+
+                            
+one_hot_cols_for_wide_part_1hot
+
+```
+
+Create crossed features for wide part: 
+
+```{python}
+# python
+import itertools
+
+crossed_features = {}
+
+for col1, col2 in itertools.combinations( categorical_colnames, 2 ):
+  key = f'{col1}_X_{col2}' 
+  print( key )
+  crossed_column = tf.feature_column.crossed_column(
+            keys = [ one_hot_cols_for_wide_part[col1], 
+                     one_hot_cols_for_wide_part[col2]
+                   ], 
+            hash_bucket_size = 10 
+        )
+  crossed_features[key] = tf.feature_column.indicator_column( crossed_column )
+  
+crossed_features  
+```
+
+```{python}
+# python 
+
+# add crossed columns to existing 1-hot categorical columns:
+one_hot_cols_for_wide_part_1hot.update( crossed_features )
+
+# have a look at the 
+import json
+print( 
+      json.dumps( one_hot_cols_for_wide_part_1hot,
+                  indent = 3
+                )
+)
+
+```
+```{python}
+one_hot_cols_for_wide_part_1hot.values()
+```
+
+```{python}
+
+```
+
+
+```{python}
+# python
+
+#input_tensor.values()
+
+final_wide_features_dense = DenseFeatures( one_hot_cols_for_wide_part_1hot.values(), 
+                                           name = 'test'
+                                         )( {x: input_tensor[x] for x in categorical_colnames} )
+                                         #)(input_tensor)
+
+output_tensor_wide = Dense( 1,
+                            activation = None,
+                            name = 'output_wide'
+                          )(final_wide_features_dense)
+                          
+```
+
+```{python}
+wide_and_deep_output_tensor = output_tensor_deep + output_tensor_wide
+
+wide_and_deep_model = tf.keras.Model( input_tensor, wide_and_deep_output_tensor )
+```
+
+Here is how the full model (both wide and deep parts) looks:
+
+( had to draw this plot in a jupyter notebook because struggled to get pydot working in RStudio with reticulate())
+```{python eval=FALSE}
+# python 
+
+tf.keras.utils.plot_model( wide_and_deep_model, show_shapes=True, rankdir="LR" )
+# had to export run this python code in jupyterlab, because it would not work in R using reticulate()
+```
+
+
+```{r}
+# tf.keras.utils.plot_model( deep_model, show_shapes=True, rankdir="LR" )
+# had to install graphviz etc. and it was a lussssss 
+knitr::include_graphics( "C://Users//jbolton//Documents//blogs//combined_wide_and_deep_model_via_jupyter.jpg" )
+```
+
+```{python}
+wide_and_deep_model.compile( optimizer = "adam", 
+                             loss = "mse",
+                             metrics = [tf.keras.metrics.RootMeanSquaredError(name="rmse")]
+                           )
+```
+
+```{python}
+#wide_and_deep_model.fit( traindat, 
+#                         #validation_data=valid_ds, 
+#                         epochs = 2
+#                       )
+traindat
+
+```
+
+
+
+
+```{python}
+# python
+
+features_for_wide_part = {}
+features_for_wide_part['product_category'] = tf.feature_column.indicator_column(   # "indicator column" performs 1-hot encoding
+                                                tf.feature_column.categorical_column_with_vocabulary_list(
+                                                              key = 'product_category',
+                                                  # all values in vocabulary assigned an integer index 0,1,..len(vocabulary_list):
+                                                  vocabulary_list = traindat['product_category'].drop_duplicates().values,
+                                                  # all values not in vocabulary list are assigned integer index [default_value]:  
+                                                    default_value = len(traindat['product_category'].drop_duplicates().values)
+                                                )
+                                            )
+                                            
+features_for_wide_part                                            
+
+```
+
+
+
+
+
+
+The binary "category bought" columns will be included in the wide part of the model as dummy variables - one hot encoding them seems wasteful. This can be done by telling the model that they are numeric variables: 
+
+```{python}
+# python
+
+binary_boughtcols = ['bought_clothing_before', 
+                     'bought_tech_before',
+                     'bought_kitchen_before',
+                     'bought_bedding_before',
+                     'bought_appliances_before',
+                     'bought_furniture_before',
+                     'bought_shoes_before'
+                    ]
+                    
+# here a sample of these variables from the training data:
+( traindat
+  [binary_boughtcols]
+  .query( '|'.join( [x+'==1' for x in binary_boughtcols] ) )  # ensure that we get some columns with "1"s in them
+  .sample(10)  
+)
+
+
+
+```
+
+
+```{python}
+#store_binary_cols = {}   # empty dictionary to store the binary columns
+
+binary_boughtcols = ['bought_clothing_before', 
+                     'bought_tech_before',
+                     'bought_kitchen_before',
+                     'bought_bedding_before',
+                     'bought_appliances_before',
+                     'bought_furniture_before',
+                     'bought_shoes_before'
+                    ]
+
+
+
+# for binary_col_j in binary_colnames:
+#   store_binary_cols['x_'+binary_col_j] = tf.feature_column.categorical_column_with_identity(         key = binary_col_j,
+#                                                                                              num_buckets = 2          # binary column in {0,1} 
+#                                                                                            )
+#                                                                                            
+# # store each of these columns as 1-hot, using dictionary comprehension:
+# store_binary_cols_1hot = {
+#   col_j: tf.feature_column.indicator_column( store_binary_cols[col_j] )
+#   for col_j in store_binary_cols
+# }                                                                                           
+#    
+# store_binary_cols
+# store_binary_cols_1hot
+```
+
+here is how these 1-hot columns are stored:
+
+[1,0] if 
+
+```{python}
+tf.keras.layers.DenseFeatures( store_binary_cols_1hot['x_bought_clothing_before'] )( {'bought_clothing_before':[0,1]} ) 
+```
+![]("do")
+
+
+```{python}
+colnames_for_crossing = (
+                          ['product_category'] +
+                          [ x for x in traindat.columns if 'bought_' in x and '_before' in x ]   # all columns with name like "bought_*_before"
+)                        
+                        
+colnames_for_crossing                        
+```
+
+
+```{python}
+  
+# x_customer_age_band = tf.feature_column.categorical_column_with_vocabulary_list( 
+#                                                                                  'customer_age_band',
+#                                                                                  traindat['customer_age_band'].drop_duplicates().sort_values().values
+#                                                                                )                                                                          
+# x_product_category = tf.feature_column.categorical_column_with_vocabulary_list(
+#                                                                                  'product_category',
+#                                                                                  traindat['product_category'].drop_duplicates().sort_values().values
+#                                                                               )
+#                                                                               
+# 
+# # continuous base columns ------------------------------------------------------------------------------------------------------------------------------
+# x_customer_age = tf.feature_column.numeric_column('customer_age')
+# 
+# # scaled proportion of buyers ageband columns:
+# for col_i in [ x for x in traindat.columns if 'scaled_proportion_of_buyers' in x ]:
+#   # clean up the column name to make it usable as a valid object name in python:
+#   clean_colname = re.sub('\(', '_EXCL', col_i) 
+#   clean_colname = re.sub(', ', '_INCL', clean_colname) 
+#   clean_colname = re.sub(']','', clean_colname)
+#   code_to_execute = f'x_{clean_colname} = tf.feature_column.numeric_column("{col_i}")'
+#   print( code_to_execute )
+#   exec( code_to_execute )
+# 
+# for col_i in [ x for x in traindat.columns if 'bought_' in x and '_before' in x ]:   # all columns with name like "bought_PRODUCTNAME_before"
+#   code_to_execute = f'x_{col_i} = tf.feature_column.numeric_column("{col_i}")'
+#   print( code_to_execute )
+#   exec( code_to_execute )
+  
+```
+
+specify the features to be included in the wide and deep parts of the model:
+
+```{python}
+# python
+
+deep_columns = [ 
+                 tf.feature_column.embedding_column( x_customer_id, dimension=10 ),
+                 tf.feature_column.embedding_column( x_product_id, dimension=10)
+               ]
+               
+wide_columns = [
+                 tf.feature_column.crossed_column( keys = ['product_category', 'x_bought_clothing_before'], hash_bucket_size = 100 ),
+                 tf.feature_column.crossed_column( keys = ['product_category', 'x_bought_tech_before'], hash_bucket_size = 100 ),
+                 tf.feature_column.crossed_column( keys = ['product_category', 'x_bought_kitchen_before'], hash_bucket_size = 100 ),
+                 tf.feature_column.crossed_column( keys = ['product_category', 'x_bought_bedding_before'], hash_bucket_size = 100 ),
+                 tf.feature_column.crossed_column( keys = ['product_category', 'x_bought_appliances_before'], hash_bucket_size = 100 ),
+                 tf.feature_column.crossed_column( keys = ['product_category', 'x_bought_furniture_before'], hash_bucket_size = 100 ),
+                 tf.feature_column.crossed_column( keys = ['product_category', 'x_bought_shoes_before'], hash_bucket_size = 100 )
+               ] 
+              
+```
+
+
+
+
+
+
+
+
+
+
+
+
+# Order-2 Factorization Machine
+
+```{python}
+# python
+
+# prepare our data for the bayesian_factorization_machine_classifier(): 
+y_train = np.array( traindat['y_bought'].values )                          # extract response column
+y_train[y_train==0] = -1       # code y as {-1,1} instead of {0,1}
+# 1-hot encode customer_id:
+customer_id_1hot_df = pd.get_dummies( traindat['customer_id'], prefix='customer_id' )
+# 1-hot encode product_id_shown:
+product_id_shown_1hot_df = pd.get_dummies( traindat['product_id_shown'], prefix='product_id_' )
+# put 1-hot customer_id and 1-hot product_id_shown into a single dataframe:
+Xtrain_df = pd.concat( [customer_id_1hot_df, product_id_shown_1hot_df], axis=1 )  
+# convert features X_df into a numpy array:
+Xtrain = Xtrain_df.to_numpy()
+# convert to cupy matrix:
+Xtrain_sparse = cupyx.scipy.sparse.csr_matrix(
+                      cp.array( Xtrain ).astype(cp.float)    # cupyx.scipy.sparse.csr_matrix only takes float, not int 
+                )
+```
+
+here is a quick test of the reformulation of the model equation stated in the paper:
+
+```{python}
+# python
+x = np.array( [ 
+                [1,2,3],
+                [4,5,6],
+                [7,8,9]
+              ]
+            )
+v = np.array( [
+                [1,2],
+                [4,5],
+                [6,7]
+              ]
+            )
+               
+[ x[0,0]*x[0,1]*np.dot(v[0],v[1]) + x[0,0]*x[0,2]*np.dot(v[0],v[2]) + x[0,1]*x[0,2]*np.dot(v[1],v[2]), 
+  x[1,0]*x[1,1]*np.dot(v[0],v[1]) + x[1,0]*x[1,2]*np.dot(v[0],v[2]) + x[1,1]*x[1,2]*np.dot(v[1],v[2]), 
+  x[2,0]*x[2,1]*np.dot(v[0],v[1]) + x[2,0]*x[2,2]*np.dot(v[0],v[2]) + x[2,1]*x[2,2]*np.dot(v[1],v[2]) 
+]               
+
+interaction_factorisation_part = np.zeros( shape=(len(x),) )
+
+for f in range(2):
+          interaction_factorisation_part += ( 
+                                              np.matmul( x, v[:,f] )**2 -
+                                              np.matmul( x**2, v[:,f]**2 )
+                                            )
+                                            
+0.5 * interaction_factorisation_part                                            
+```
+
+experiment with making a predict function:
+
+note that I'm using **cupy** to perform matrix calculations on my GPU 
+
+```{python}
+# python
+
+x_test = pd.DataFrame( {'x1':[1,0,2],
+                        'x2':[0,3,0],
+                        'x3':[4,5,6]
+                       }
+                     ).astype(float)
+w0_test = 3.1
+w_test = [5,3,1]
+v_test = pd.DataFrame( {'v_dim1':[12,10,8],
+                        'v_dim2':[6,4,2]
+                       }
+                     ).astype(float)
+
+# function which provides predictions, given a fitted model: 
+def bayes_fm_predict( X_mat,    # matrix of features, in sparse format cupyx.scipy.sparse.csr.csr_matrix 
+                      w_0,     # intercept value (float)
+                      W_vec,   # px1 vector of model coefficients, px1 sparse matrix cupyx.scipy.sparse.csr.csr_matrix
+                      V_mat    # pxk sparse matrix of latent factors, pxk sparse matrix cupyx.scipy.sparse.csr.csr_matrix  
+                    ):
+  n = X_mat.shape[0]
+  p = X_mat.shape[1]
+  k = V_mat.shape[1]
+  
+  # represent w_0 as an nx1 matrix with w_0 in every entry:
+  w_0 = cupyx.scipy.sparse.csr_matrix( cp.array( [w_0]*n, shape=(n,1) ) )
+                    
+  # initialise the interaction vector with 0s:                  
+  # (it is iteratively populated)
+  # (this is the term in square brackets in equation (5) in the original Rendle LibFM paper)
+  interaction_factorisation_part = cupyx.scipy.sparse.csr_matrix(       # initialise with [0,0,.....,0]
+                                        cp.zeros( shape=(n,1) ) 
+                                     )
+                                     
+  for f in range(k):
+         interaction_factorisation_part += (
+                                             X_mat.dot( V_mat[:,f] ).power(2) -
+                                             X_mat.power(2).dot( V_mat[:,f].power(2) )
+                                           )      
+
+  return ( w_0 +
+           X_mat.dot( W_vec ) +
+           interaction_factorisation_part                                           
+         )                                  
+                                     
+# let's see the function in action:
+bayes_fm_predict( X_mat = cupyx.scipy.sparse.csr_matrix( cp.array(x_test) ),
+                    w_0 = w0_test,     
+                  W_vec = cupyx.scipy.sparse.csr_matrix( cp.array(w_test) ),   
+                  V_mat = cupyx.scipy.sparse.csr_matrix( cp.array(v_test) )
+                ) 
+
+```
+
+
+```{python}
+# class bayesian_factorization_machine_classifier():
+#   def __init__(       self,
+#                          k,      # dimension of latent representation
+#                          p,      # number of features in X
+#                        w_0 = None,
+#                      W_vec = None,
+#                      V_mat = None,
+#                 init_sigma = 1   # parameter used for initial values in coefficient matrix V
+#                ):
+#     self.model = 'Order-2 Bayesian Factorization Machine'
+#     self.k = k
+#     self.p = p
+#     # initialize model coefficients if they have not been provided ---------------------------------
+#     if w_0 is None:
+#       self.w_0 = 0
+#     if W_vec is None:
+#       self.W_vec = cp.zeros( (p,1), dtype=float )  )
+#     if V_mat is None:
+#       self.V_mat = cp.random.normal( loc = 0,      # mean
+#                                      scale = init_sigma,   # sd
+#                                      size = (p,k)    # dimension of V matrix
+#                                    )
+#                                          
+#   def predict( self,
+#               new_X
+#              ):
+#     interaction_factorisation_part = cp.zeros( shape=(new_X.shape[0],) )    # initialise with [0,0,.....,0]
+#                                     
+#     for f in range(self.k):
+#           interaction_factorisation_part += ( 
+#                                               cp.matmul( new_X, self.V_mat[:,f] )**2 -
+#                                               cp.matmul( new_X**2, self.V_mat[:,f]**2 )
+#                                             )
+#     interaction_factorisation_part = 0.5 * interaction_factorisation_part   
+#     # turn it into a column vector:
+#     interaction_factorisation_part = interaction_factorisation_part.reshape( interaction_factorisation_part.shape[0],
+#                                                                              1
+#                                                                            )             
+#              
+#     return ( 
+#              self.w_0 +
+#              cp.matmul( new_X, self.W_vec ) +
+#              interaction_factorisation_part
+#            )
+#                                    
+#       
+#   def fit( self, 
+#            n_iter, # number of iterations to run MCMC algorithm 
+#            X,   # matrix of features n x p
+#            y
+#          ):
+#     
+#     n = len(y)
+#     assert n == len(X)    # ensure that number of rows of X is equal to length of y
+#     
+         
+```
+
+```{python}
+
+k = 5
+p = Xtrain_sparse.shape[1]
+
+# initialise w_0 with 0:
+w_0 = 0
+
+# initialise W_vec with 0s:
+W_vec = cupyx.scipy.sparse.csr_matrix(
+              cp.zeros( (p,1), dtype=float )
+        )
+
+# initialise V matrix with random values:
+V_mat = cupyx.scipy.sparse.csr_matrix( 
+                         cp.random.normal(   loc = 0,      # mean
+                                           scale = 1,      # sd
+                                            size = (p,k)    # dimension of V matrix
+                                         )
+                  )
+
+interaction_factorisation_part = cupyx.scipy.sparse.csr_matrix(       # initialise with [0,0,.....,0]
+                                        cp.zeros( shape=(Xtrain_sparse.shape[0],1) ) 
+                                     )
+
+for f in range(k):
+         interaction_factorisation_part += (
+                                             Xtrain_sparse.dot( V_mat[:,f] ).power(2) -
+                                             Xtrain_sparse.power(2).dot( V_mat[:,f].power(2) )
+                                           )
+
+train_yhat = (
+               w_0 +
+               Xtrain_sparse.dot( W_vec ) +
+               interaction_factorisation_part
+)
+        
+```
+
+verify the code above:
+
+```{python}
+# python 
+
+```
+
+
+```{python}
+fm_classifier = bayesian_factorization_machine_classifier( k = 5,    # dimension of latent/factorized representation
+                                                           p = Xtrain.shape[1],    # number of features in X-train
+                                                           init_sigma = 0.5       # used for initial random values in V matrix
+                                                         )
+
+
+#fm_classifier.w_0
+#fm_classifier.W_vec
+#fm_classifier.V_mat
+fm_classifier.predict( new_X = Xtrain )
+```
+
+
+
+
+
+# resources
+
+* https://noelkonagai.github.io/Workshops/tensorflow_pt2_widedeep/
+
+* https://chromium.googlesource.com/external/github.com/tensorflow/tensorflow/+/r0.10/tensorflow/g3doc/tutorials/wide_and_deep/index.md
+
+* https://github.com/AmazingDD/daisyRec
+
+* libFM paper
+
+* For setting up **pydot** and **graph_viz**: http://justinwatson.name/2017/02/10/Setting_up_pydot_for_Python_3_5_Keras_Conda_Windows_64.html#:~:text=Install%20graphviz%20for%20windows%20from%20the%20graphviz%20website.,using%20the%20following%20command%3A%20%3E%20pip%20install%20git%2Bhttps%3A%2F%2Fgithub.com%2Fpydot%2Fpydot-ng.git
+
+* 

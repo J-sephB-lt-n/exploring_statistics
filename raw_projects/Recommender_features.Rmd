@@ -1,0 +1,94 @@
+---
+title: "Recommender_Features"
+author: "Joseph Bolton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+I am in the process of building a retail Deep and Cross (DCN-V2) recommender system for item purchase prediction, to be used for top-n item ranking. I'm going to build both a stacked and a parallel variant of the model, and compare the performance of the two. I think that the same model architecture, but with a learn-to-rank objective for item ranking instead of a binary classification objective, will perform marginally better. However, I am building a purchase classifier as a first step. 
+
+TensorFlow/Keras makes it very simple to specify the model architecture, train and use the model, making feature engineering by far the biggest task in building this recommender system.   
+
+I have created this page to document my conceptual exploration of the features (explanatory variables) that I hypothesize are likely to be predictive in a retail item (product) recommender system, so that I can decide on the features that I am going to include in my model.  
+
+I hypothesize 5 broad classes of features which I think are likely to be predictive of which items a user would like to buy in the future.  
+
+**Hypothesis 1 (content-based)**: A user is going to buy similar items to the items that they've bought in the past i.e. we can learn a user's future item preferences from the characteristics of their past purchases. 
+
+**Hypothesis 2 (collaborative)**: If we find other users who've bought similar items to *user A* (in addition to other items they've bought not in common with *user A*), then the item preferences of these similar consumers will be somewhat predictive of *user A*'s item preferences (even for items that *user A* has not bought yet). Similarly, if we find other items which are similar to *item B* (in that there is overlap in the users buying these items), then we can recommend these similar items to users who have bought *item B*.      
+
+**Hypothesis 3 (modeling)**: Some relationships and behaviours span multiple users. For example, most users in a certain age range (or in certain geographic locations) might tend to prefer specific types of items.
+
+**Hypothesis 4 (popular/seasonal)**: Certain items are more likely to be bought by most users i.e. some items are globally more popular than others. Some items see increased interest at certain times of year (e.g. blankets in winter), or during certain times of the month, or on certain days of the week, or at certain times of day. These features might also interact with user features (e.g. old people liking to shop on Wednesday mornings). 
+
+**Hypothesis 5 (association/sequence)**: Certain combinations of items tend to be bought together, or in a set sequence. e.g. a user is likely to buy bedding shortly after they've bought a bed. Conversely, a user that has recently bought a certain item (e.g. a bed) is unlikely to buy certain other items (e.g. another bed). 
+
+# Examples of Content-Based Features (hypothesis 1)
+In order for a recommender model to be able to recommend items to users based on the attributes of the items, the model needs to be able to see both:
+
+1. Features describing (for each user) the attributes of the items that they have purchased before (or features otherwise describing their preferences for certain item attributes)
+
+2. The attributes of each item 
+
+A recommender model/engine can then learn (using these features) to match user preferences to item attributes, in order to identify items that a user might like. 
+
+Here are some example features:
+
+* item attributes e.g. *colour*, *size*, *price*, *department* (e.g. electronics, bedding, formal-wear), ...
+
+* features describing user past item attribute preferences:
+    * Recency-based e.g. *number of days since last bought formal clothing*, *number of days since last bought a red item*, ... 
+    * Frequency-based e.g. *total number of formal clothing items bought*, *total number of red items bought*
+    * Spend-based e.g. *% of total spend spent on formal clothing*, *% of total spend spent on red items*
+
+* Features extracted from item description text 
+
+Classical content-based filtering recommender models represent each item as a real vector of item features, and each user as a an aggregation (e.g. average) of the item vectors of the items that they have consumed. Users can then be recommended items whose item vector representations are close to their user vector representation (using, for example, cosine distance). In models (such as neural networks) which can hand a large number of features, these item and user vectors can be included directly as features in the model.  
+
+# Examples of Collaborative Features (hypothesis 2)
+Collaborative approaches to making item recommendations involve finding matching/similar users (or about finding mathcing/similar items), and using this information to make recommendations.     
+
+Here are some example features: 
+
+* User embedding: representation of each user as a real-valued vector learned from data (i.e. model explicitly learns useful latent user features - a representation of each customer as a real vector in a vector space of chosen dimension) 
+* Item embedding: representation of each item as a real-valued vector learned from data (i.e. model explicitly learns useful latent item features - a representation of each item as a real vector in a vector space of chosen dimension)
+* Product preferences of 'similar' users. 'Similar users' could be defined using the cosine distance between user purchase vectors. For a given user/item pair, a feature such as *% of similar users who purchased this item* could be created.       
+
+# Example of Modeling Features (hypothesis 3)
+A modeling approach to item recommendation involves teaching an algorithm to learn relationships between item features and user features which are predictive of a users item preferences. 
+
+Here are some example features:
+
+* user RFM attributes:
+    * frequency of shopping e.g. *number of items bought in last X months*, *min/max/average number of days between orders*
+* user demographic attributes
+    * gender 
+    * age (continuous feature and/or as age bands) 
+    * geographicallocation
+* calculated item attributes:
+    * *age*/*gender*/*other user attribute* distribution of users who have bought this item e.g. *Item X age 30-35 %* = $\displaystyle\frac{\text{number of users aged 30-35 who have bought item X}}{\text{number of users who have bought item X}}$
+    * relative *age*/*gender*/*other user attribute* distribution of users who have bought this item e.g. *Item X age 30-35 relative %* = 
+    $\displaystyle\frac{\Big(\displaystyle\frac{\text{number of users aged 30-35 who have bought item X}}{\text{number of users who have bought item X}}\Big)}{\Big(\displaystyle\frac{\text{number of users aged 30-35 who have bought any item}}{\text{number of users who have bought any item}}\Big)}$
+
+  * features describing user price preferences:
+    * *Historic Max. Item Spend* - the most that the user has ever spent on an item
+    * *Historic Min. Item Spend* - the least that the user has ever spent on an item
+    * *Historic Median Item Spend* - a summary measure of the average amount that the user normally spends on an item
+    * *Historic Max. Basket Spend* - the most the user has ever spent on a basket of items (or in a single day)
+    * *Historic Min. Basket Spend* - the least the user has ever spent on a basket of items (or in a single day)
+    * *Historic Median  Basket Spend* - a summary measure of the average amount that the user normally spends on a basket of items (or in a single day)    
+    
+# Hypothesis 4 (popular/seasonal)
+useful for users that we don't have much info on (cold start)
+
+* item popularity metrics:
+    * *item popularity rank percentile in last [day/week/month/year/all time]* (e.g. item in top 10% in the past week)
+    * *item popularity rank percentile in customer subgroup X in last [day/week/month/year/all time]* (e.g. item in top 10% of items consumed by 50-55 year old male customers in the past 3 months)
+    
+* seasonality metrics:
+    * distribution of sales per weekday (e.g. *Monday%*=15, *Tuesday%*=10,...)
+    * distribution of sales per weekday compared to all other products 
+      e.g. *Item X MondayRelative%* = $\displaystyle\frac{\text{% of total sales of item X that have happened on a Monday}{\text{% of total item sales that have happened on a Monday}}$  
+
+# Hypothesis 5 (association/sequence)
+test

@@ -1,0 +1,329 @@
+---
+title: "Assessing top-k Recommender Systems: MAP@k and nDCG@k"
+output: html_document
+---
+
+It is very useful to be able to summarise the performance of a model using a single-number summary. For example, we can summarise the performance of a regression model with the [mean squared error](https://en.wikipedia.org/wiki/Mean_squared_error) and [coefficient of determination $R^2$](https://en.wikipedia.org/wiki/Coefficient_of_determination), or the performance of a classication model with [accuracy](https://en.wikipedia.org/wiki/Confusion_matrix), [AUC](https://en.wikipedia.org/wiki/Receiver_operating_characteristic#Area_under_the_curve) and [F1 score](https://en.wikipedia.org/wiki/F-score).  
+
+A $top-k$ recommender system is an algorithm which, given a large list of potential items to recommend, is required to produce a reduced list of $k$ maximally relevant items to each user. 
+
+When we're comparing $top-k$ recommender systems, it doesn't make sense to use metrics designed to assess other kinds of models (like classification or regression). So, specific metrics have been designed for this purpose. 
+
+
+
+
+What irritated me when I investigated these metrics for the first time was the lack of concrete examples of their implementation, so that is what I have given here - the calculations clearly laid out. 
+
+I'm happy that my calculations are correct - I am able to perfectly replicate the output of the  [XG-Boost](https://github.com/dmlc/xgboost) package on these metrics ($MAP@k$ and $nDCG@k$). 
+
+It turns out that the definitions of these metrics **MAP@k** and **NDCG@k** differ somewhat by source, although they are all variations on the same theme (see, for example, [DCG](https://en.wikipedia.org/wiki/Discounted_cumulative_gain).  
+
+$AP@k$ is defined, for a single user, as: 
+
+$$\begin{array}{lcl}
+AP@k &=& \displaystyle\frac{\displaystyle\sum_{i=1}^k P(i)\cdot rel(i)}{min\big\{k,n \big\}} \\
+n &=& \text{total number of items in dataset relevant to this user} \\
+P(i) &=& \text{cumulative precision at rank } i \\ 
+&=& \displaystyle\frac{}{} \\
+rel(k) &=& \begin{cases} 1 \text{ if item in rank } i \text{ is relevant to the user}\\ 0 \text{ if item in rank } i \text{ is NOT relevant to the user} \end{cases}
+\end{array}$$
+
+Some sources (e.g. the [XG-Boost](https://github.com/dmlc/xgboost) package and [wikipedia](https://en.wikipedia.org/wiki/Evaluation_measures_(information_retrieval)#Average_precision)) define the denominator of the $AP@k$ simply as $n$. I don't think that this makes sense in the $top-k$ recommendations context: In my opinion, the ranking model should not be penalised where there are more than $k$ relevant items for a given user in the database, since we are not allowing the ranker to recommend more than $k$ items.
+
+$nDCG@k$ is defined (for a single user) as:
+
+$$\begin{array}{lcl}
+nDCG@k &=& \displaystyle\frac{DCG@k}{\text{ideal } DCG@k} \\
+DCG@k &=& \displaystyle\sum_{i=1}^k \displaystyle\frac{2^{y_i}-1}{log_2(i+1)} \\
+y_i &=& \text{relevance of (gain from) the item in rank } i \\
+\text{ideal } DCG@k &=& \text{the highest achievable } DCG@k \text{ on the observed data}  \\
+k &=& \text{number of items recommended to user} \\
+\end{array}$$
+
+So, $DCG@k$ (for a single user) is the sum of the relevance values of the highest ranked $k$ items, where the relevance values are discounted (shrunk) as they fall further down in the ranking. $nDCG@k$ is simply the relative size of the user's $DCG@k$ value compared to the highest possible $DCG@k$ value, which we could have achieved if we had an item-ranking system with perfect knowledge. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(kableExtra)
+library(formattable)   # see https://haozhu233.github.io/kableExtra/awesome_table_in_html.html
+```
+
+```{r echo=FALSE}
+full_itemset <- 
+  tibble(
+    item_id = 1:16,
+    relevant_to_user_1 = c(0,0,0,1,1,0,0,1,1,1,0,0,0,1,0,1)
+  )
+```
+
+```{r echo=FALSE}
+ideal_DCG <- 
+  full_itemset %>% 
+    arrange(
+              desc(relevant_to_user_1)
+    ) %>% 
+    mutate( rownumber = row_number() ) %>% 
+    mutate( 
+            `ideal_DCG@k` = cumsum( 
+                                    (2^relevant_to_user_1 - 1) /
+                                    log( rownumber + 1, base=2 )
+                                  )
+          ) %>% 
+    select( rownumber, `ideal_DCG@k` )
+```
+
+```{r echo=FALSE}
+full_itemset$model1_item_rank_for_user1 <- c(9,15,13,5,1,16,10,4,7,11,3,6,12,14,8,2)
+
+model1_metric_calcs <- 
+  full_itemset %>% 
+    arrange( model1_item_rank_for_user1 ) %>% 
+    mutate( 
+            `CG@k` = cumsum(relevant_to_user_1)
+            ,
+            `DCG@k` = cumsum( 
+                              (2^relevant_to_user_1 - 1) /
+                              log( model1_item_rank_for_user1 + 1, base=2 )
+                            )
+          ) %>% 
+    mutate( 
+            delta_DCG = if_else( 
+                                              model1_item_rank_for_user1==1, 
+                                             `DCG@k`,
+                                             `DCG@k` - lag(`DCG@k`)
+                                            ) 
+          ) %>% 
+    left_join( 
+                ideal_DCG,
+                by = c("model1_item_rank_for_user1"="rownumber") 
+             ) %>% 
+    mutate( 
+              `NDCG@k` = `DCG@k` / `ideal_DCG@k`
+          ) %>% 
+    mutate( 
+            precision = `CG@k` / model1_item_rank_for_user1
+            ,
+            delta_precision = if_else( 
+                                        model1_item_rank_for_user1==1, 
+                                        precision,
+                                        precision - lag(precision)
+                                    )
+            ,
+            recall = `CG@k` / sum(full_itemset$relevant_to_user_1)
+            ,
+            delta_recall = if_else(
+                                    model1_item_rank_for_user1==1, 
+                                    recall,
+                                    recall - lag(recall)
+                                  )
+            ,
+            Average_Precision = cumsum( precision * delta_recall)   
+            ,
+            Average_Precision_altcalc = cumsum( precision * relevant_to_user_1 / sum(.$relevant_to_user_1) )     
+          ) 
+
+```
+
+```{r echo=FALSE}
+full_itemset$model2_item_rank_for_user1 <- c(5,10,14,15,6,11,13,3,16,12,4,7,2,9,1,8)
+
+model2_metric_calcs <- 
+  full_itemset %>% 
+    arrange( model2_item_rank_for_user1 ) %>% 
+    mutate( 
+            `CG@k ` = cumsum(relevant_to_user_1)
+            ,
+            `DCG@k ` = cumsum( 
+                              (2^relevant_to_user_1 - 1) /
+                              log( model2_item_rank_for_user1 + 1, base=2 )
+                            )
+          ) %>% 
+    mutate( 
+            delta_DCG = if_else( 
+                                  model2_item_rank_for_user1==1, 
+                                  `DCG@k `,
+                                  `DCG@k ` - lag(`DCG@k `)
+                               ) 
+          ) %>% 
+    left_join( 
+                ideal_DCG,
+                by = c("model2_item_rank_for_user1"="rownumber") 
+             ) %>% 
+    mutate( 
+              `NDCG@k ` = `DCG@k ` / `ideal_DCG@k`
+          ) %>%   
+    mutate( 
+            precision = `CG@k ` / model2_item_rank_for_user1
+            ,
+            delta_precision = if_else( 
+                                        model2_item_rank_for_user1==1, 
+                                        precision,
+                                        precision - lag(precision)
+                                    )
+            ,
+            recall = `CG@k ` / sum(full_itemset$relevant_to_user_1)
+            ,
+            delta_recall = if_else(
+                                    model2_item_rank_for_user1==1, 
+                                    recall,
+                                    recall - lag(recall)
+                                  )
+            ,
+            Average_Precision = cumsum( precision * delta_recall)   
+            ,
+            Average_Precision_altcalc = cumsum( precision * relevant_to_user_1 / sum(.$relevant_to_user_1) )     
+          ) 
+```
+
+
+```{r echo=FALSE}
+bind_cols(
+  model1_metric_calcs
+  ,
+  model2_metric_calcs %>% rename_all(function(x){ paste0(x," ")} )
+) %>% 
+  rename( 
+          item_rank = model1_item_rank_for_user1
+          ,
+          `item_rank ` = `model2_item_rank_for_user1 `
+        ) %>% 
+  mutate_all( round, digits = 3 ) %>% 
+  
+  # set up conditional formatting bars
+  # note that I use fun=function(x){x} in order to make bars proportonal to the values themselves, rather than scaling them
+  mutate( 
+           `CG@k` = formattable::color_bar("lightgreen")(.$`CG@k`),
+           `CG@k  ` = formattable::color_bar("lightgreen")(.$`CG@k  `),
+
+           `DCG@k` = formattable::color_bar("lightblue")(.$`DCG@k`),
+           `DCG@k  ` = formattable::color_bar("lightblue")(.$`DCG@k  `),
+           
+           `NDCG@k` = formattable::color_bar("pink")(.$`NDCG@k`),
+           `NDCG@k  ` = formattable::color_bar("pink")(.$`NDCG@k  `)
+           
+          #`precision ` = formattable::color_bar("lightgreen", fun=function(x){x})(.$`precision `),
+          #recall = formattable::color_bar("lightblue", fun=function(x){x})(.$recall),
+          #`recall ` = formattable::color_bar("lightblue", fun=function(x){x})(.$`recall `),
+          #Average_Precision = formattable::color_bar("pink", fun=function(x){x})(.$Average_Precision),
+          #`Average_Precision ` = formattable::color_bar("pink", fun=function(x){x})(.$`Average_Precision `),
+        ) %>%
+
+  select( 
+          # model 1
+          item_rank, 
+          item_id,
+          relevant_to_user_1,
+          `CG@k`,
+          `DCG@k`,
+          `ideal_DCG@k`,
+          `NDCG@k`,
+          
+          # model 2
+          `item_rank `,
+          `item_id `,
+          `relevant_to_user_1 `,
+          `CG@k  `,
+          `DCG@k  `,
+          `NDCG@k  `
+        ) %>% 
+  kbl( 
+       caption = "NDCG@k",
+       escape = FALSE,
+       align = "l",
+       booktabs = TRUE
+     ) %>%
+  kable_paper( "hover", full_width = FALSE ) %>%
+  # column_spec( column = 1:10, width = "6cm") %>%
+  kable_styling(
+                  bootstrap_options = "striped",
+                  full_width = FALSE,
+                  position = "center"
+               ) %>%
+  add_header_above( c("Model 1" = 7, "Model 2" = 6) )
+```
+
+```{r echo=FALSE}
+bind_cols(
+  model1_metric_calcs
+  ,
+  model2_metric_calcs %>% rename_all(function(x){ paste0(x," ")} )
+) %>% 
+  rename( 
+          item_rank = model1_item_rank_for_user1
+          ,
+          `item_rank ` = `model2_item_rank_for_user1 `
+        ) %>% 
+  mutate_all( round, digits = 3 ) %>% 
+  
+  # set up conditional formatting bars
+  # note that I use fun=function(x){x} in order to make bars proportonal to the values themselves, rather than scaling them
+  mutate( 
+          precision = formattable::color_bar("lightgreen", fun=function(x){x})(.$precision),
+          `precision ` = formattable::color_bar("lightgreen", fun=function(x){x})(.$`precision `),
+          recall = formattable::color_bar("lightblue", fun=function(x){x})(.$recall),
+          `recall ` = formattable::color_bar("lightblue", fun=function(x){x})(.$`recall `),
+          Average_Precision = formattable::color_bar("pink", fun=function(x){x})(.$Average_Precision),
+          `Average_Precision ` = formattable::color_bar("pink", fun=function(x){x})(.$`Average_Precision `),
+        ) %>%
+   
+  select( 
+          # model 1
+          item_rank, 
+          item_id,
+          relevant_to_user_1,
+          precision,
+          recall, 
+          Average_Precision,
+          
+          # model 2
+          `item_rank `,
+          `item_id `,
+          `relevant_to_user_1 `,
+          `precision `,
+          `recall `,
+          `Average_Precision `
+        ) %>% 
+  kbl( 
+       caption = "AP@k",
+       escape = FALSE,
+       align = "l",
+       booktabs = TRUE
+     ) %>%
+  kable_paper("hover", full_width = F) %>%
+  # column_spec( column = 1:10, width = "6cm") %>%
+  kable_styling(
+                  bootstrap_options = "striped",
+                  full_width = FALSE,
+                  position = "center"
+               ) %>%
+  add_header_above( c("Model 1" = 6, "Model 2" = 6) )
+```
+
+```{r fig.width=13, echo=FALSE}
+ggplot(
+        data = bind_rows( 
+                            model1_metric_calcs %>% 
+                              mutate( model = "Model 1") %>% 
+                              rename( model_item_rank_for_user1 = model1_item_rank_for_user1 )
+                            ,
+                            model2_metric_calcs %>% 
+                              rename_all( .funs = function(x){ gsub(" ","", x) } ) %>% 
+                              mutate( model = "Model 2" ) %>% 
+                              rename( model_item_rank_for_user1 = model2_item_rank_for_user1 )
+                        ),
+        aes( x = recall,
+             y = precision,
+             label = model_item_rank_for_user1
+           )
+) +
+  geom_point() + 
+  geom_line() +
+  geom_text( 
+            colour = "red",
+            hjust = -0.5
+          ) + 
+  facet_wrap( ~model )
+
+```
+

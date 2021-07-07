@@ -1,0 +1,142 @@
+---
+title: "Untitled"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+num_features_in_common <- function(vec1, vec2){ sum(vec1 == vec2) }
+```
+
+simulate customers:
+
+```{r}
+
+sim_population <- function( n_customers,
+                            n_uplift_reps,
+                            n_campaigns,
+                            n_observed_features,
+                            n_UNobserved_features
+                          ){
+      # simulate uplift reps:
+      uplift_rep_list <- list()
+      
+      for( i in 1:n_uplift_reps ){
+        
+        campaign_effects <- rep( 0, n_campaigns )
+        campaign_effects <- data.frame(t(sapply(campaign_effects,c)))
+        names(campaign_effects) <- paste("campaign", 1:n_campaigns, sep="_")
+        campaign_effects <- model.matrix( ~.*. -1, campaign_effects )
+        for( j in 1:length(campaign_effects) ){ campaign_effects[j] <- sample(1:10, size=1) }
+        uplift_rep_list[[ paste0("rep",i) ]]$campaign_effects <- campaign_effects 
+      
+        observed_features <- sample( 0:1, size=n_observed_features, replace=TRUE )
+        names(observed_features) <- paste("X", 1:n_observed_features, sep="")  
+        UNobserved_features <- sample( 0:1, size=n_UNobserved_features, replace=TRUE )
+        names(UNobserved_features) <- paste("Z", 1:n_UNobserved_features, sep="")  
+      
+        uplift_rep_list[[ paste0("rep",i) ]]$features <- c(observed_features, UNobserved_features)
+      }
+      
+      campaign_effects_mat <- do.call( rbind, lapply(uplift_rep_list, function(r){r$campaign_effects} ) )
+      rownames(campaign_effects_mat) <- paste("rep", 1:nrow(campaign_effects_mat))
+      
+      # simulate customers:
+      customer_list <- list()
+      
+      for( i in 1:n_customers ){
+        
+        observed_features <- sample( 0:1, size=n_observed_features, replace=TRUE )
+        names(observed_features) <- paste("X", 1:n_observed_features, sep="")  
+        UNobserved_features <- sample( 0:1, size=n_UNobserved_features, replace=TRUE )
+        names(UNobserved_features) <- paste("Z", 1:n_UNobserved_features, sep="")  
+      
+        customer_list[[ paste0("customer_",i) ]]$features <- c(observed_features, UNobserved_features)
+        
+        customer_list[[ paste0("customer_",i) ]]$pre_campaign_y <- sample(0:100, size=1)
+        
+        # calculate campaign effects for this customer:
+        similarity_to_each_uplift_rep <- sapply(
+            uplift_rep_list,
+            function(r){ num_features_in_common( r$features,                                 # uplift rep features
+                                                 c(observed_features, UNobserved_features)   # this customer's features
+                                               ) } 
+        )
+        relative_similarities_to_uplift_reps <- similarity_to_each_uplift_rep / sum(similarity_to_each_uplift_rep)
+        customer_list[[ paste0("customer_",i) ]]$relative_similarities_to_uplift_reps <- relative_similarities_to_uplift_reps 
+        customer_list[[ paste0("customer_",i) ]]$campaign_effects <- 
+          sapply(
+            1:ncol(campaign_effects_mat),
+            function(x){ sum( campaign_effects_mat[,x] * relative_similarities_to_uplift_reps ) } 
+        )
+        names(customer_list[[ paste0("customer_",i) ]]$campaign_effects) <- colnames(campaign_effects)
+        
+      }
+      
+      return( 
+              list( 
+                    uplift_reps = uplift_rep_list,
+                      customers = customer_list
+                  )
+              
+            )
+}      
+
+```
+
+example of simulated population: 
+
+```{r}
+sim_population(   n_customers = 2,
+                n_uplift_reps = 3,
+                  n_campaigns = 5,
+          n_observed_features = 4,
+        n_UNobserved_features = 3
+              )
+```
+
+```{r}
+n_experiments <- 3
+n_customers_targeted_per_campaign <- 10
+population_params <- list( n_customers = 100,
+                           n_uplift_reps = 2,
+                           n_campaigns = 5,
+                           n_observed_features = 4,
+                           n_UNobserved_features = 3
+                          )
+experiment_list <- list()
+experiment_results <- list()
+
+for( experiment_i in 1:n_experiments ){
+  
+  # create population of customers:
+  experiment_list[[paste0("experiment",experiment_i)]]$population <- 
+      sim_population( n_customers           = population_params$n_customers,
+                      n_uplift_reps         = population_params$n_uplift_reps,
+                      n_campaigns           = population_params$n_campaigns,
+                      n_observed_features   = population_params$n_observed_features,
+                      n_UNobserved_features = population_params$n_UNobserved_features
+                    )
+  
+  # assign customers randomly to campaign target groups (i.e. customers to receive the campaign):
+  campaign_target_groups <- list()
+  for( campaign_i in 1:population_params$n_campaigns ){
+    target_customer_index <- sort( sample(1:population_params$n_customers, size=n_customers_targeted_per_campaign) ) 
+    
+    campaign_target_groups[[paste0("campaign",campaign_i)]]$target_customer_index <- target_customer_index
+  }
+  
+  # choose random control groups:
+  campaign_random_control_groups <- list()
+
+  
+  # choose matched control groups:
+  campaign_matched_control_groups <- list()
+  
+  
+}
+```

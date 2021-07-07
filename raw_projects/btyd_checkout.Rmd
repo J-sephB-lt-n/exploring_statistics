@@ -1,0 +1,155 @@
+---
+title: "BTYD_checkout"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(BTYDplus)
+```
+
+I used this query to get a random sample of customers transaction histories:
+
+```{sql}
+select
+			[PersonNo]
+		,	[Date]
+		,	SUM(OrdPrice) AS [sum_OrdPrice]
+from
+			[data_staging].[extract].[HC_DW_factOrderTruncate] orders
+inner join
+			(
+				select 
+						[DateKey]
+					,	[Date]
+				from
+						[data_staging].[extract].[HC_DW_dim_date]
+			)
+			dimdate
+on
+			orders.[OrderDteKey] = dimdate.[DateKey]
+where
+			[PersonNo] in (select top 50000 [PersonNo] from [data_staging].[extract].[HC_DW_factOrderTruncate] order by newid())
+and
+			[CurrOrdStatus] in 
+								(
+									select 
+												[OrdStatusKey]
+									from
+												[data_staging].[extract].[HC_DW_dimOrdStatus]
+									where
+												[OrdStatusGrp] = 'Despatch'
+								)
+group by 
+			[PersonNo]
+		,	[Date]
+order by
+			[PersonNo]
+		,	[Date]
+;
+```
+
+define holdout period start date:
+
+```{r}
+holdout_start_date <- "2021-01-01"
+```
+
+read in data:
+
+```{r}
+transaction_data <- read_csv("C:/Users/jbolton/Desktop/temp.csv")
+head(transaction_data)
+```
+
+plot transactions histories of a few random customers:
+
+```{r fig.width=12, fig.height=12}
+transaction_data %>% 
+  # select some random customers
+  filter( PersonNo %in% sample( unique(transaction_data$PersonNo), 40) ) %>% 
+  mutate( PersonNo = factor(PersonNo) ) %>% 
+  ggplot( 
+          data = .,
+          aes( y = PersonNo,
+               x = Date
+             )  
+        ) + 
+  geom_point( shape="|", size=5 ) +
+  labs( title = "Sample of Customer Despatched Order Histories" )
+```
+
+```{r}
+# get transaction data into format needed by BTYDplus package:
+transaction_data_btyd <- 
+  transaction_data %>% 
+    filter( PersonNo %in% sample( unique(transaction_data$PersonNo), 1000) ) %>% 
+    filter( sum_OrdPrice > 0 ) %>% 
+    rename( cust = PersonNo,
+            date = Date,
+            sales = sum_OrdPrice
+          )  
+  
+# create customer-by-sufficient-statistic view:
+calc_cbs <- 
+      BTYDplus::elog2cbs( 
+                     elog = transaction_data_btyd,      # event log
+                    units = "week",                     # unit of time to use
+                    T.cal = holdout_start_date          # start of holdout period
+                  )
+
+calc_cbs
+
+# estimate parameters of Pareto/GGG model:
+pggg_draws <- BTYDplus::pggg.mcmc.DrawParameters( calc_cbs )
+```
+
+add model customer estimates to customer-by-sufficient-statistic view table:
+
+```{r}
+# generate a sample from the posterior distribution: 
+pggg.xstar.draws <- BTYDplus::mcmc.DrawFutureTransactions(calc_cbs, pggg_draws)
+
+# conditional expectations (expected number of transactions in observation period)
+calc_cbs$xstar.pggg <- apply(pggg.xstar.draws, 2, mean)
+
+# get Pr(active) for each customer (i.e. prob will shop in holdout period):
+calc_cbs$pactive.pggg <- mcmc.PActive(pggg.xstar.draws)
+
+# get Pr(alive) for each customer:
+calc_cbs$palive.pggg <- mcmc.PAlive(pggg_draws)
+
+```
+
+plot customers with their estimates: 
+
+```{r fig.width=12, fig.height=6}
+calc_cbs_tibble <- as_tibble(calc_cbs)
+
+transaction_data_btyd %>% 
+  filter( cust %in% sample( unique(transaction_data_btyd$cust), 20) ) %>%  # random sample of customers
+  left_join( calc_cbs_tibble, by="cust" ) %>% 
+  mutate( #cust = factor(cust),
+          cust = paste0( cust, "  Pr[alive]=", palive.pggg ),
+          in_holdout = if_else( date > holdout_start_date, 
+                                1,
+                                0
+                              ) %>% as_factor()
+        ) %>% 
+  ggplot( 
+          data = .,
+          aes( y = cust,
+               x = date,
+               colour = in_holdout
+             )  
+        ) + 
+  geom_point( shape="|", size=5 ) +
+  geom_vline( xintercept = as.numeric(as.POSIXct(holdout_start_date)), alpha=0.5 ) +
+  labs( title = "Sample of Customer Despatched Order Histories",
+        subtitle = "with probability of alive from Pareto/GGG model"  
+      )
+
+
+```

@@ -1,0 +1,504 @@
+---
+title: "DCN V2 Cross Layer Investigation"
+author: "Joseph Bolton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+[DCN V2: Improved Deep & Cross Network and Practical Lessons for Web-scale Learning to Rank Systems](https://arxiv.org/abs/2008.13535)
+
+![](c:/users/jbolton/Documents/blogs/updated_visualisation_of_a_cross_layer.jpg)
+
+$$\begin{array}{lcl}
+x_{l+1} &=& x_0 \odot (W_l x_l + b_l) + x_l \\
+x_0 &=& \begin{bmatrix}
+          \color{orange}{a} \\
+          \color{green}{b} \\
+          \color{brown}{c} \\
+        \end{bmatrix} 
+\\
+x_1 
+  &=& 
+        x_0 \odot (W_0 x_0 + b_0) + x_0 \\
+  &=&
+  \begin{bmatrix}
+          \color{orange}{a} \\
+          \color{green}{b} \\
+          \color{brown}{c} \\
+  \end{bmatrix}
+  \odot
+  \Bigg( 
+         \begin{bmatrix}
+         {^0}w_{11} & {^0}w_{12} & {^0}w_{13} \\
+         {^0}w_{21} & {^0}w_{22} & {^0}w_{23} \\
+         {^0}w_{31} & {^0}w_{32} & {^0}w_{33} \\
+         \end{bmatrix}
+          \begin{bmatrix}
+            \color{orange}{a} \\
+            \color{green}{b} \\
+            \color{brown}{c} \\
+          \end{bmatrix}
+          +
+         \begin{bmatrix}
+         {^0}b_1 \\ {^0}b_2 \\ {^0}b_3 \\
+         \end{bmatrix}      
+  \Bigg)
+  +
+    \begin{bmatrix}
+          \color{orange}{a} \\
+          \color{green}{b} \\
+          \color{brown}{c} \\
+  \end{bmatrix}
+\\
+&=&
+  \begin{bmatrix}
+    \color{orange}{a}(
+      {^0}w_{11}\color{orange}{a} + 
+      {^0}w_{12}\color{green}{b} + 
+      {^0}w_{13}\color{brown}{c}
+      +
+      {^0}b_1
+    )
+    +
+    \color{orange}{a}
+    \\
+    \color{green}{b}(
+      {^0}w_{21}\color{orange}{a} + 
+      {^0}w_{22}\color{green}{b} + 
+      {^0}w_{23}\color{brown}{c}
+      +
+      {^0}b_2
+    )
+    +
+    \color{green}{b}
+    \\
+    \color{brown}{c}(
+      {^0}w_{31}\color{orange}{a} + 
+      {^0}w_{32}\color{green}{b} + 
+      {^0}w_{33}\color{brown}{c}
+      +
+      {^0}b_3
+    )
+    +
+    \color{brown}{c}
+  \end{bmatrix}
+\\  
+&=&
+  \begin{bmatrix}
+      {^0}w_{11}\color{orange}{a^2} + 
+      {^0}w_{12}\color{orange}{a}\color{green}{b} + 
+      {^0}w_{13}\color{orange}{a}\color{brown}{c}
+      +
+      \color{orange}{a}({^0}b_1+1)
+    \\
+    {^0}w_{21}\color{orange}{a}\color{green}{b} + 
+      {^0}w_{22}\color{green}{b^2} + 
+      {^0}w_{23}\color{green}{b}\color{brown}{c}
+      +
+      \color{green}{b}({^0}b_2+1)
+    \\
+    {^0}w_{31}\color{orange}{a}\color{brown}{c} + 
+      {^0}w_{32}\color{green}{b}\color{brown}{c} + 
+      {^0}w_{33}\color{brown}{c^2}
+      +
+      \color{brown}{c}( {^0}b_3+1 )
+    )
+  \end{bmatrix}
+  \\
+x_2 
+  &=&
+      x_0 \odot (W_1 x_1 + b_1 ) + x_1 \\
+  &=&
+  \underset{x_0}{
+    \underbrace{
+      \begin{bmatrix}
+          \color{orange}{a} \\
+          \color{green}{b} \\
+          \color{brown}{c} \\
+      \end{bmatrix}
+    }
+  }
+  \odot
+  \Bigg( 
+        \underset{W_1}{
+          \underbrace{
+           \begin{bmatrix}
+           {^1}w_{11} & {^1}w_{12} & {^1}w_{13} \\
+           {^1}w_{21} & {^1}w_{22} & {^1}w_{23} \\
+           {^1}w_{31} & {^1}w_{32} & {^1}w_{33} \\
+           \end{bmatrix}
+          }
+        }
+          \underset{x_1}{
+            \underbrace{
+              \begin{bmatrix}
+                  {^0}w_{11}\color{orange}{a^2} + 
+                  {^0}w_{12}\color{orange}{a}\color{green}{b} + 
+                  {^0}w_{13}\color{orange}{a}\color{brown}{c}
+                  +
+                  \color{orange}{a}({^0}b_1+1)
+                \\
+                {^0}w_{21}\color{orange}{a}\color{green}{b} + 
+                  {^0}w_{22}\color{green}{b^2} + 
+                  {^0}w_{23}\color{green}{b}\color{brown}{c}
+                  +
+                  \color{green}{b}({^0}b_2+1)
+                \\
+                {^0}w_{31}\color{orange}{a}\color{brown}{c} + 
+                  {^0}w_{32}\color{green}{b}\color{brown}{c} + 
+                  {^0}w_{33}\color{brown}{c^2}
+                  +
+                  \color{brown}{c}( {^0}b_3+1 )
+                )
+              \end{bmatrix}
+            }
+          }
+          +
+          \underset{b_1}{
+            \underbrace{
+              \begin{bmatrix}
+                {^1}b_1 \\ {^1}b_2 \\ {^1}b_3 \\
+               \end{bmatrix}      
+            }
+          }
+  \Bigg)
+  +
+          \underset{x_1}{
+            \underbrace{
+              \begin{bmatrix}
+                  {^0}w_{11}\color{orange}{a^2} + 
+                  {^0}w_{12}\color{orange}{a}\color{green}{b} + 
+                  {^0}w_{13}\color{orange}{a}\color{brown}{c}
+                  +
+                  \color{orange}{a}({^0}b_1+1)
+                \\
+                {^0}w_{21}\color{orange}{a}\color{green}{b} + 
+                  {^0}w_{22}\color{green}{b^2} + 
+                  {^0}w_{23}\color{green}{b}\color{brown}{c}
+                  +
+                  \color{green}{b}({^0}b_2+1)
+                \\
+                {^0}w_{31}\color{orange}{a}\color{brown}{c} + 
+                  {^0}w_{32}\color{green}{b}\color{brown}{c} + 
+                  {^0}w_{33}\color{brown}{c^2}
+                  +
+                  \color{brown}{c}( {^0}b_3+1 )
+                )
+              \end{bmatrix}
+            }
+          }
+\\  
+&=&
+  \begin{bmatrix}
+      \color{orange}{a} \\
+      \color{green}{b} \\
+      \color{brown}{c} \\
+  \end{bmatrix}
+  \odot
+  \begin{bmatrix}
+    {^1}w_{11}(
+                  {^0}w_{11}\color{orange}{a^2} + 
+                  {^0}w_{12}\color{orange}{a}\color{green}{b} + 
+                  {^0}w_{13}\color{orange}{a}\color{brown}{c}
+                  +
+                  \color{orange}{a}{^0}b_1+\color{orange}{a}
+    ) 
+    +
+    {^1}w_{12}(
+                {^0}w_{21}\color{orange}{a}\color{green}{b} + 
+                  {^0}w_{22}\color{green}{b^2} + 
+                  {^0}w_{23}\color{green}{b}\color{brown}{c}
+                  +
+                  \color{green}{b}{^0}b_2 + \color{green}{b}
+    ) +
+    {^1}w_{13}(
+                {^0}w_{31}\color{orange}{a}\color{brown}{c} + 
+                  {^0}w_{32}\color{green}{b}\color{brown}{c} + 
+                  {^0}w_{33}\color{brown}{c^2}
+                  +
+                  \color{brown}{c}{^0}b_3 + \color{brown}{c}
+    )
+    +
+    {^1}b_1 
+    \\
+    {^1}w_{21}(
+                  {^0}w_{11}\color{orange}{a^2} + 
+                  {^0}w_{12}\color{orange}{a}\color{green}{b} + 
+                  {^0}w_{13}\color{orange}{a}\color{brown}{c}
+                  +
+                  \color{orange}{a}{^0}b_1+\color{orange}{a}
+    ) 
+    +
+    {^1}w_{22}(
+                {^0}w_{21}\color{orange}{a}\color{green}{b} + 
+                  {^0}w_{22}\color{green}{b^2} + 
+                  {^0}w_{23}\color{green}{b}\color{brown}{c}
+                  +
+                  \color{green}{b}{^0}b_2 + \color{green}{b}
+    ) +
+    {^1}w_{23}(
+                {^0}w_{31}\color{orange}{a}\color{brown}{c} + 
+                  {^0}w_{32}\color{green}{b}\color{brown}{c} + 
+                  {^0}w_{33}\color{brown}{c^2}
+                  +
+                  \color{brown}{c}{^0}b_3 + \color{brown}{c}
+    )
+    +
+    {^1}b_2    
+    \\
+    {^1}w_{31}(
+                  {^0}w_{11}\color{orange}{a^2} + 
+                  {^0}w_{12}\color{orange}{a}\color{green}{b} + 
+                  {^0}w_{13}\color{orange}{a}\color{brown}{c}
+                  +
+                  \color{orange}{a}{^0}b_1+\color{orange}{a}
+    ) 
+    +
+    {^1}w_{32}(
+                {^0}w_{21}\color{orange}{a}\color{green}{b} + 
+                  {^0}w_{22}\color{green}{b^2} + 
+                  {^0}w_{23}\color{green}{b}\color{brown}{c}
+                  +
+                  \color{green}{b}{^0}b_2 + \color{green}{b}
+    ) +
+    {^1}w_{33}(
+                {^0}w_{31}\color{orange}{a}\color{brown}{c} + 
+                  {^0}w_{32}\color{green}{b}\color{brown}{c} + 
+                  {^0}w_{33}\color{brown}{c^2}
+                  +
+                  \color{brown}{c}{^0}b_3 + \color{brown}{c}
+    )
+    +
+    {^1}b_3        
+  \end{bmatrix}
+  +
+              \begin{bmatrix}
+                  {^0}w_{11}\color{orange}{a^2} + 
+                  {^0}w_{12}\color{orange}{a}\color{green}{b} + 
+                  {^0}w_{13}\color{orange}{a}\color{brown}{c}
+                  +
+                  \color{orange}{a}({^0}b_1+1)
+                \\
+                {^0}w_{21}\color{orange}{a}\color{green}{b} + 
+                  {^0}w_{22}\color{green}{b^2} + 
+                  {^0}w_{23}\color{green}{b}\color{brown}{c}
+                  +
+                  \color{green}{b}({^0}b_2+1)
+                \\
+                {^0}w_{31}\color{orange}{a}\color{brown}{c} + 
+                  {^0}w_{32}\color{green}{b}\color{brown}{c} + 
+                  {^0}w_{33}\color{brown}{c^2}
+                  +
+                  \color{brown}{c}( {^0}b_3+1 )
+              \end{bmatrix}  
+\\
+&=&
+  \begin{bmatrix}
+    {^1}w_{11}(
+                  {^0}w_{11}\color{orange}{a^3} + 
+                  {^0}w_{12}\color{orange}{a^2}\color{green}{b} + 
+                  {^0}w_{13}\color{orange}{a^2}\color{brown}{c}
+                  +
+                  {^0}b_1\color{orange}{a^2} + \color{orange}{a^2}
+    ) 
+    +
+    {^1}w_{12}(
+                {^0}w_{21}\color{orange}{a^2}\color{green}{b} + 
+                  {^0}w_{22}\color{orange}{a}\color{green}{b^2} + 
+                  {^0}w_{23}\color{orange}{a}\color{green}{b}\color{brown}{c}
+                  +
+                  {^0}b_2\color{orange}{a}\color{green}{b} + \color{orange}{a}\color{green}{b}
+    ) +
+    {^1}w_{13}(
+                {^0}w_{31}\color{orange}{a^2}\color{brown}{c} + 
+                  {^0}w_{32}\color{orange}{a}\color{green}{b}\color{brown}{c} + 
+                  {^0}w_{33}\color{orange}{a}\color{brown}{c^2}
+                  +
+                  {^0}b_3\color{orange}{a}\color{brown}{c} + \color{orange}{a}\color{brown}{c}
+    )
+    +
+    {^1}b_1 \color{orange}{a}
+    +
+                  {^0}w_{11}\color{orange}{a^2} + 
+                  {^0}w_{12}\color{orange}{a}\color{green}{b} + 
+                  {^0}w_{13}\color{orange}{a}\color{brown}{c}
+                  +
+                  \color{orange}{a}({^0}b_1+1)
+    \\
+    {^1}w_{21}(
+                  {^0}w_{11}\color{orange}{a^2}\color{green}{b} + 
+                  {^0}w_{12}\color{orange}{a}\color{green}{b^2} + 
+                  {^0}w_{13}\color{orange}{a}\color{green}{b}\color{brown}{c}
+                  +
+                  {^0}b_1\color{orange}{a}\color{green}{b} + \color{orange}{a}\color{green}{b}
+    ) 
+    +
+    {^1}w_{22}(
+                {^0}w_{21}\color{orange}{a}\color{green}{b^2} + 
+                  {^0}w_{22}\color{green}{b^3} + 
+                  {^0}w_{23}\color{green}{b^2}\color{brown}{c}
+                  +
+                  {^0}b_2\color{green}{b^2} + \color{green}{b^2}
+    ) +
+    {^1}w_{23}(
+                {^0}w_{31}\color{orange}{a}\color{green}{b}\color{brown}{c} + 
+                  {^0}w_{32}\color{green}{b^2}\color{brown}{c} + 
+                  {^0}w_{33}\color{green}{b}\color{brown}{c^2}
+                  +
+                  {^0}b_3\color{green}{b}\color{brown}{c} + \color{green}{b}\color{brown}{c}
+    )
+    +
+    {^1}b_2\color{green}{b} 
+    +
+                  {^0}w_{21}\color{orange}{a}\color{green}{b} + 
+                  {^0}w_{22}\color{green}{b^2} + 
+                  {^0}w_{23}\color{green}{b}\color{brown}{c}
+                  +
+                  \color{green}{b}({^0}b_2+1)
+    \\
+    {^1}w_{31}(
+                  {^0}w_{11}\color{orange}{a^2}\color{brown}{c} + 
+                  {^0}w_{12}\color{orange}{a}\color{green}{b}\color{brown}{c} + 
+                  {^0}w_{13}\color{orange}{a}\color{brown}{c^2}
+                  +
+                  {^0}b_1\color{orange}{a}\color{brown}{c} + \color{orange}{a}\color{brown}{c}
+    ) 
+    +
+    {^1}w_{32}(
+                  {^0}w_{21}\color{orange}{a}\color{green}{b}\color{brown}{c} + 
+                  {^0}w_{22}\color{green}{b^2}\color{brown}{c} + 
+                  {^0}w_{23}\color{green}{b}\color{brown}{c^2}
+                  +
+                  {^0}b_2\color{green}{b}\color{brown}{c} + \color{green}{b}\color{brown}{c}
+    ) +
+    {^1}w_{33}(
+                  {^0}w_{31}\color{orange}{a}\color{brown}{c^2} + 
+                  {^0}w_{32}\color{green}{b}\color{brown}{c^2} + 
+                  {^0}w_{33}\color{brown}{c^3}
+                  +
+                  {^0}b_3\color{brown}{c^2} + \color{brown}{c^2}
+    )
+    +
+    {^1}b_3\color{brown}{c}  
+    +
+                  {^0}w_{31}\color{orange}{a}\color{brown}{c} + 
+                  {^0}w_{32}\color{green}{b}\color{brown}{c} + 
+                  {^0}w_{33}\color{brown}{c^2}
+                  +
+                  \color{brown}{c}( {^0}b_3+1 )
+  \end{bmatrix}  
+\\
+x_3 
+  &=&
+      x_0 \odot (W_2 x_2 + b_2 ) + x_2 \\
+  &=&
+  \underset{x_0}{
+    \underbrace{
+      \begin{bmatrix}
+          \color{orange}{a} \\
+          \color{green}{b} \\
+          \color{brown}{c} \\
+      \end{bmatrix}
+    }
+  }
+  \odot
+  \Bigg( 
+        \underset{W_2}{
+          \underbrace{
+           \begin{bmatrix}
+           {^2}w_{11} & {^2}w_{12} & {^2}w_{13} \\
+           {^2}w_{21} & {^2}w_{22} & {^2}w_{23} \\
+           {^2}w_{31} & {^2}w_{32} & {^2}w_{33} \\
+           \end{bmatrix}
+          }
+        }
+          \underset{x_2}{
+            \underbrace{
+              \begin{bmatrix}
+                  . \\ . \\ .
+              \end{bmatrix}
+            }
+          }
+          +
+          \underset{b_2}{
+            \underbrace{
+              \begin{bmatrix}
+                {^2}b_1 \\ {^2}b_2 \\ {^2}b_3 \\
+               \end{bmatrix}      
+            }
+          }
+  \Bigg)
+  +
+          \underset{x_2}{
+            \underbrace{
+              \begin{bmatrix}
+                  . \\ . \\ .
+              \end{bmatrix}
+            }
+          }
+\end{array}$$
+
+Here is a quick validation of my calculation:
+
+```{r}
+# validate my calculation:
+a <- -1
+b <- 4
+c <- 9
+x0 <- matrix( c(a, b, c), nrow=3, ncol=1 ) 
+w0 <- matrix( sample( -100:100, size=9, replace=TRUE),
+              nrow = 3,
+              ncol = 3
+            )
+b0 <- matrix( sample( -100:100, size=3, replace=TRUE),
+              nrow = 3,
+              ncol = 1
+            )
+w1 <- matrix( sample( -100:100, size=9, replace=TRUE),
+              nrow = 3,
+              ncol = 3
+            )
+b1 <- matrix( sample( -100:100, size=3, replace=TRUE),
+              nrow = 3,
+              ncol = 1
+            )
+
+x1 <- x0 * ( w0%*%x0 + b0 ) + x0
+x2 <- x0 * ( w1%*%x1 + b1 ) + x1
+
+x2
+
+c(
+    w1[1,1]*( w0[1,1]*a^3 + w0[1,2]*a^2*b + w0[1,3]*a^2*c + b0[1]*a^2 + a^2 ) +
+    w1[1,2]*( w0[2,1]*a^2*b + w0[2,2]*a*b^2 + w0[2,3]*a*b*c + b0[2]*a*b + a*b ) +
+    w1[1,3]*( w0[3,1]*a^2*c + w0[3,2]*a*b*c + w0[3,3]*a*c^2 + b0[3]*a*c + a*c) +
+    b1[1]*a +
+    w0[1,1]*a^2 + 
+    w0[1,2]*a*b +
+    w0[1,3]*a*c +
+    a * (b0[1] + 1)
+    ,
+    w1[2,1]*( w0[1,1]*a^2*b + w0[1,2]*a*b^2 + w0[1,3]*a*b*c + b0[1]*a*b + a*b ) +
+    w1[2,2]*( w0[2,1]*a*b^2 + w0[2,2]*b^3 + w0[2,3]*b^2*c + b0[2]*b^2 + b^2 ) +
+    w1[2,3]*( w0[3,1]*a*b*c + w0[3,2]*b^2*c + w0[3,3]*b*c^2 + b0[3]*b*c + b*c) +
+    b1[2]*b +
+    w0[2,1]*a*b + 
+    w0[2,2]*b^2 +
+    w0[2,3]*b*c +
+    b * (b0[2] + 1)    
+    ,
+    w1[3,1]*( w0[1,1]*a^2*c + w0[1,2]*a*b*c + w0[1,3]*a*c^2 + b0[1]*a*c + a*c ) +
+    w1[3,2]*( w0[2,1]*a*b*c + w0[2,2]*b^2*c + w0[2,3]*b*c^2 + b0[2]*b*c + b*c ) +
+    w1[3,3]*( w0[3,1]*a*c^2 + w0[3,2]*b*c^2 + w0[3,3]*c^3 + b0[3]*c^2 + c^2) +
+    b1[3]*c +
+    w0[3,1]*a*c + 
+    w0[3,2]*b*c +
+    w0[3,3]*c^2 +
+    c * (b0[3] + 1)        
+    
+)
+```
+
+
+
+

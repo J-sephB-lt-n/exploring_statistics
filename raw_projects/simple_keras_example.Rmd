@@ -1,0 +1,304 @@
+---
+title: "keras_example"
+output: html_document
+---
+
+Example from:
+
+https://keras.io/examples/structured_data/structured_data_classification_from_scratch/
+
+```{r setup, include=FALSE}
+# R
+
+knitr::opts_chunk$set(echo = TRUE)
+library(reticulate)
+reticulate::use_python("C:/Program Files (x86)/Microsoft Visual Studio/Shared/Python37_64/")
+library(tidyverse)
+```
+
+```{python}
+# python
+# import packages:
+
+import pandas as pd
+import numpy as np
+
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+```
+
+```{python}
+file_url = "http://storage.googleapis.com/download.tensorflow.org/data/heart.csv"
+dataframe = pd.read_csv(file_url)
+
+dataframe.shape
+```
+
+```{python}
+dataframe['cp'] = 'cp' + dataframe['cp'].astype(str)
+dataframe['fbs'] = 'fbs' + dataframe['fbs'].astype(str)
+dataframe['restecg'] = 'restecg' + dataframe['restecg'].astype(str)
+dataframe['ca'] = 'ca' + dataframe['ca'].astype(str)
+```
+
+
+```{python}
+dataframe.head()
+```
+
+The last column, "target", indicates whether the patient has a heart disease (1) or not (0).
+
+Let's split the data into a training and validation set:
+
+
+```{python}
+val_dataframe = dataframe.sample( frac = 0.2,         # 20% to validation set 
+                                  random_state = 69420 
+                                )
+
+train_dataframe = dataframe.drop( val_dataframe.index )
+
+print(
+    "Using %d samples for training and %d for validation"
+    % (len(train_dataframe), len(val_dataframe))
+)                                
+```
+
+```{python}
+def dataframe_to_dataset(dataframe):
+    # turns a pandas dataframe into a tf.data.Dataset object
+    dataframe = dataframe.copy()
+    labels = dataframe.pop("target")
+    ds = tf.data.Dataset.from_tensor_slices((dict(dataframe), labels))
+    ds = ds.shuffle(buffer_size=len(dataframe))
+    return ds
+
+train_ds = dataframe_to_dataset(train_dataframe)
+val_ds = dataframe_to_dataset(val_dataframe)
+```
+
+```{python}
+train_ds
+```
+
+Each Dataset yields a tuple (input, target) where input is a dictionary of features and target is the value 0 or 1:
+
+```{python}
+for x, y in train_ds.take(1):
+    print("Input:", x)
+    print("Target:", y)
+```
+
+batch the datasets (batches of size 32):
+
+```{python}
+train_ds = train_ds.batch(32)
+val_ds = val_ds.batch(32)
+```
+
+```{python}
+continuous_numeric_featurenames = [ 
+                                    'age',
+                                    'trestbps',
+                                    'chol',
+                                    'thalach',
+                                    'oldpeak',
+                                    'slope'
+                                  ]
+                                  
+string_categorical_featurenames = [ 
+                                    'cp',
+                                    'fbs',
+                                    'restecg',
+                                    'ca'
+                                  ]
+
+integer_categorical_featurenames = [
+                                      'sex',
+                                      'exang'
+                                   ]                                  
+
+```
+
+create function for normalizing a continuous numerical feature:
+
+```{python}
+from tensorflow.keras.layers.experimental.preprocessing import Normalization
+
+def encode_numerical_feature(
+                              feature,        # object of form keras.Input()
+                              name,           # name of column in 'dataset' 
+                              dataset         # pandas dataset containing this feature
+                            ):
+  # create a normalization layer for this feature:
+  normalizer = Normalization()        
+  
+  # prepare a dataset containing only the single feature:
+  feature_ds = ( dataset
+                 .map( lambda x, y: [name] )
+                 .map( lambda : tf.expand_dims(x, -1) )
+               )
+               
+  # normalizer learns mean and sd from the feature:               
+  normalizer.adapt(feature_ds)        
+  
+  # normalize the feature
+  encoded_feature = normalizer(feature)
+  
+  return encoded_feature
+               
+```
+
+create function for encoding a categorical feature stored as a string:
+
+```{python}
+
+from tensorflow.keras.layers.experimental.preprocessing import StringLookup
+from tensorflow.keras.layers.experimental.preprocessing import CategoryEncoding
+
+def encode_string_categorical_feature( 
+                                        feature,        # object of form keras.Input()
+                                        name,           # name of column in 'dataset' 
+                                        dataset         # pandas dataset containing this feature
+                                     ):
+  # create StringLookup layer which turns strings into integer indices:
+  index = StringLookup()
+  
+  # prepare a dataset containing only the selected feature:
+  feature_ds = (
+                  dataset
+                  .map( lambda x,y: x[name] )
+                  .map( lambda x: tf.expand_dims(x, -1) )
+               )
+  
+  # learn the set of possible string values and assign them a fixed integer index:
+  index.adapt( feature_ds )
+  
+  # encode the string input into integer indices:
+  encoded_feature = index(feature)
+  
+  # create a Category encoding for our integer indices:
+  encoder = CategoryEncoding( output_mode = 'binary' )
+  
+  # prepare a dataset of indices:
+  feature_ds = feature_ds.map(index)
+  
+  # learn the space of possible indices:
+  encoder.adapt(feature_ds)
+  
+  # apply one-hot encoding to our indices:
+  encoded_features = encoder(encoded_feature)
+  
+  return encoded_feature
+
+```
+
+create function for encoding a categorical feature stored as an integer:
+```{python}
+def encode_integer_categorical_feature( 
+                                        feature,        # object of form keras.Input()
+                                        name,           # name of column in 'dataset' 
+                                        dataset         # pandas dataset containing this feature
+                                      ):
+  # create a category encoding for our integer indices:
+  encoder = CategoryEncoding( output_mode='binary' )
+  
+  # prepare a dataset containing only our feature:
+  feature_ds = ( dataset
+                 .map( lambda x,y: x[name] )
+                 .map( lambda x: tf.expand_dims(x, -1) )
+               )
+               
+  # learn the space of possible indices:
+  encoder.adapt(feature_ds)
+  
+  # apply one-hot encoding to our indices:
+  encoded_feature = encoder(feature)
+  
+  return encoded_feature
+  
+```
+
+
+define formats of inputs to the model 
+```{python}
+# categorical features encoded as integers:
+sex = keras.Input( shape=(1,), name='sex', dtype='int64' ) 
+exang = keras.Input( shape=(1,), name='exang', dtype='int64' ) 
+
+# categorical features stored as strings:
+cp = keras.Input( shape=(1,), name='cp', dtype='string' )
+fbs = keras.Input( shape=(1,), name='fbs', dtype='string' )
+restecg = keras.Input( shape=(1,), name='restecg', dtype='string' )
+ca = keras.Input( shape=(1,), name='ca', dtype='string' )
+thal = keras.Input( shape=(1,), name='thal', dtype='string' )
+
+# numerical features:
+age = keras.Input( shape=(1,), name='age' )
+trestbps = keras.Input( shape=(1,), name='trestbps' )
+chol = keras.Input( shape=(1,), name='chol' )
+thalach = keras.Input( shape=(1,), name='thalach' )
+oldpeak = keras.Input( shape=(1,), name='oldpeak' )
+slope = keras.Input( shape=(1,), name='slope' )
+
+```
+
+encode features: 
+
+```{python}
+
+# Integer categorical features
+sex_encoded = encode_integer_categorical_feature( sex, "sex", train_ds )
+exang_encoded = encode_integer_categorical_feature( exang, "exang", train_ds )
+
+# String categorical features
+cp_encoded = encode_string_categorical_feature( cp, 'cp', train_ds )
+fbs_encoded = encode_string_categorical_feature( fbs, 'fbs', train_ds )
+restecg_encoded = encode_string_categorical_feature( restecg, 'restecg', train_ds )
+ca_encoded = encode_string_categorical_feature( ca, 'ca', train_ds )
+thal_encoded = encode_string_categorical_feature( thal, 'thal', train_ds )
+
+# Continuous numeric features:
+age_encoded = encode_numerical_feature(age, "age", train_ds)
+trestbps_encoded = encode_numerical_feature(trestbps, "trestbps", train_ds)
+chol_encoded = encode_numerical_feature(chol, "chol", train_ds)
+thalach_encoded = encode_numerical_feature(thalach, "thalach", train_ds)
+oldpeak_encoded = encode_numerical_feature(oldpeak, "oldpeak", train_ds)
+slope_encoded = encode_numerical_feature(slope, "slope", train_ds)
+
+all_features = layers.concatenate(
+    [
+        sex_encoded,
+        cp_encoded,
+        fbs_encoded,
+        restecg_encoded,
+        exang_encoded,
+        slope_encoded,
+        ca_encoded,
+        thal_encoded,
+        age_encoded,
+        trestbps_encoded,
+        chol_encoded,
+        thalach_encoded,
+        oldpeak_encoded
+    ]
+)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

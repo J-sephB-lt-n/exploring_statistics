@@ -1,0 +1,466 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reticulate)
+reticulate::use_python("C:/Program Files (x86)/Microsoft Visual Studio/Shared/Python37_64/")
+library(tidyverse)
+library(knitr)
+```
+
+```{python}
+# [python]
+# import packages:
+
+import pandas as pd
+import random
+from collections import deque  
+import numpy as np
+```
+
+```{python}
+n_customers = 1000
+n_products = 80
+```
+
+```{python}
+class product:
+  def __init__(self, product_id):
+    self.product_id = product_id
+    self.category = random.sample( ['clothing','tech','kitchen','bedding','appliances','furniture','shoes'], k=1 )[0]
+    self.price = random.sample( range(50,2000,50), k=1 )[0]
+    # this product can only be bought in these seasons:
+    self.seasons_sold = random.sample( ['winter','spring','summer','autumn'], k = random.randint(2,4) )
+    # only customers in this age range will like this product:
+    age_min = random.randint(18,80)
+    age_max = age_min + random.randint( 5, 30 )
+    age_max = min( 100, age_max )
+    if random.uniform(0,1) > 0.5:  # with 50% chance, bottom of age range is 18 
+      age_min = 18
+    if random.uniform(0,1) > 0.5:  # with 50% chance, top of age range is 100
+      age_max = 100
+    self.age_range = (age_min, age_max)
+    # only customers with this gender will buy this product (can be both):
+    self.gender_target = random.sample( ['male','female'], k=random.randint(1,2) )
+    
+test = product(420)
+test.__dict__
+
+```
+
+```{python}
+product_list = {}
+for i in range(1,n_products+1):
+  product_list[f'product_{i}'] = product(product_id=i)
+  
+product_list['product_1'].__dict__
+print('\n')
+product_list['product_2'].__dict__
+print('\n')
+product_list['product_3'].__dict__
+
+```
+
+```{python}
+# define current enviroment:
+CURRENT_SEASON = random.sample( ['winter','spring','summer','autumn'], k=1 )[0]
+CURRENT_SEASON
+
+```
+
+```{python}
+class customer:
+  def __init__(self, customer_id):
+    self.customer_id = customer_id
+    
+    # select an age for this customer:
+    age_range = random.sample( ( 
+                 [ (19,29) for i in range(25) ] +   # 25% chance 
+                 [ (30,39) for i in range(30) ] +   # 30% chance
+                 [ (40,49) for i in range(20) ] +   # 20% chance
+                 [ (50,59) for i in range(12) ] +   # 12% chance  
+                 [ (60,69) for i in range(8) ] +    #  8 % chance
+                 [ (70,100) for i in range(5) ]     #  5 % chance 
+               ),
+               k = 1
+            )[0]
+    self.age = random.randint( age_range[0], age_range[1] )
+
+    # customer will only purchase from these categories:
+    self.categories_interested_in = random.sample( ['clothing','tech','kitchen','bedding','appliances','furniture','shoes'],
+                                                   k = random.randint(1,7)
+                                                 )
+    # record of customer's past 3 purchases (product IDs of last 3 purchases):
+    self.recent_purchase_history = deque([], maxlen=3)
+    # categories of past 3 products purchased:
+    self.recent_category_history = deque([], maxlen=3)
+    # record of historic spend (spend on last 3 purchases):
+    self.recent_spend_history = deque([], maxlen=3)
+    # full history of products shown:
+    self.full_products_viewed_history = []
+    # full history of products bought:
+    # (list same length as self.full_products_viewed_history, containing product ID if bought, otherwise NaN)
+    self.full_products_bought_history = []
+    # store the reason that a customer didn't buy each product that they didn't buy
+    # (matches entries in self.full_products_viewed_history, with empty entries where a viewed product was bought)
+    self.product_rejection_reasons = []
+    # customer will not buy a product cheaper than this:
+    self.price_limit_min = random.sample( range(0,500,50), k=1 )[0]
+    # customer will not buy a product more expensive than this:
+    self.price_limit_max = self.price_limit_min + random.sample( range(500, 2000, 50), k=1 )[0]
+    # gender of customer:
+    self.gender = random.sample( ['male']*4 +['female']*6, k=1 )[0]        # 60% chance of being female
+    # season history: (history of season product was shown to customer in):
+    self.season_shown_history = []
+
+
+  def show_customer_product(self, product_id):
+    product_shown = product_list[f'product_{product_id}']
+
+    # record that they've seen it:
+    self.full_products_viewed_history.append(product_id)
+    # record which season they were shown the product in
+    self.season_shown_history.append(CURRENT_SEASON)
+
+    # decide if customer buys product or not, and store this information for this customer:
+    bought_product = 'yes'
+    rejection_reasons_this_prod = []
+    if CURRENT_SEASON not in product_shown.seasons_sold:
+      rejection_reasons_this_prod.append( f'product not sold in current season ({CURRENT_SEASON})' )
+      bought_product = 'no'
+    if product_shown.category not in self.categories_interested_in:
+      rejection_reasons_this_prod.append( f'customer not interested in category [{product_shown.category}]' )
+      bought_product = 'no'
+    if product_shown.price > self.price_limit_max:
+      rejection_reasons_this_prod.append( f'product is too expensive for this customer' )
+      bought_product = 'no'
+    if product_shown.price < self.price_limit_min:
+      rejection_reasons_this_prod.append( f'product is too cheap for this customer' )
+      bought_product = 'no'
+    if product_id in self.full_products_bought_history:
+      rejection_reasons_this_prod.append( f'customer will not buy the same product twice' )
+      bought_product = 'no'
+    if self.age < product_shown.age_range[0] or self.age > product_shown.age_range[1]:
+      rejection_reasons_this_prod.append( f'product does not suit age of customer' )
+      bought_product = 'no'
+    if self.gender not in product_shown.gender_target:
+      rejection_reasons_this_prod.append( f'product does not suit gender of customer' )
+      bought_product = 'no'
+
+    # record if the customer bought the product or not, and possibly details about the product:
+    if bought_product == 'no':
+      self.full_products_bought_history.append(None)
+    else:
+      self.full_products_bought_history.append(product_id)
+      self.recent_purchase_history.append(product_id)
+      self.recent_spend_history.append(product_shown.price)
+      self.recent_category_history.append(product_shown.category)
+
+    # add rejection reasons for this product to customer's full history of product rejection reasons:
+    self.product_rejection_reasons.append( rejection_reasons_this_prod )
+    
+```
+
+Let's create 1000 customers:
+```{python}
+customer_list = {}
+for i in range(1,n_customers+1):
+  customer_list[f'customer_{i}'] = customer(i)
+```
+
+Customer 1 has the following attributes/preferences:
+```{python}
+for i in range(len(customer_list['customer_1'].__dict__)):
+  print( list(customer_list['customer_1'].__dict__.keys())[i] + ':  ' + str( list(customer_list['customer_1'].__dict__.values())[i]) )
+```
+
+Let's make the current season **spring**:
+```{python}
+CURRENT_SEASON = 'spring'
+print( f'current season is {CURRENT_SEASON}' )
+```
+Here are the attributes of product 1:
+```{python}
+for i in range(len(product_list['product_1'].__dict__)):
+  print( list(product_list['product_1'].__dict__.keys())[i] + ':  ' + str( list(product_list['product_1'].__dict__.values())[i]) )
+```
+
+Let's try showing product 1 to customer 1 and see if they buy it:
+```{python}
+customer_list['customer_1'].show_customer_product(1)
+
+if customer_list['customer_1'].full_products_bought_history[0] is None:
+  print('customer 1 does not buy product 1')
+  print('here are the reason(s):')
+  print( '\n'.join( customer_list['customer_1'].product_rejection_reasons[0] ) )
+else: 
+  print( 'customer 1 buys product 1!' )
+  print( 'here is their updated attributes:' )
+  for i in range(len(customer_list['customer_1'].__dict__)):
+    print( list(customer_list['customer_1'].__dict__.keys())[i] + ':  ' + str( list(customer_list['customer_1'].__dict__.values())[i]) )
+```
+Let's trying showing them products 2-20 and see if they buy any of them:
+
+```{python}
+for product_i in range(2,21):
+  print( f'attributes of product {product_i} are:' )
+  for j in range( len(product_list[f'product_{product_i}'].__dict__ ) ):
+    print( list(product_list[f'product_{product_i}'].__dict__.keys())[j] + ':  ' + str( list(product_list[f'product_{product_i}'].__dict__.values())[j]) )
+  
+  print('\n')
+  print( f'show customer 1 product {product_i}:' )
+  customer_list['customer_1'].show_customer_product( product_i )
+  
+  if customer_list['customer_1'].full_products_bought_history[ len(customer_list['customer_1'].full_products_bought_history)-1] is None:
+    print( f'customer 1 does not buy product {product_i}' )
+    print('here are the reason(s):')
+    print( '\n'.join( customer_list['customer_1'].product_rejection_reasons[ len(customer_list['customer_1'].product_rejection_reasons)-1 ] ) )
+  else: 
+    print( f'customer 1 buys product {product_i}!' )
+    print( 'here are customer 1s updated attributes:' )
+    for i in range(len(customer_list['customer_1'].__dict__)):
+      print( list(customer_list['customer_1'].__dict__.keys())[i] + ':  ' + str( list(customer_list['customer_1'].__dict__.values())[i]) )
+
+  print('\n')
+  
+```
+
+Here are the full attributes/history of customer 1 after showing them the first 20 products:
+
+```{python}
+for i in range(len(customer_list['customer_1'].__dict__)):
+  print( list(customer_list['customer_1'].__dict__.keys())[i] + ':  ' + str( list(customer_list['customer_1'].__dict__.values())[i]) )
+```
+
+# Creating a training dataset
+Now, let's randomly show 20,000 products to our 1,000 customers (choosing from our pool of 80 unique products) and store the customer responses in a dataframe:
+
+```{python}
+# python
+
+for i in range(20_000):
+  # choose a random season: 
+  CURRENT_SEASON = random.sample( ['winter','spring','summer','autumn'], k=1 )[0]
+  # choose a random customer:
+  random_customer = random.randint(1,n_customers)
+  # choose a random product
+  random_product = random.randint(1,n_products)
+
+  customer_list[f'customer_{random_customer}'].show_customer_product(random_product)
+```
+
+```{python}
+# python
+
+traindat_entries = []
+
+for customer_i in range(1,n_customers+1):
+    
+    customer_record = customer_list[f'customer_{customer_i}']
+    
+    traindat_entries.append( 
+      pd.DataFrame(
+                   { 
+      'customer_id':customer_i,             
+      'y_bought':[ 1 if x is not None else 0 for x in customer_record.full_products_bought_history ],
+      'product_id_shown':customer_record.full_products_viewed_history,
+      'current_season':customer_record.season_shown_history,
+      'customer_gender':customer_record.gender,
+      'customer_age':customer_record.age,
+      'product_category':[ product_list[f'product_{x}'].category for x in customer_record.full_products_viewed_history ],
+      'product_price':[ product_list[f'product_{x}'].price for x in customer_record.full_products_viewed_history ]
+                   }
+                  ) 
+)
+
+pd.set_option('display.max_columns', None)  
+pd.set_option('display.max_rows', None)  
+traindat = pd.concat( traindat_entries )
+```
+
+create some calculated features from the purchase data:
+
+Note that all feature calculations are cumulative, at each time point looking only backward in order to create features. The model must not be allowed to see into the future, it must learn to make decisions based on past observations of customer behaviour. 
+
+```{python}
+# python
+
+# keep a history of which product categories the customer has been shown:
+for product_category in ['clothing','tech','kitchen','bedding','appliances','furniture','shoes']:
+  traindat[f'shown_{product_category}_before'] = ( traindat
+                                                    .groupby('customer_id')
+                                                    .apply( lambda x: np.cumsum( 
+                                                                                 (x['product_category'].shift(1)==product_category)
+                                                                               ) > 0
+                                                          )
+                                                    .values
+                                                    .astype(int)
+                                                  )
+
+# keep a history of which product categories the customer has bought:
+for product_category in ['clothing','tech','kitchen','bedding','appliances','furniture','shoes']:
+  traindat[f'bought_{product_category}_before'] = ( traindat
+                                                    .groupby('customer_id')
+                                                    .apply( lambda x: np.cumsum( 
+                                                                                 (x['product_category'].shift(1)==product_category) & 
+                                                                                 (x['y_bought'].shift(1)==1)
+                                                                               ) > 0
+                                                          )
+                                                    .values
+                                                    .astype(int)
+                                                  )
+                                                  
+```
+
+record (cumulative) max spend for each customer:
+
+```{python}
+# python 
+
+# record the most that each customer has ever spent:
+traindat['TEMP_COL_money_spent'] = traindat['product_price']*traindat['y_bought']   # contains product price only if the product was bought
+# per customer lagged version of 'TEMP_COL_money_spent' column:
+traindat['historic_max_spend'] = traindat.groupby('customer_id').TEMP_COL_money_spent.shift(1).fillna(0).astype(int)  
+# calculate cumulative maximum spend:
+traindat['historic_max_spend'] = traindat.groupby('customer_id').historic_max_spend.cummax()
+# drop the temporary calculation column:
+traindat = traindat.drop( columns=['TEMP_COL_money_spent'], inplace=False )
+```
+
+record age-band of each customer:
+
+```{python}
+# python
+
+traindat['customer_age_band'] = pd.cut( x = traindat['customer_age'],
+                                        bins = [0,19,29,39,49,59,69,79,89,99,109]
+                                      ).astype(str)    # this is a little hack required to make R understand the data-frame 
+
+# let's look at 10 random customers:                                      
+traindat[['customer_age','customer_age_band']].drop_duplicates().sample(10)
+```
+
+
+calculate the buyer distribution by age-band for each product:
+(normalise by population distribution of ages?)
+
+```{python}
+# python 
+
+# calculate distribution of age bands in population:
+traindat_customer_age_dbn = (
+  traindat
+  [['customer_id','customer_age_band']]
+  .drop_duplicates()             # only keep a single row per customer
+  .groupby('customer_age_band')
+  .agg( n_unique_customers = ('customer_id', 'count') )
+  .reset_index()
+)
+
+traindat_customer_age_dbn['train_population_proportion'] = (
+      traindat_customer_age_dbn['n_unique_customers'] / sum(traindat_customer_age_dbn['n_unique_customers'] ) 
+)
+
+# store all possible combinations of age_band and product_id in a pandas dataframe:
+product_IDs_list = traindat['product_id_shown'].drop_duplicates().values
+age_bands = traindat['customer_age_band'].drop_duplicates().values 
+all_age_band_product_id_combinations = pd.DataFrame( 
+                                                     [ (x,y) for x in product_IDs_list for y in age_bands ],
+                                                     columns = ['product_id_shown','customer_age_band']  
+                                                   )
+
+# count number of buyers by age band for each product:
+product_distribution_of_buyer_ages = ( 
+  traindat
+  .query( 'y_bought==1' )        # only consider products that were bought
+  [['customer_id','product_id_shown','customer_age_band']]
+  .drop_duplicates()            # only keep a record of a customer buying the same product once
+  .groupby( ['product_id_shown', 'customer_age_band'] )
+  .agg( n_unique_buyers = ('customer_id','count') )
+  .reset_index()
+)
+
+# add in missing age-bands to each product (i.e. age bands for which there were no buyers ) 
+product_distribution_of_buyer_ages = pd.merge( 
+    all_age_band_product_id_combinations,
+    product_distribution_of_buyer_ages,
+    on = ['product_id_shown','customer_age_band'],
+    how = 'outer'
+).fillna(0)    # this gives n_unique_buyers=0 for age-bands which were not present
+
+# calculate total buyers per product, and distribution of buyer age bands per product: 
+product_distribution_of_buyer_ages = (  
+  product_distribution_of_buyer_ages
+  # calculate the total number of customers who bought this product: -
+  .assign( total_buyers_of_this_product = lambda x: x.groupby('product_id_shown').n_unique_buyers.transform('sum'),
+                   proportion_of_buyers = lambda x: x['n_unique_buyers'] / x['total_buyers_of_this_product'] 
+         )
+)
+
+# add the population proportion of customers in each age band to the product table:
+product_distribution_of_buyer_ages = (
+pd.merge(
+    product_distribution_of_buyer_ages,
+    traindat_customer_age_dbn[['customer_age_band','train_population_proportion']],
+    on = 'customer_age_band',
+    how = 'left'
+   )
+   .sort_values( ['product_id_shown','customer_age_band'] )
+   .fillna(0)     # this makes proportion_of_buyers=0 instead of proportion_of_buyers=NaN where there were no buyers for a product
+)
+
+# make a proportion_of_buyers column that is adjusted for the population proportions of each age band:
+product_distribution_of_buyer_ages['scaled_proportion_of_buyers'] = ( product_distribution_of_buyer_ages['proportion_of_buyers'] /
+                                                                      product_distribution_of_buyer_ages['train_population_proportion']
+).fillna(0)        # fillna(0) makes 0/0 into 0 rather than NaN
+```
+
+Here is the age-of-buyers breakdown for a random product: 
+
+metric                       | description
+-----------------------------|--------------------------------------------------------------
+n_unique_buyers              | number of unique customers in this age band who bought this product in the training data
+total_buyers_of_this_product | number of unique customers who bought this product in the training data (all age bands)
+proportion_of_buyers         | proportion of the total buyers of this product who are in this age band
+train_population_proportion  | the proportion of the total customers in the training data who are in this age band 
+scaled_proportion_of_buyers  | *proportion_of_buyers*, but adjusted for the sizes of the age-band groups in the training data 
+
+```{r}
+# R
+
+random_product_id <- sample( py$product_distribution_of_buyer_ages$product_id_shown, size=1 )
+
+py$product_distribution_of_buyer_ages %>% 
+  filter( product_id_shown == random_product_id ) %>% #View 
+  kable()
+```
+
+
+here is a look at a random customer:
+
+```{r echo=FALSE}
+# R
+py$traindat %>% 
+  filter( customer_id == sample(py$traindat$customer_id,size=1) ) 
+
+```
+
+# Wide & Deep Model 
+
+# Order-2 Factorization Machine
+
+```{python}
+#import tensorflow as tf
+```
+
+```{python}
+#print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
+```
+
+
+```{python}
+#import ttfm # https://github.com/geffy/tffm
+```

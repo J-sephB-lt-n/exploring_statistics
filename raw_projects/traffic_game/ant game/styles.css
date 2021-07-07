@@ -1,0 +1,14 @@
+body{
+    background: #FFF;
+}
+#container {
+    max-width: 1400px;
+    margin: auto;
+}
+#game_canvas {
+    background: #7CFC00;
+}
+#toolbar { 
+position: relative;
+float: right;
+}

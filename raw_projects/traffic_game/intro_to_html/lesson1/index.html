@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<!--this content from https://developer.mozilla.org/en-US/docs/Learn/HTML/Introduction_to_HTML/Getting_started-->
+<html lang="eng-US">
+  <head>
+	<!-- the <head> part contains elements not to be actually shown on the webpage i.e. contains metadata about the document-->
+    <meta charset="utf-8">
+	<meta name="author" content="Joseph Bolton">
+	<meta name="description" content="this is the first html page I've created from scratch">
+	<link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
+    <title>This title text is shown on the tab in the browser</title>     <!--and also if the page is bookmarked!-->
+  </head>
+  <body>
+	<!-- the <body> part shows content to actually be shown on the page-->
+	<h1>This title text is shown on the webpage itself</h1>        <!-- h1 specifies the text size -->
+    <p>Text on the webpage can be <strong>bold</strong> or not.</p>
+	<p> Here is a link to 
+		<a href="https://9gag.com" 
+		   title="this is the hovertext"
+		   target="_blank"
+		> some funny site called "9gag"
+		</a> 
+		for you (which will open in a new tab, since I've used <strong>target="_blank".</strong>)
+	</p>
+
+	<p> Here is a link to 
+		<a href="favicon.ico" 
+		   title="this is the text that appears when you hover over the link"
+		   target="_blank"
+		> the favicon for this html page 
+		</a> 
+		for you (which will open in a new tab, since I've used <strong>target="_blank".</strong>)
+	</p>
+	
+	<p> Here is a link to 
+		<a href="#an_ordered_list_example" title="an ordered list example">[[click me]]</a> 
+		a section on this page.
+	</p>
+
+	<img src="https://th.bing.com/th/id/OIP.x8SPRwS_shVID_EQFoiBDgHaFj?pid=ImgDet&rs=1">
+	
+	<h1>The Crushing Bore</h1>
+	<p>By Chris Mills</p>
+	<h2>Chapter 1: The dark night</h2>
+	<p>It was a dark night. Somewhere, an owl hooted. The rain lashed down on the ...</p>
+	<h2>Chapter 2: The eternal silence</h2>
+	<p>Our protagonist could not so much as a whisper out of the shadowy figure ...</p>
+	<h3>The specter speaks</h3>
+	<p>Several more hours had passed, when all of a sudden the specter sat bolt upright and exclaimed, "Please have mercy on my soul!"</p>
+  
+	<h2>an unordered list example</h2>
+	<ul>
+		<li>milk</li>
+		<li>eggs</li>
+		<li>bread</li>
+		<li>hummus</li>
+	</ul>
+
+	<h2 id="an_ordered_list_example">an ORDERED list example</h2>
+	<ol>
+		<li>milk</li>
+		<li>eggs</li>
+		<li>bread</li>
+		<li>hummus</li>
+	</ol>
+
+	<h2>nested lists example</h2>
+	<ol>
+		<li>milk</li>
+			<ul>
+				<li>cow</li>
+				<li>goat</li>
+				<li>rat</li>
+			</ul>
+		<li>eggs</li>
+		<li>bread</li>
+		<li>hummus</li>
+	</ol>
+	
+	<dl>
+		<dt>soliloquy</dt>
+		<dd>In drama, where a character speaks to themselves, representing their inner thoughts or feelings and in the process relaying them to the audience (but not to other characters.)</dd>
+		<dt>monologue</dt>
+		<dd>In drama, where a character speaks their thoughts out loud to share them with the audience and any other characters present.</dd>
+		<dt>aside</dt>
+		<dd>In drama, where a character shares a comment only with the audience for humorous or dramatic effect. This is usually a feeling, thought, or piece of additional background information.</dd>
+	  </dl>
+
+	<p>Here below is a blockquote...</p>
+	<blockquote cite="https://developer.mozilla.org/en-US/docs/Web/HTML/Element/blockquote">
+		<p>The <strong>HTML <code>&lt;blockquote&gt;</code> Element</strong> (or <em>HTML Block
+		Quotation Element</em>) indicates that the enclosed text is an extended quotation.</p>
+	</blockquote>
+	
+	<p>My birthday is on the 25<sup>th</sup> of May 2001.</p>
+	<p>Caffeine's chemical formula is C<sub>8</sub>H<sub>10</sub>N<sub>4</sub>O<sub>2</sub>.</p>
+	<p>If x<sup>2</sup> is 9, x must equal 3 or -3.</p>
+
+	<p>There once was a man named O'Dell<br>
+		Who loved to write HTML<br>
+		But his structure was bad, his semantics were sad<br>
+		and his markup didn't read very well.</p>
+
+</body>
+</html>

@@ -1,0 +1,53 @@
+
+x = lighter weight
+
+handstand warmup
+x	lateral raise hold
+x	lateral raise 
+x	front raise hold
+x	front raise
+x	hammer front raise hold
+x	hammer front raise 
+Shoulder press hold
+shoulder press
+arnold press hold
+arnold press
+flys hold
+flys
+chest pushup hold
+chest pushup
+squeeze press hold
+squeeze press
+reverse flys hold
+reverse flys
+bent over row hold
+bent over row
+push up row left hold
+push up row left 
+push up row right hold
+push up row right
+x	tricep kickback left hold
+x	tricep kickkack left
+x	tricep kickback right hold
+x	tricep kickkack right
+x	lying overhead tricep extension hold
+x	lying overhead tricep extension
+skull crusher hold
+skull crusher
+sitting bicep hold left
+sitting bicep left
+sitting bicep hold right
+sitting bicep right
+hammer curls hold 
+hammer curls
+bicep curls hold
+bicep curls
+
+
+
+
+
+
+
+
+

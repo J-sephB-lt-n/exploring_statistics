@@ -1,0 +1,112 @@
+---
+title: "datacamp_intro_to_keras"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(reticulate)
+reticulate::use_python("C:/Program Files (x86)/Microsoft Visual Studio/Shared/Python37_64/")
+```
+
+```{python}
+# load python packages:
+import pandas as pd
+import numpy as np
+```
+
+```{python}
+# Read in white wine data 
+white = pd.read_csv("http://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-white.csv", sep=';')
+
+# Read in red wine data 
+red = pd.read_csv("http://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv", sep=';')
+```
+
+count nulls by column: 
+```{python}
+white.isna().sum()
+```
+
+```{python}
+red.isna().sum()
+```
+
+```{python}
+# Add `type` column to `red` with value 1
+red['type'] = 1
+
+# Add `type` column to `white` with value 0
+white['type'] = 0
+
+# Append `white` to `red`
+wines = red.append(white, ignore_index=True)
+
+wines.sample(10)
+```
+
+```{python}
+# store the wine label (red/white) as a vector:
+y = np.ravel(wines.type)       # this is the same in this case as doing y = wines.type.values
+y
+```
+
+```{python}
+# store the features:
+X = wines.iloc[:,0:11]
+print( X.columns )
+X.head()
+```
+
+```{python}
+# Split the data up in train and test sets:
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)
+```
+
+```{python}
+from sklearn.preprocessing import StandardScaler   # for numeric feature scaling 
+
+feature_scaler = StandardScaler().fit(X_train)
+
+# Scale the train set
+X_train = feature_scaler.transform(X_train)
+
+# Scale the test set
+X_test = feature_scaler.transform(X_test)
+```
+
+after the scaling step, **X_train** looks likes this:
+
+```{python}
+print(X_test.shape)
+X_test
+```
+
+```{python}
+X_test[0]
+```
+
+```{python}
+# Import `Sequential` from `keras.models`
+from keras.models import Sequential
+
+# Import `Dense` from `keras.layers`
+from keras.layers import Dense
+
+# Initialize the constructor
+model = Sequential()
+
+# Add an input layer 
+model.add( Dense(12, activation='relu', input_shape=(11,) ) )
+
+# Add one hidden layer 
+model.add( Dense(8, activation='relu') )
+
+# Add an output layer 
+model.add( Dense(1, activation='sigmoid') )
+```
+
+
+
+
+

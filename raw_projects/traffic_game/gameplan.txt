@@ -1,0 +1,24 @@
+
+
+ideas:
+	steal graphics from google maps/earth
+	observe actual car behaviour by youtube drone footage
+	model car behaviour by programming actual driver rules (i.e. they look ahead a certain distance and adjust their angle/velocity based on what is there)
+	random population of map with buildings (can also steal images from google maps/earth)
+
+loose gameplan:
+
+1. learn basics of html (https://developer.mozilla.org/en-US/docs/Learn/HTML/Introduction_to_HTML/Getting_started)
+2. learn basics of CSS
+3. learn basics of javascript () 
+4. draw game board, and make drawing of roads tool
+5. make erasing of roads tool 
+6. implement car(s) 
+7.  
+
+other ideas:
+*	possibly just implement directly on top of google maps? 
+*	possibly just implement 1-way roads? Is that simpler? 
+*	would be really cool if levels are procedurally generated
+
+

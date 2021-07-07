@@ -1,0 +1,48 @@
+---
+title: "DAGs"
+author: "Joseph Bolton"
+date: "01/06/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dagitty)
+library(ggdag)
+```
+
+https://cran.r-project.org/web/packages/ggdag/vignettes/intro-to-ggdag.html
+
+```{r fig.with=7, fig.height=7}
+mydag <- 
+  dagify(
+          profit ~ customer_buys_product + customer_offered_discount + advertising_spend,
+          product_perception ~ advertising_spend + customer_age,
+          exposure = "advertising_spend",
+          outcome = "profit"
+       )
+# ggdag_paths( mydag ) +
+#   theme( 
+#           panel.background = element_rect(fill="#808080", colour="808080"),
+#           panel.grid = element_line(colour="#808080")
+#        )
+
+ggdag::ggdag_dconnected( mydag ) +
+   theme( 
+           panel.background = element_rect(fill="#808080", colour="808080"),
+           panel.grid = element_line(colour="#808080")
+        )
+```
+
+
+for visualising networks: https://briatte.github.io/ggnet/
+
+resources:
+
+* https://cran.r-project.org/web/packages/ggdag/vignettes/intro-to-dags.html
+
+* https://www.hsph.harvard.edu/miguel-hernan/causal-inference-book/
+
+* https://www.youtube.com/watch?v=aA-gTNxy1rw
+
+
+

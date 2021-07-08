@@ -1,0 +1,202 @@
+---
+title: "Time Series & Dynamic Regression. Fourier terms"
+author: "Joe"
+output: html_notebook
+---
+
+This information is taken from
+
+https://kevinkotze.github.io/ts-5-decompose/
+
+and
+
+https://robjhyndman.com/nyc2018/3-1-Dynamic-Regression.pdf
+https://robjhyndman.com/uwafiles/10-Dynamic-Regression.pdf
+
+# Backshift notation
+$$B y_t \quad=\quad y_{t-1}$$
+
+$$\begin{array}{lcl} 
+B^3 y_t 
+&=& 
+B B By_t \\
+&=&
+B B y_{t-1} \\
+&=&
+B y_{t-2} \\
+&=&
+y_{t-3} \\
+\end{array}$$
+
+a 12-period (seasonal) difference is (e.g. subtract observed same month last year if data is monthly):
+$$\begin{array}{lcl}
+(1-B^{12})y_t 
+&=&
+y_t - y_{t-12}
+\end{array}$$
+
+a first difference:
+$$\begin{array}{lcl} 
+y_t' &=& 
+(1-B)y_t \\
+&=& 
+y_t - y_{t-1} \\
+\end{array}$$
+
+a $2^{nd}$-order difference:
+$$\begin{array}{lcl}
+y_t'' 
+&=&
+y_t' - y_{t-1}' \\
+&=&
+(y_t-y_{t-1}) - (y_{t-1}-y_{t-2}) \\
+&=&
+y_t - 2y_{t-1} + y_{t-2} \\
+&=&
+(1-B)^2y_t \\
+&=&
+(1-2B+B^2)y_t \\
+&=&
+y_t - 2y_{t-1} + y_{t-2} \\
+\end{array}$$
+
+a $\text{d}^{th}$-order difference is:
+$$(1-B)^dy_t$$
+
+seasonal difference (4 periods) followed by first difference
+$$\begin{array}{lcl} 
+(1-B)(1-B^4)y_t 
+&=& 
+(1-B)(y_t - y_{t-4}) \\
+&=& 
+y_t - y_{t-1} - y_{t-4} + y_{t-5} \\
+&=&
+(1 - B - B^4 + B^5)y_t
+\end{array}$$
+
+# (non-seasonal) Arima process
+$y_t'$ is a differenced series (could be differenced more than once - $d$ times) 
+$$\begin{array}{lcl}
+y_t' 
+&=&
+\mu + \underbrace{ \phi_1 y'_{t-1} + \phi_2 y'_{t-2} + ... + \phi_p y'_{t-p}} + \underbrace{\phi_1\epsilon_{t-1}+\phi_2\epsilon_{t-2} + ... + \phi_q\epsilon_{t-q}} 
++ \epsilon_t   \\
+(1-\phi_1B-\phi_2B^2-...-\phi_p B^p)(1-B)^dy_t &=& \mu + (1+\theta_1B+\theta_2B^2+...+\theta_qB^q)\epsilon_t \\
+\end{array}$$
+
+# Seasonal Arima process
+Need to do this
+
+# Regression with ARIMA errors
+The (time-series) regression model (with $k$ explanatory variables) is
+
+$$y_t \quad=\quad \beta_0 + \beta_1 x_{1t} + \beta_2 x_{2t} + ... + \beta_k x_{kt} + \epsilon_t$$
+
+The normal OLS regression makes the assumption that the errors $\epsilon_t$ are independent (a *white noise* process). We wish to allow the $\epsilon_t$ to be autocorrelated. 
+
+The linear regression model with an $\text{ARIMA}(p,d,q)$ error structure is:
+
+$$\begin{array}{lcl}
+y_t &=& \beta_0 + \beta_1 x_{1t} + \beta_2 x_{2t} + ... + \beta_k x_{kt} + \eta_t \\
+\eta_t' 
+&=&
+\underbrace{ \phi_1 \eta'_{t-1} + \phi_2 \eta'_{t-2} + ... + \phi_p \eta'_{t-p}} + \underbrace{\phi_1\epsilon_{t-1}+\phi_2\epsilon_{t-2} + ... + \phi_q\epsilon_{t-q}} 
++ \epsilon_t   \\
+(1-\phi_1B-\phi_2B^2-...-\phi_p B^p)(1-B)^d\eta_t 
+&=& 
+(1+\theta_1B+\theta_2B^2+...+\theta_qB^q)\epsilon_t \\
+&\space& \text{where } \epsilon_t \text{ is a white noise process} \\
+\end{array}$$
+
+We don't want to assume that the series $\epsilon_t$ is *white noise* (i.e. no autocorrelation).
+
+The regression model with ARIMA errors is
+
+$$\begin{array}{lcl}
+y_t &=& 
+\beta_0 + \beta_1 x_{1t} + \beta_2 x_{2t} + ... + \beta_k x_{kt} + \eta_t \\
+\\
+\text{where} \quad \phi(B)(1-B)^d \eta_t &=& \theta(B) \epsilon_t 
+\quad\quad \eta_t \text{ is an (non-seasonal) ARIMA process} 
+\\
+\end{array}$$
+
+Before fitting the regression model with ARIMA errors, all variables (both features $X$ and response $y$) need to be differenced until they are stationary. The same order of differencing may be applied to all variables in order to aid interpretability. 
+
+
+
+
+
+
+# to do: 
+simulate data with autocorrelation and look at what happens to coefficient estimates and confidence intervals. 
+
+also try fitting a model with the wrong autocorrelation structure. 
+
+
+
+
+
+
+# other stuff
+
+```{r setup}
+library(tidyverse)
+```
+
+An observed time series can be considered a weighted sum of a number of different cyclical underlying series (with different frequencies). 
+
+consider the function
+
+$$\begin{array}{lcl} 
+f\Big(t\Big) 
+&=& 
+a \space \cdot cos\Big(2\pi \omega t + \phi\Big) \\
+&=& 
+\underset{\displaystyle U_1}{\underbrace{a \cdot cos\phi}} \times cos\Big(2\pi\omega t\Big)
+\quad+\quad
+\underset{\displaystyle U_2}{\underbrace{-a \cdot sin\phi}} \times sin\Big(2\pi\omega t\Big)
+\\
+\end{array}$$
+
+$\omega$ is cycles per unit time (frequency index)
+
+$a = \sqrt{U_1^2+U_2^2}$ is the height/amplitude of the function
+
+$\phi = tan^{-1}\Big(-\frac{U_1}{U_2}\Big)$ is the phase of the function (the starting point of the cosine function)
+
+```{r}
+t <- seq(1, 5, length.out=1000)
+
+parameter_sets_to_try <- 
+  tibble( omega = c(1, 1, 1,  0.5, 1, 2,  1,1,1),
+              a = c(1, 2, 5,  2, 2, 2,    2,2,2),
+            phi = c(0, 0, 0,  0, 0, 0,    0,pi,2*pi) 
+        )
+
+par(mfrow = c(3,3) )
+
+for( i in 1:nrow(parameter_sets_to_try) ){
+  
+  omega <- parameter_sets_to_try$omega[i]
+  a <- parameter_sets_to_try$a[i]
+  phi <- parameter_sets_to_try$phi[i]
+  
+  plot( x = t,
+        y = a * cos( 2*pi*omega*t + phi),
+        main = bquote(omega~"="~.(omega)~"     a = "~.(a)~"     "*phi~"="~.(phi)),
+        xlab = "t", ylab = "f(t)",
+        ylim = c(-5, 5),
+        type = "l"
+  )
+}
+```
+
+# Regression with fourier terms
+
+A regression model with only fourier terms (and an intercept) is:
+
+$$\begin{array}{lcl} y_t 
+&=& 
+\beta_0 + \bigg[ \displaystyle{\sum}_{k=1}^K \quad \alpha_k  \underset{sin\Big(\frac{2\pi k t}{m}\Big)}{\underbrace{s_k(t)}} + \beta_k  \underset{cos\Big(\frac{2\pi k t}{m}\Big)}{\underbrace{c_k(t)}} \Bigg] + \epsilon_t
+\end{array}$$

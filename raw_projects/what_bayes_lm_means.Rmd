@@ -1,0 +1,238 @@
+---
+title: "What the Bayesian lm means"
+author: "fuck yeah"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r }
+library(tidyverse)
+#library(epade)
+library(knitr)
+```
+
+prior distribution of $\beta_0$:
+
+$$\begin{array}{lcl} 
+Pr[\beta_0 = -1] &=& 0.4 \\
+Pr[\beta_0 = 1] &=& 0.6 \\
+\end{array}$$
+
+```{r echo=FALSE}
+tibble( beta0 = c(-1, 1),
+        prob = c(0.4, 0.6) 
+      ) %>% 
+  ggplot( data = .,
+          aes( x = beta0,
+               y = prob 
+              )
+          ) +
+  geom_bar( stat = "identity" ) +
+  labs( title = bquote( "distribution of"~beta[0]) )
+```
+
+prior distribution of $\beta_1$:
+
+$$\begin{array}{lcl} 
+Pr[\beta_1 = -1] &=& 0.3 \\
+Pr[\beta_1 = 0] &=& 0.5 \\
+Pr[\beta_1 = 1] &=& 0.2 \\
+\end{array}$$
+
+```{r echo=FALSE}
+tibble( beta1 = c(-1, 0, 1) %>% as.factor(),
+        prob = c(0.3, 0.5, 0.2) 
+      ) %>% 
+  ggplot( data = .,
+          aes( x = beta1,
+               y = prob 
+              )
+          ) +
+  geom_bar( stat = "identity" ) +
+  labs( title = bquote( "distribution of"~beta[1]) )
+```
+
+error distribution:
+
+```{r echo=FALSE}
+tibble( e = -5:5,
+        prob = c(1,1,2,5,8,15,8,5,2,1,1)/sum( c(1,1,2,5,8,15,8,5,2,1,1) )
+      ) %>% 
+  ggplot( data = .,
+          aes( x = e,
+               y = prob 
+              )
+          ) +
+  geom_bar( stat = "identity" ) +
+  geom_text( aes( x = e,
+                  y = prob,
+                  label = round(prob, digits=3),
+                  vjust = -0.3
+                )
+           ) +
+  theme_bw() + 
+  labs( title = bquote("distribution of the errors"~epsilon) )
+```
+
+
+we have that:
+
+$$y \quad=\quad \beta_0 \quad + \quad \beta_1 x \quad + \quad \epsilon$$
+
+our observed data is:
+```{r echo=FALSE}
+set.seed(5213)
+x <- c(-2, 1, 2)         # sample( -2:2, size=3, replace=TRUE ) 
+b0 <- -1
+b1 <- 1
+e <- c(0,0,1)
+
+# sample( x = c(-2, -1, 0, 1, 2),
+#              prob = c(0.05, 0.2, 0.5, 0.2, 0.05),
+#              size = 3,
+#              replace = TRUE
+#            )
+
+y <- b0 + b1*x + e
+observed_data <- tibble(x,y) %>% arrange(x,y) %>% filter( abs(y)<4 )
+
+observed_data
+
+plot( y ~ x )
+```
+
+So, we can see that in the scenario that we have specified: 
+
+$$Pr\Big[y = -3 \space \Bigl|\space \beta_0=-1, \beta_1=0, x=-1\Big] \quad=\quad 0.01$$
+
+Since we know the system which created our data, we can make probability statements about each $y_i|\beta_0,\beta_1,x_i$.
+
+Since we assume that every row of our data is an independent draw from our data-creation process, we can make probability statements about our whole dataset:
+
+$$\begin{array}{lcl}
+Pr\Big[ y=\begin{bmatrix}-3\\-2\\-1\\-1\\-1\\1\\2\\2\end{bmatrix} \space \Bigl| \space \beta_0=-1, \beta_1=0, x = \begin{bmatrix}x\\x\\x\\x\end{bmatrix} \Big] &=& 
+Pr\Big[y=-3|\beta_0=-1, \beta_1=0, x=-2\Big] \times \\ 
+&\space& Pr\Big[y=-2|\beta_0=-1, \beta_1=0, x=-1\Big] \times \\
+&\space& . \\
+&\space& . \\
+&\space& . \\
+&\space& \times Pr\Big[y=2|\beta_0=-1, \beta_1=0, x=2\Big]  \\
+\end{array}$$
+
+
+$$\begin{array}{lcl}
+Pr(\beta_0, \beta_1 | y, x) &\propto& Pr(y|\beta_0,\beta_1,x)\times Pr(\beta_0,\beta_1) \\
+                            &=& Pr(y|\beta_0,\beta_1,x)\times Pr(\beta_0)\times Pr(\beta_1) \\
+                            &=& \begin{cases}
+                                      \times \quad\quad \text{for } \beta_0=0, \space \beta_1=-2 \\
+                                      \times \quad\quad \text{for } \beta_0=1, \space \beta_1=-2 \\
+                                      \times \quad\quad \text{for } \beta_0=5, \space \beta_1=-2 \\
+                                      \times \quad\quad \text{for } \beta_0=0, \space \beta_1=1 \\
+                                      \times \quad\quad \text{for } \beta_0=1, \space \beta_1=1 \\
+                                      \times \quad\quad \text{for } \beta_0=5, \space \beta_1=1 \\
+                                      \end{cases}
+\end{array}$$
+
+```{r}
+
+likelihood_y_i <- function( y_i, x_i, b0, b1 ){
+  
+  tibble( error = -5:5,
+          prob = c(1,1,2,5,8,15,8,5,2,1,1)/sum( c(1,1,2,5,8,15,8,5,2,1,1) )
+        ) %>% 
+    mutate( y = b0 + b1*x_i + error ) %>% 
+    filter( y == y_i ) %>% 
+    summarise( prob = sum(prob) ) %>% 
+    pull( prob )
+  
+}
+
+theoretical_probs <- 
+  expand.grid( 
+                 b0 = c(-1, 1),
+                 b1 = c(-1, 0, 1)
+              ) %>% 
+      as_tibble() %>% 
+    
+      # add b0 prior probs:
+      left_join( tibble( b0 = c(-1, 1),
+                         b0_prob = c(0.4, 0.6) 
+                       ),
+                 by = "b0"
+                ) %>%
+      # add b1 prior probs:
+      left_join( tibble( b1 = c(-1, 0, 1),
+                         b1_prob = c(0.3, 0.5, 0.2) 
+                       ),
+                 by = "b1"
+                ) %>% 
+    
+      mutate( prior_prob = b0_prob * b1_prob ) %>% 
+    
+      #select( -b0_prob, -b1_prob ) %>% 
+    
+      mutate( likelihood = map2_dbl( .x = b0,
+                                     .y = b1,
+                                     .f = function(beta0, beta1){
+                                       
+                                       observed_data %>% 
+                                          mutate( likelihood_y_i = pmap_dbl( list(X = x,
+                                                                                  Y = y,
+                                                                                  B0 = beta0,
+                                                                                  B1 = beta1
+                                                                                  ),
+                                                                             .f = function(X,Y,B0,B1){
+                                                                               likelihood_y_i( y_i=Y,
+                                                                                               x_i=X,
+                                                                                               b0=B0,
+                                                                                               b1=B1 ) 
+                                                                                 }
+                                                                            )
+                                          ) %>% 
+                                         summarise( likelihood_y = prod(likelihood_y_i) ) %>% 
+                                         pull( likelihood_y )
+                                    }
+                                  )
+            ) %>% 
+    mutate( unscaled_prob = prior_prob * likelihood ) %>% 
+    mutate( scaled_prob = unscaled_prob / sum(unscaled_prob) ) 
+    
+theoretical_probs
+```
+
+```{r}
+
+conditional_match <- tibble( b0=NA, b1=NA ) %>% slice(0)
+
+for( i in 1:1e7L ){
+  
+  if( i%%1e4L == 0 ){ print(i) }
+  
+  b0 <- sample( c(-1, 1), prob = c(0.4, 0.6), size=1 )
+  b1 <- sample( c(-1,0, 1), prob = c(0.3, 0.5, 0.2), size=1 ) 
+
+  e <- sample( -5:5,
+               prob = c(1,1,2,5,8,15,8,5,2,1,1)/sum( c(1,1,2,5,8,15,8,5,2,1,1) ),
+               size = nrow(observed_data),
+               replace = TRUE
+             )
+  
+  y <- b0 + observed_data$x*b1 + e
+    
+  if( all.equal(y, observed_data$y) == TRUE ){
+    conditional_match <- bind_rows( conditional_match, tibble(b0=b0, b1=b1) )
+  }
+}
+
+conditional_match %>% 
+  group_by( b0, b1) %>% 
+  tally() %>% 
+  ungroup() %>% 
+  mutate( simulated_prob = n/sum(n) ) %>% 
+  left_join( theoretical_probs %>% 
+                select( b0, b1, scaled_prob )   
+           ) %>% 
+  rename( theoretical_prob = scaled_prob )
+
+```

@@ -1,0 +1,64 @@
+---
+title: "Epidemiology: Measures of Disease Association in R"
+author: "Joseph Bolton"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(fmsb)
+```
+
+
+
+```{r}
+clinical_trial_data <- 
+  table( exposure = factor( c("yes", "no"), levels=c("yes", "no") ),
+          disease = factor( c("yes", "no"), levels=c("yes", "no") )
+       )
+
+clinical_trial_data["yes","yes"] <- 27    # exposed, diseased
+clinical_trial_data["yes","no"] <- 455    # exposed, no disease
+clinical_trial_data["no","yes"] <- 77     # non-exposed, diseased
+clinical_trial_data["no","no"] <- 1831    # non-exposed, no disease
+
+clinical_trial_data
+```
+
+
+```{r}
+e_d   <- clinical_trial_data["yes","yes"]       # exposed, diseased
+e_nd  <- clinical_trial_data["yes","no"]        # exposed, no disease
+ne_d  <- clinical_trial_data["no","yes"]        # non-exposed, diseased
+ne_nd <- clinical_trial_data["no","no"]         # non-exposed, no disease
+  
+joe_ftn <- function( e_d, e_nd, ne_d, ne_nd, conf.level=0.95 ){
+  
+  prop_diseased_in_exposed <- e_d / (e_d+e_nd) 
+  prop_diseased_in_non.exposed <- ne_d / (ne_d+ne_nd)   
+  
+  n_exposed <- e_d + e_nd 
+  n_non.exposed <- ne_d + ne_nd 
+  
+  risk_difference <- prop_diseased_in_exposed - prop_diseased_in_non.exposed
+  risk_ratio <- prop_diseased_in_exposed / prop_diseased_in_non.exposed
+                
+  z_2sided <- qnorm( 1 - (1-conf.level)/2 )        
+    
+    
+  # Wald confidence interval for risk difference:
+  # reference: https://documentation.sas.com/?docsetId=procstat&docsetTarget=procstat_freq_details54.htm&docsetVersion=9.4&locale=en
+  wald_diff_se <- sqrt( (prop_diseased_in_exposed * (1-prop_diseased_in_exposed)) / n_exposed +
+                        (prop_diseased_in_non.exposed * (1-prop_diseased_in_exposed)) / n_non.exposed  
+                      )
+  risk_difference - z_2sided * wald_diff_se
+  risk_difference + z_2sided * wald_diff_se
+  
+
+  
+  results <- list()
+  
+  
+}
+
+```

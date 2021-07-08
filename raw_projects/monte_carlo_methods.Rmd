@@ -1,0 +1,405 @@
+---
+title: "Monte Carlo Methods"
+author: "Joe"
+date: "09 February 2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(purrr)
+library(ggplot2)
+```
+
+Monte Carlo methods are the finding of approximate solutions to complex mathematical/statistical problems via simulation, without having to analytically solve them. 
+
+For example, suppose that we want to infer about the distribution $f(X)$ and that we have a large sample $x_1, x_2, x_3,...,x_n$ from $f(X)$. We can use the following approximations:
+
+$$E\Big[h(X)\Big]\quad = \quad \int h(x)f(x) dx \quad \approx \quad \frac{\sum_{i=1}^n h(X_i)}{n}$$
+$$Pr\Big[X>c\Big] \quad = \quad \int \mathbf{I}(X>c)f(x) dx \quad \approx \quad \frac{\sum_{i=1}^n \mathbf{I}(X_i>c)}{n}$$
+
+For example, suppose that 
+
+$$X \quad \sim \quad \text{Poisson}\Big(\lambda=5\Big)$$
+
+$$p(x) \quad = \quad \frac{5^xe^{-5}}{x!}$$
+
+Then, we know that
+
+$$E\Big[X\Big] \quad = \quad 5$$
+
+$$Var\Big[X\Big] \quad = \quad 5$$
+
+$$Pr\Big[X \leq 6 \Big] \quad = \quad \sum_{x=0}^6 \frac{5^xe^{-5}}{x!} \quad = \quad 0.7621835$$
+
+We can get approximate estimates of these values by sampling randomly from $f(X)$ and using the sample versions of them. By simulation below, we can see that the distributions of the sample versions of these statistics are symmetrical about 0, and reduce dramatically in variance as the size of our sample increases (points are jittered randomly to the left and right a little to make them more visible):
+
+```{r tester}
+# do 100 random samples for each sample size:
+
+# sample means around true mean:
+data_frame( sample_size = c( rep(100, 100),
+                             rep(1000, 100),
+                             rep(5000, 100),
+                             rep(10000, 100),
+                             rep(100000, 100)
+                           )
+          ) %>% 
+  mutate( sample_mean_estimate = purrr::map( .x = sample_size,
+                                             .f = function(samplesize){ mean( rpois(n=samplesize, lambda=5) ) } 
+                                           ) %>% 
+                                 unlist()
+        ) %>%
+  mutate( sample_size = as.factor(sample_size) ) %>% 
+  ggplot( data = .,
+          aes( x = sample_size,
+               y = sample_mean_estimate) 
+        ) + 
+  geom_jitter() + 
+  geom_hline(yintercept=5)
+
+# sample variances around true variance:
+data_frame( sample_size = c( rep(100, 100),
+                             rep(1000, 100),
+                             rep(5000, 100),
+                             rep(10000, 100),
+                             rep(100000, 100)
+                           )
+          ) %>% 
+  mutate( sample_variance_estimate = 
+                  purrr::map( .x = sample_size,
+                              .f = function(samplesize){ var( rpois(n=samplesize, lambda=5) ) } 
+                            ) %>% 
+                  unlist()
+        ) %>%
+  mutate( sample_size = as.factor(sample_size) ) %>% 
+  ggplot( data = .,
+          aes( x = sample_size,
+               y = sample_variance_estimate) 
+        ) + 
+  geom_jitter() + 
+  geom_hline(yintercept=5)
+
+# sample estimates of Pr[X<7] around true Pr[X<7]:
+data_frame( sample_size = c( rep(100, 100),
+                             rep(1000, 100),
+                             rep(5000, 100),
+                             rep(10000, 100),
+                             rep(100000, 100)
+                           )
+          ) %>% 
+  mutate( sample_prob_estimate = 
+                  purrr::map( .x = sample_size,
+                              .f = function(samplesize){ sum( rpois(n=samplesize, lambda=5) < 7 )/samplesize } 
+                            ) %>% 
+                  unlist()
+        ) %>%
+  mutate( sample_size = as.factor(sample_size) ) %>% 
+  ggplot( data = .,
+          aes( x = sample_size,
+               y = sample_prob_estimate) 
+        ) + 
+  geom_jitter() + 
+  geom_hline(yintercept=0.7621835) +
+  ylab( "estimate of Pr[X<7]")
+
+```
+
+# The Probability Integral Transform
+This is a method used to generate a random sample of data from any univariate distribution, given that we have a closed form expression for the inverse of it's Cumulative Distribution Function (CDF).  
+
+This method assumes that we can generate random Uniform(0,1) numbers. 
+
+example: 
+
+Suppose that we want to simulate data from univariate distribution $f_X(x)$ (with corresponding CDF $F_X(x)$). 
+
+We use the fact that  
+
+$$F_X^{-1}(u) \quad \sim \quad f(x)$$
+
+where 
+
+$$u \quad \sim \quad \text{uniform}\Big(0,1\Big)$$
+
+For example, suppose that we want to generate numbers from 
+
+$$x \quad \sim \quad \text{exponential}\Big(\lambda=3\Big)$$
+
+$$f_X(x) \quad = \quad 3e^{-3x}$$
+
+$$F_X(x) \quad = \quad 1-e^{-3x}$$
+
+The inverse of the CDF is:
+
+$$F^{-1}_X(x) \quad = \quad -\frac{log(1-x)}{3}$$
+
+```{r show_prob_int_trans}
+
+# generate 500,000 random uniform numbers:
+runif_01 <- runif(5e5L,0,1) 
+
+# put these random uniform numbers through the inverse CDF of X:
+montecarlo_X <- -log(1-runif_01)/3
+
+# plot the sample data:
+hist( montecarlo_X, freq=FALSE, breaks=500 )
+
+# add curve of true distribution of f(x):
+curve( dexp(x, rate=3), add=TRUE, col=2, lwd=2, from=0, to=max(montecarlo_X) )
+```
+
+# The Box-Mueller Method
+
+# Acceptance Rejection Method
+This method is used to generate random values from some univariate probability distribution $f(x)$ given that we can generate random values from a more convenient distribution $h(y)$ which has a similar form to $f(x)$. 
+
+There is a restriction on the $h(y)$ that we can use: $h(x)$ can only take on a value of 0 when $f(x)=0$
+
+The method relies on the fact that: 
+
+$$h\Big( \space y \quad | \quad U \leq g(Y) \space \Big) \quad = \quad f(y)$$
+
+$$U \quad \sim \quad \text{uniform}\Big(0,1\Big)$$
+
+$$g(y) \quad = \quad \frac{f(y)}{C \times \space h(y)}$$
+$$C \quad = \quad \underset{\big\{x \space | \space h(x)>0 \big\}}{\text{max}} \quad \frac{f(x)}{h(x)}$$
+
+..which is a result derived using Bayes Theorem.
+
+This leads us to the following algorithm to generate a random value from distribution $f(x)$:
+
+1. Choose a distribution $h(y)$ close in shape to $f(x)$ that is easy to generate random values of $y$ from.
+
+2. Calculate the value $C$. $C$ is the largest value that the ratio $\frac{f(x)}{h(x)}$ can take, over all values of $x$ where $h(x)$ is positive.  
+
+3. Calculate the distribution function $g(y)$
+
+4. Generate a random value $y$ from distribution $h(y)$
+
+5. Generate a random uniform(0,1) number $u$
+
+6. If $u\leq g(y)$ then keep this value of $y$. Otherwise, discard this $y$ and repeat the algorithm again. 
+ 
+example: 
+
+Suppose that we want to generate a random sample from 
+
+$$f(x) \quad = \quad \frac{x^{20-1} \space e^{-x}}{\Gamma(20)} \hspace{10mm} x>0 \hspace{15mm}\text{i.e. X has a gamma distribution with shape=20 and rate=1}$$
+
+1. Suppose that we choose $h(y)$ to be a exponential distribution with rate $\lambda = 1/20$ 
+
+$$h(y) \quad = \quad \frac{1}{20}e^{-\frac{1}{20}y} \hspace{10mm} y>0$$
+Here is how these 2 distributions look: 
+
+```{r show_dbns}
+x <- seq(0,100, 0.1)
+f_x <- dgamma( x, shape=20, rate=1 )
+h_y <- dexp( x, rate=1/20 )
+
+plot( f_x ~ x, type="l", ylab="density")
+lines( h_y ~ x, col=2 )
+legend( "topright",
+        legend = c("f(x) gamma","h(x) exponential"),
+        lty = c(1,1),
+        col = 1:2
+      )
+```
+
+$h(y)$ has a very different shape to $f(x)$ (which will make the algorithm very inefficient), but $h(y)$ satisfies 
+
+$$h(x)=0 \text{ only when } f(x)=0$$ 
+
+so the algorithm will still work. 
+
+2. First, we calculate $C$:
+
+$$C \quad = \quad \underset{\big\{x \space | \space h(x)>0 \big\}}{\text{max}} \quad \frac{f(x)}{h(x)} \quad=\quad \underset{\big\{x \space | \space h(x)>0 \big\}}{\text{max}} \quad \frac{\bigg(\frac{x^{20-1} \space e^{-x}}{\Gamma(20)} \bigg)}{ \bigg( \frac{1}{20}e^{-\frac{1}{20}x} \bigg)} \quad = \quad 4.829589$$
+
+We can use the optim() function in R to find $C$:
+
+```{r get_c}
+fx_div_hx <- function(x){ (x^19 * exp(-x) / gamma(20)) / (20^(-1)*exp(-x/20) ) }   # function to be maximised
+find_C <- optim( par = 1,             # initial guess for C
+                 fn = function(x){ -fx_div_hx(x) },      # function to be minimised  
+                 method = "Brent",
+                 lower = 0,
+                 upper = 999
+                ) 
+find_C
+
+C <- fx_div_hx( x=find_C$par)
+C
+```
+
+and we can visually verify that $C$ maximises $\frac{f(x)}{h(x)}$:
+
+```{r shwothis_20}
+x <- seq( 0, 50, 0.01)
+fx_div_hx_to_plot <- fx_div_hx(x)
+plot( fx_div_hx_to_plot ~ x, type = "l", ylab="f(x) / h(x)")
+abline( v=find_C$par, lty=2)
+```
+
+3. Having found $C$, we can define distribution g(y):
+
+$$g(y) \quad = \quad \frac{f(y)}{C \times \space h(y)} \quad = \quad \frac{\bigg(\frac{y^{20-1} \space e^{-y}}{\Gamma(20)} \bigg)}{ 4.829589\times \bigg( \frac{1}{20}e^{-\frac{1}{20}y} \bigg)}$$
+
+```{r define_gY}
+g_y <- function(y){  (y^19 * exp(-y) / gamma(20)) / ( C* 20^(-1)*exp(-y/20) )  }  
+```
+
+Now, we can generate values from $f(x)$ using the acceptance/rejection method:
+```{r accept_reject}
+
+# 4. generate 100,000 random values from h(y): 
+random_h_y <- rexp(n=1e5L, rate=1/20) 
+
+# 5. generate 100,000 random uniform(0,1) values:
+u <- runif(n=1e5L,0,1)
+
+# 6. calculate the density g(y) for each y generated from h(y) in step '4.':
+get_g_y <- g_y( random_h_y ) 
+
+# keep only the y values where u <= y:
+final_x <- random_h_y[ u <= get_g_y ]
+```
+
+So, from 100,000 random uniform values $u$ and 100,000 random values $y$ from $h(y)$, we have generated only `r length(final_x)` values from $f(x)$ (`r round( length(final_x)/1e5L*100,2 )`%). The reason for this large inefficiency is that the shape of $h(y)$ was an appalling approximation to the shape of $f(x)$. 
+
+Here is a histogram of our generated values, with the true distribution curve $f(x)$ superimposed over it:
+
+```{r show_hist_dbn}
+hist( final_x, freq=FALSE, breaks=50 )
+curve( dgamma(x, shape=20, rate=1), add=TRUE, col=2, lwd=2 )
+```
+
+# Acceptance/Rejection Method: example 2
+Suppose that we want to generate random data from the distribution 
+
+$$f(x) \quad = \quad e^{-\frac{x^2}{2}} \Big(\text{sin}(2x)\Big)^2$$
+
+```{r show_it}
+ 
+f_x <- function(x){ exp(-x^2/2)*( sin(2*x) )^2 }
+
+x <- seq(-5,5,0.01)
+f_x_toplot <- exp(-x^2/2)*( sin(2*x) )^2 
+plot( f_x_toplot ~ x, type="l", xlim=c(-5,5))
+```
+
+This is not a true distribution function since it does not integrate to 1:
+
+```{r does_it_integrate}
+# check approximate area under f(x) by numerical integration:
+integrate( f=f_x,
+           lower = -Inf,
+           upper = Inf 
+          )
+```
+
+However, this does not matter for the Accept/Reject algorithm.
+
+Let's choose $h(y)$ (the function approximating $f(x)$) to be 
+
+$$\begin{array}{lcl} h(y) &=& \text{Normal}\Big(\mu=0, \quad \sigma^2=2^2 \Big) \\
+&=& \frac{1}{\sqrt{2\pi \times 2^2}} \space e^{-\frac{1}{2}\Big(\frac{x-0}{2}\Big)^2} \\
+\end{array}$$
+
+```{r the2plots}
+h_x <- dnorm( x, mean=0, sd=1)
+dnorm( 0.5, 0,2 )
+
+plot( f_x_toplot ~ x, type="l" )
+lines( h_x ~ x, col=2 )
+```
+
+$$\begin{array}{lcl} C &=& \underset{\big\{x \space | \space h(x)>0 \big\}}{\text{max}} \quad \frac{f(x)}{h(x)}\\
+&=& \underset{\big\{x \space | \space h(x)>0 \big\}}{\text{max}} \quad \frac{e^{-\frac{x^2}{2}} \Big(\text{sin}(2x)\Big)^2}{\frac{1}{\sqrt{8\pi}} \space e^{-\frac{x^2}{8}}} \\
+&=& 4.057389 \\
+\end{array}$$
+
+```{r find_C_again}
+h_x <- function(x){ dnorm(x, mean=0, sd=2) } 
+
+fx_divide_hx <- function(x){ f_x(x) / h_x(x) }
+
+find_C <- 
+     optim( par = 0,  # initial guess
+            fn = function(x){ -fx_divide_hx(x) },       # function to minimise
+            method = "Brent",
+            lower = -5,
+            upper = 5
+          )
+
+find_C
+
+# C is the largest value of f(x)/h(x): 
+C <- fx_divide_hx( x=find_C$par )
+C
+```
+
+Which we can again verify visually:
+```{r plot_C_calc}
+x <- seq(-5,5,0.01)
+plot( fx_divide_hx(x) ~ x, type="l")
+abline( v = find_C$par, lty=2 )
+abline( h = C, lty=2 )
+```
+
+It looks like $C$ does not occur uniquely at one $x$ value, but it looks like it will always have the same value.
+
+Now, we define $g(y)$:
+
+$$\begin{array}{lcl} g(y) &=& \frac{f(y)}{C \times \space h(y)} \\
+&=& \frac{e^{-\frac{y^2}{2}} \Big(\text{sin}(2y)\Big)^2}{4.057389 \times \frac{1}{\sqrt{8\pi}} \space e^{-\frac{y^2}{8}}} \\
+\end{array}$$
+
+and now we generate values from $f(x)$ using the **acceptance/rejection** method:
+```{r accept_reject222}
+# generate 1,000,000 random uniform(0,1) values:
+u <- runif(n=1e6L,0,1)
+
+# generate 1,000,000 values from h(y):
+y <- rnorm( n=1e6L, mean=0, sd=2 )
+
+# specify the function g(y):
+g_y <- function(y){ f_x(y) / (C*h_x(y)) }
+
+# evaluate each y value under distribution g(y):
+get_gy <- g_y(y)
+
+# keep only the y values where u <= g(y):
+fx_sim_final <- y[ u <= get_gy ] 
+```
+
+If we plot $f(x)$ over the histogram of our accept/reject sample, it looks as if we have made an error:
+
+```{r show_that_im_almost_the_boss}
+hist( fx_sim_final, breaks=500, freq=FALSE, xlim=c(-5,5) )
+curve( f_x(x),
+       add=TRUE, col=2 )
+```
+
+However, this is because $f(x)$ is an improper integral (it does not integrate to 1). If we scale $f(x)$ to integrate to 1 (become a proper probability function), then we see that the generated data are correct:
+
+```{r show_that_im_the_boss}
+hist( fx_sim_final, breaks=500, freq=FALSE, xlim=c(-5,5) )
+integration_const <- integrate(f_x, -5, 5)$value
+f_x_pdf <- function(x){ exp(-x^2/2)*( sin(2*x) )^2 / integration_const }
+curve( f_x_pdf(x),
+       add=TRUE, col=2 )
+```
+
+# MCMC Methods/Gibbs Sampling
+This is a numerical method used to generate data from a multivariate distribution. 
+
+Gibbs sampling works by sweeping alternately through the marginal distribution of each variable, holding all other variables constant
+
+Let's look at a bivariate example:
+
+
+

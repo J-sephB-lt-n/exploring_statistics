@@ -1,0 +1,360 @@
+---
+title: "Calculated Features to Capture Customer Order Behaviour in Time"
+author: "Joseph Bolton"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(lubridate)
+library(patchwork)
+library(broom)
+```
+
+```{r}
+gen_random_timeofday <- function(){
+  hour <- sample( 8:16, size=1 ) %>% as.character()
+  minute <- sample( 0:59, size=1 ) %>% as.character()
+  hour <- str_pad( string=hour, width=2, side="left", pad="0")
+  minute <- str_pad( string=minute, width=2, side="left", pad="0")
+  return( paste0(hour, ":", minute) )
+}
+
+gen_random_timeofday()
+gen_random_timeofday()
+gen_random_timeofday()
+```
+
+```{r}
+# gen_customer_order_viz <- function( order_date_vec,
+#                                     xlim = c( lubridate::date("2018-01-01"),
+#                                               lubridate::date("2019-12-31")
+#                                             ),
+#                                     cluster_proximity = 7   # all orders within this distance of one another
+#                                                             # will be treated as 1 order
+#                                   ){
+#   
+#     order_date_vec <- lubridate::date( order_date_vec )
+#     start_date <- xlim[1]
+#     end_date <- xlim[2]
+#     
+#     plot_data <- tibble( date = order_date_vec,
+#                            y = 0,
+#                          grp = "customer"    # add this because geom_line compains otherwise
+#                        ) %>% 
+#             mutate( gaplength = date - lag(date) )
+#     
+#     # 
+#     
+#     sd_gaplength <- sd(plot_data$gaplength, na.rm=TRUE)
+#     
+#     return( 
+#             ggplot( data = plot_data,
+#                     aes(     x = date,
+#                              y = y,
+#                          group = grp
+#                         )
+#                   ) + 
+#             geom_point(colour="red", size=3) + 
+#             geom_line() +
+#             geom_vline( aes(xintercept = date), colour = "red" ) +
+#             geom_text( aes(label=week_number), hjust=2, angle=90 ) +
+#             labs( subtitle = paste0( "SD_gaplength: ", round(sd_gaplength),
+#                                      "\n",
+#                                      "n_orders_past_7days: ", plot_data %>% filter( date >= (end_date-7) ) %>% nrow(),
+#                                      "\n",
+#                                      "n_orders_past_14days: ", plot_data %>% filter( date >= (end_date-14) ) %>% nrow(),
+#                                      "\n",
+#                                      "n_orders_past_30days: ", plot_data %>% filter( date >= (end_date-30) ) %>% nrow()
+#                                     )
+#                 ) +
+#             xlim( xlim ) 
+#             
+#     )
+#   
+#   
+# }
+# 
+# gen_customer_order_viz( order_date_vec = c("2018-01-01", "2018-01-05", "2018-01-31", "2018-03-01") )
+```
+
+```{r}
+gen_customer_order_viz2 <- function( order_datetime_vec,
+                                     xlim = c( lubridate::as_datetime("2018-01-01 00:00:00"),
+                                               lubridate::as_datetime("2019-12-31 23:59:59")
+                                             ),
+                                     ylim = as.POSIXct( strptime(c("08:00",
+                                                                   "17:00"), format = "%H:%M")
+                                                      )
+                                   ){
+  
+    order_datetime_vec <- lubridate::as_datetime( order_datetime_vec )
+    start_date_time <- xlim[1]
+    end_date_time <- xlim[2]
+    
+    plot_data <- tibble(      date = order_datetime_vec,
+                         timeofday = as.POSIXct( 
+                                          strftime(order_datetime_vec, format="%H:%M"),
+                                          format = "%H:%M"
+                                          ) - 2*60*60,
+                               grp = "customer"    # add this because geom_line compains otherwise
+                        ) %>% 
+             mutate( gaplength = difftime( date,lag(date), unit="days" ) ) %>% 
+             mutate( dayofweek = lubridate::wday(date) ) %>% 
+             mutate( period = case_when( lubridate::hour(date) < 11 ~ "8:00-10:59",
+                                         lubridate::hour(date) %in% c(11,12,13) ~ "11:00-13:59",
+                                         lubridate::hour(date) > 13 ~ "14:00-16:59",
+                                       ) 
+                   ) %>% 
+             mutate( period = factor(period, levels=c("8:00-10:59", "11:00-13:59", "14:00-16:59") ))
+             
+    
+    return( 
+             ggplot( data = plot_data,
+                     aes(     x = date,
+                              y = timeofday,
+                          group = grp,
+                          label = dayofweek,
+                          shape = period
+                        )
+                   ) + 
+             geom_vline( aes(xintercept = date), colour = "red" ) +
+             geom_hline( yintercept = c(as.POSIXct( strptime(c("08:00",
+                                                                 "11:00",
+                                                                 "14:00",
+                                                                 "17:00"), format = "%H:%M")
+                                                      )),
+                         alpha = 0.3
+                        ) +
+             geom_point( colour="black", size=5) +
+             geom_text( colour = "white" ) +
+             xlim( xlim ) + 
+             scale_y_datetime( limits = ylim,
+                               breaks = c(as.POSIXct( strptime(c("08:00",
+                                                                 "09:00",
+                                                                 "10:00",
+                                                                 "11:00",
+                                                                 "12:00",
+                                                                 "13:00",
+                                                                 "14:00",
+                                                                 "15:00",
+                                                                 "16:00",
+                                                                 "17:00"), format = "%H:%M")
+                                                      )),
+                               labels = c("08:00",
+                                                                 "09:00",
+                                                                 "10:00",
+                                                                 "11:00",
+                                                                 "12:00",
+                                                                 "13:00",
+                                                                 "14:00",
+                                                                 "15:00",
+                                                                 "16:00",
+                                                                 "17:00")
+                             )
+     )
+  
+  
+}
+
+gen_customer_order_viz2( order_datetime_vec = c("2018-01-01 09:15:36", "2018-03-05 13:49:02", "2018-03-19 10:01:02", "2018-07-01 16:12:58") )
+```
+
+# Recency
+When was the last time that the customer was active? 
+```{r echo=FALSE}
+(
+  gen_customer_order_viz2( order_datetime_vec = c("2018-01-01 12:15:00", "2019-01-01 13:30:02") ) /
+  gen_customer_order_viz2( order_datetime_vec = c("2018-01-01 12:15:00", "2019-11-01 13:30:02") )
+)
+```
+
+Features describing *recency*:
+
+1. Number of days since last transaction
+
+2. Number of days since customer had $x$ close transactions (e.g. how many days ago did customer have 3 transactions, where those transactions were a maximum of 1 month apart). This is a stricter definition of an *active* customer, requiring a number of transactions in close proximity in time.  
+
+# Consistency
+How consistent is a customer in their transactions, in terms of amount of time between each transaction?  
+
+```{r echo=FALSE}
+(
+  gen_customer_order_viz2( order_datetime_vec = c("2018-01-01 12:15:00", "2018-04-01 12:15:00","2018-07-01 12:15:00", "2018-10-01 12:15:00", "2019-01-01 12:15:00","2019-04-01 12:15:00", "2019-07-01 12:15:00","2019-10-01 12:15:00") ) /
+  gen_customer_order_viz2( order_datetime_vec = c("2018-01-01 12:15:00", "2018-02-01 12:15:00","2018-03-01 12:15:00", "2018-11-01 12:15:00", "2018-12-01 12:15:00","2019-12-01 12:15:00", "2019-07-01 12:15:00","2019-08-01 12:15:00") ) /
+    gen_customer_order_viz2( order_datetime_vec = c("2018-01-01 12:15:00", "2018-02-01 12:15:00","2018-07-01 12:15:00", "2018-08-01 12:15:00", "2019-01-01 12:15:00","2019-02-01 12:15:00", "2019-07-01 12:15:00","2019-08-01 12:15:00") )
+)
+```
+
+Meausures of consistency: 
+
+1. Standard Deviation of Gap Length (gap length=number of days between 2 transactions).
+
+2. Standard Deviation of gap length, where data is first binned into active weeks (week containing at least one transaction) and inactive weeks (week containing no transactions). *Gap length* is then defined as number of inactive weeks between any 2 given active weeks. Could also bin transactions into *active* and *inactive* *months*. 
+
+# Trajectory
+```{r echo=FALSE}
+(
+  gen_customer_order_viz2( order_datetime_vec = c("2018-01-01 09:15:00", "2018-07-01 13:30:02", "2019-01-01 14:22:02", "2019-07-01 11:35:58", "2019-07-15 11:35:58", "2019-08-01 11:35:58", "2019-08-15 11:35:58", "2019-10-01 11:35:58", "2019-12-01 11:35:58") ) /
+  gen_customer_order_viz2( order_datetime_vec = c("2018-01-01 09:15:00", "2018-07-01 13:30:02", "2019-01-01 14:22:02", "2019-07-01 11:35:58", "2019-08-01 11:35:58", "2019-09-01 11:35:58", "2019-10-01 11:35:58", "2019-11-01 11:35:58", "2019-12-01 11:35:58") )  /
+  gen_customer_order_viz2( order_datetime_vec = c("2018-01-01 09:15:00", "2018-07-01 13:30:02", "2019-01-01 14:22:02", "2019-07-01 11:35:58", "2019-10-01 11:35:58", "2019-11-01 11:35:58", "2019-11-15 11:35:58", "2019-12-01 11:35:58", "2019-12x-15 11:35:58") )
+)
+```
+
+Measures of trajectory:
+
+1. *Trajectory in last $x$ weeks*: Count number of transactions per week in the last $x$ months. Fit an OLS line to the relationship **n_transactions ~ time**. The slope of this line is a measure of the trajectory of the last $x$ months.     
+
+2. *Trajectory in last $x$ weeks*: Count number of transactions per week in the last $x$ months. For each week, calculate the change in number of transactions (absolute or %) for this week compared to every subsequent week. Define the trajectory as the average of these changes. 
+
+# Frequency
+```{r echo=FALSE}
+(
+  gen_customer_order_viz2( order_datetime_vec = c("2018-01-01 12:15:00", "2018-04-01 12:15:00","2018-07-01 12:15:00", "2018-10-01 12:15:00", "2019-01-01 12:15:00","2019-04-01 12:15:00", "2019-07-01 12:15:00","2019-10-01 12:15:00", "2019-12-31 12:15:00") ) /
+  gen_customer_order_viz2( order_datetime_vec = c("2018-01-01 12:15:00","2018-07-01 12:15:00", "2019-01-01 12:15:00", "2019-07-01 12:15:00", "2019-12-31 12:15:00") )
+)
+```
+
+Measures of frequency:
+
+1. Number of transactions in last $x$ weeks.  
+
+# Day-of-Week Preference
+```{r echo=FALSE}
+(
+  gen_customer_order_viz2( order_datetime_vec = c("2018-01-04 12:15:00", "2018-04-05 12:15:00","2018-07-05 12:15:00", "2018-10-04 12:15:00", "2019-01-03 12:15:00","2019-04-04 12:15:00", "2019-07-04 12:15:00","2019-10-03 12:15:00", "2019-12-26 12:15:00") ) /
+  gen_customer_order_viz2( order_datetime_vec = c("2018-01-01 12:15:00", "2018-04-01 12:15:00","2018-07-04 12:15:00", "2018-10-04 12:15:00", "2019-01-06 12:15:00","2019-04-01 12:15:00", "2019-07-06 12:15:00","2019-10-01 12:15:00", "2019-12-26 12:15:00") )
+)
+```
+
+Measures of *Day-of-Week Preference*: 
+
+1. Count number of transactions per day of week in the last $x$ weeks. Turn these into a proportional spread of day-of-week across all of these transactions. Gini coefficient of these values measures spread over days (i.e. ...).
+
+2. Report favourite day-of-week. Could scale this by number of customers active on each day-of-week in the period of interest. 
+
+# Time-of-Day Preference
+```{r echo=FALSE}
+(
+  gen_customer_order_viz2( order_datetime_vec = 
+            c(paste0( "2018-01-01 ", gen_random_timeofday(), ":00"),
+              paste0( "2018-04-01 ", gen_random_timeofday(), ":00"),
+              paste0( "2018-07-04 ", gen_random_timeofday(), ":00"),
+              paste0( "2018-10-04 ", gen_random_timeofday(), ":00"),
+              paste0( "2019-01-06 ", gen_random_timeofday(), ":00"),
+              paste0( "2019-04-01 ", gen_random_timeofday(), ":00"),
+              paste0( "2019-07-06 ", gen_random_timeofday(), ":00"),
+              paste0( "2019-10-01 ", gen_random_timeofday(), ":00"),
+              paste0( "2019-12-26 ", gen_random_timeofday(), ":00")
+             )
+    )/
+  gen_customer_order_viz2( order_datetime_vec = c("2018-01-01 12:15:00", "2018-04-01 12:15:00","2018-07-04 12:15:00", "2018-10-04 12:15:00", "2019-01-06 12:15:00","2019-04-01 12:15:00", "2019-07-06 12:15:00","2019-10-01 12:15:00", "2019-12-26 12:15:00") )
+)
+```
+
+# Change in behaviour regime
+Compare change in various metrics over 2 consecutive periods. 
+
+
+# Old Code
+
+```{r}
+orders <-
+  bind_rows( 
+    tibble( person = 1,
+            order_datetime = c("2018-01-01 09:15:00", "2018-07-01 13:30:02", "2019-01-01 14:22:02", "2019-07-01 11:35:58", "2019-07-15 11:35:58", "2019-08-01 11:35:58", "2019-08-15 11:35:58", "2019-10-01 11:35:58", "2019-12-01 11:35:58")   
+          ),
+    tibble( person = 2,
+            order_datetime = c("2018-01-01 09:15:00", "2018-07-01 13:30:02", "2019-01-01 14:22:02", "2019-07-01 11:35:58", "2019-08-01 11:35:58", "2019-09-01 11:35:58", "2019-10-01 11:35:58", "2019-11-01 11:35:58", "2019-12-01 11:35:58")
+          ),
+    tibble( person = 3,
+            order_datetime = c("2018-01-01 09:15:00", "2018-07-01 13:30:02", "2019-01-01 14:22:02", "2019-07-01 11:35:58", "2019-10-01 11:35:58", "2019-11-01 11:35:58", "2019-11-15 11:35:58", "2019-12-01 11:35:58", "2019-12x-15 11:35:58")
+          )
+  ) %>% 
+  mutate( order_datetime = lubridate::as_datetime(order_datetime) ) %>% 
+  mutate( time_since_period_end = difftime( "2020-01-01 00:00:00",    # end of observation period
+                                            order_datetime,
+                                            unit = "days"
+                                            ) 
+                                  
+        ) 
+
+#   trajectory_last_6_months <- 
+#     orders %>% 
+#       filter( time_since_period_end < 180 ) %>% 
+#       mutate( yearmon = lubridate::date( 
+#                               paste0( lubridate::year(order_datetime),
+#                                       "-",
+#                                       str_pad( string = lubridate::month(order_datetime),
+#                                                 width = 2,
+#                                                  side = "left",
+#                                                   pad = "0"
+#                                              ),
+#                                       "-01"
+#                                       )
+#                               )
+#       ) %>% 
+#       group_by( person, yearmon ) %>% 
+#       summarise( n_orders = n() ) %>% 
+#       ungroup() %>% 
+#       arrange( person, yearmon ) %>% 
+#       group_by( person ) %>% 
+#       mutate( time = yearmon - min(yearmon) ) %>%
+#       nest() %>% 
+#       mutate(fit_lm = map(data, ~ lm(n_orders ~ time, data = .) %>% 
+#                             tidy() %>%
+#                             select(term, estimate) %>% 
+#                             spread(term, estimate)
+#                          )
+#             ) %>% 
+#     unnest(fit_lm) %>% 
+#     rename( slope = time ) %>%
+#     unnest( data ) 
+#   
+# ggplot( trajectory_last_6_months,
+#         aes( x = time, 
+#              y = n_orders
+#            )
+#       ) +
+#   geom_point() +
+#   geom_abline( aes(intercept = `(Intercept)`, slope = slope), colour="red" ) +
+#   labs( aes(title = slope) ) %>% 
+#   facet_grid( person ~ . ) 
+  
+(
+  gen_customer_order_viz2( order_datetime_vec = orders %>% filter(person==1) %>% pull(order_datetime) ) /
+  gen_customer_order_viz2( order_datetime_vec = orders %>% filter(person==2) %>% pull(order_datetime) )  /
+  gen_customer_order_viz2( order_datetime_vec = orders %>% filter(person==3) %>% pull(order_datetime) )
+)
+```
+
+
+
+
+
+```{r fig.width=10, fig.height=15}
+# show 10 random series with between 2 and 5 points in each:
+
+
+# for( j in 1:5 ){
+#   
+#   plot_list <- list()
+#   
+#   for( i in 1:10 ){
+#   
+#     n_orders <- sample(3:10, size=1)
+#     order_dates <- sample( 1:180, size=n_orders )
+#     order_dates <- order_dates[ cumsum(order_dates) < 729 ]
+#     order_dates <- lubridate::date("2018-01-01") + cumsum(order_dates)
+#     plot_list[[i]] <- gen_customer_order_viz( order_dates )
+#     }
+# 
+#   plot( patchwork::wrap_plots( plot_list, ncol = 2) )
+# 
+# }
+
+```
+
+

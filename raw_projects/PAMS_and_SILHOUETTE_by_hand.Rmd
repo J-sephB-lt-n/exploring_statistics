@@ -1,0 +1,716 @@
+---
+title: "Clustering: PAM k-Medoids, CLARA & Silhouette Values"
+author: "Joseph Bolton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"    
+output:
+  html_document:
+    df_print: paged
+    theme: darkly
+    highlight: espresso
+---
+
+```{r setup, include='false'}
+library(tidyverse)
+library(cluster)
+library(ggpubr)
+```
+
+Clustering algorithms are for partitioning objects into groups, such that similar objects get assigned to the same group. 
+
+In this post, I briefly explain the PAM [Partitioning Around Medoids] algorithm, implementing it from scratch in R on a simple 2-dimensional dataset. My result is identical to the result obtained by the R function pam() in the *cluster* package.     
+
+# Partitioning Around Medoids
+The PAM algorithm chooses $k$ points/rows in the data to be *medoids*, or *cluster centres*. The value $k$ is a parameter that must be chosen (this can be chosen using *Silhouette* values, which are discussed later on in this post). For each *non-medoid* point/row in the data, cluster membership is decided according to which *medoid* that point is closest to. 
+
+PAM consists of 2 phases: a BUILD phase and a SWAP phase.
+
+In the BUILD phase, $k$ initial *medoid* points are chosen. 
+
+In the SWAP phase, different *medoid* points are tried, until an optimal clustering is achieved. 
+
+I don't describe or implement the BUILD phase (which is very simple) in this post, simply choosing random starting *medoids*. Further details can be found in the original paper:
+
+$\quad$ *Clustering by Means of Medoids*
+
+$\quad$ Leonard KAUFMAN & Peter J. Rousseeuw
+
+$\quad$ https://www.researchgate.net/publication/243777819_Clustering_by_Means_of_Medoids
+
+$$\space \quad \space$$
+
+Here is a simple 2-dimensional 100-observation dataset of random noise, for us to test out PAM clustering on: 
+
+```{r}
+x <- runif(100, -100, 100 )
+y <- runif(100, -100, 100 )
+
+thedata <- tibble( x = x,
+                   y = y
+                 )
+
+thedata
+
+ggplot( data = thedata,
+        aes( x=x, y=y)
+      ) +
+  geom_point()
+
+```
+
+The PAM algorithm is as follows:
+
+* We wish to define *k* clusters, where the value of *k* is prespecified by the user.
+
+**BUILD STEP**
+
+* Choose *k* data points to be the starting *medoids* (I have skipped this step and simply chosen random starting *medoid* points, but this would not be difficult to code).
+
+* Each *medoid* point represents, in a sense, the *centre* of a cluster.
+
+* For each point, assign that point to it's closest *medoid* point. This is how clusters are decided. I measured distance using the 'euclidean' distance measure, although another distance measure could have been used.
+
+* The sum of the distances of each point to it's assigned *medoid* (i.e. tightness of clusters) measures the quality of a given clustering.
+
+**SWAP STEP**
+
+* For each *medoid* point, do the following:
+    - swap this *medoid* point with any *non-medoid* point (i.e. the *non-medoid* point becomes a *medoid* point and the *medoid* point becomes a *non-medoid* point)
+    - reassign every point to it's closest *medoid*. Calculate the sum of distances of each point to it's closest *medoid*. 
+
+* Amongst all the swaps considered above, find the swap that resulted in the smallest sum of distances of each point to it's closest *medoid*.
+
+* If the best swap gives a smaller sum of distances to closest *medoid* than we've seen before (i.e. the clustering improved), then do this swap. 
+
+* Keep repeating this swap step until the clustering can not be improved (i.e. sum of distances of each point to it's closest *medoid* can't be reduced). This is the final clustering. 
+
+# PAM using cluster package in R
+Here is how the PAM algorithm can be implemented automatically in R (still using the dataset created above): 
+
+```{r}
+k <- 5   # k is a number that we must choose
+init_medoids <- sample( 1:nrow(thedata), size=k )   # give random starting medoids
+
+run_pam <- cluster::pam( x = thedata,
+                         k = k,        
+                         metric = "euclidean",
+                         diss = FALSE,
+                         medoids = init_medoids,
+                         stand = FALSE,
+                         pamonce = 0
+                      )
+
+ggplot( data = bind_cols( thedata, tibble( cluster = factor(run_pam$clustering) ) ) %>%
+                  mutate( id = row_number() ) %>% 
+                  mutate( medoid = ifelse(id %in% run_pam$id.med, 2, 1) ) 
+          ,
+        aes( x=x, y=y, colour=cluster, size=medoid )
+      ) +
+  geom_point() +
+  theme( legend.position = NULL )
+```
+
+Note that we have chosen $k=5$ clusters. $k$ is a hyperparameter that we ourselves must choose for this algorithm. Some methods for choosing $k$ are discussed later. 
+
+# PAM from scratch
+Now, I implement the PAM algorithm (performed above automatically) from scratch:
+
+specify $k$ = number of clusters:
+
+```{r}
+k <- 5
+```
+
+specify initial (random) medoids to the algorithm:
+```{r}
+init_medoids <- init_medoids      # use the same random starting medoids we used earlier
+```
+
+```{r fig.width=7, fig.height=7}
+par( pty="s")
+
+n <- nrow(thedata) 
+
+distmat <- dist(thedata, method="euclidean") %>% as.matrix()
+cluster_vec <- rep(NA, nrow(distmat) )
+dist_from_medoid_vec <- rep(NA, nrow(distmat) )
+
+# create a function which returns sum of distances of 
+# all points to their nearest medoid:
+
+calc_tot_within_dist <- function(medoid_indices){
+  
+  for( p in 1:length(cluster_vec) ){
+    
+    # assign each point to a cluster based on closest medoid:
+    # and store this information
+    cluster_vec[p] <- which.min( distmat[p,medoid_indices] ) 
+    
+    # calculate the distance of each point from it's assigned medoid:
+    # and store this information
+    dist_from_medoid_vec[p] <- distmat[p, medoid_indices[cluster_vec[p]] ]
+    
+  }
+  
+  return( 
+          list( tot_dist = sum(dist_from_medoid_vec),
+                cluster_vec = cluster_vec,  
+                dist_from_medoid_vec = dist_from_medoid_vec
+              )
+        )
+  
+  
+}
+
+# give my alg the same starting medoids as I gave to cluster::pam():
+current_medoid_indices <- init_medoids 
+
+# define a plotting function:
+draw_current_plot <- function(){
+    plot( x = thedata$x, 
+          y = thedata$y,
+          col = run_dist_calc$cluster_vec,
+          pch = 16,
+          main = paste0( "sum distances: ", run_dist_calc$tot_dist )
+    )
+    points( x = thedata$x[current_medoid_indices],
+            y = thedata$y[current_medoid_indices],
+            col = run_dist_calc$cluster_vec[current_medoid_indices],
+            pch = "X",
+            cex = 2
+          )
+    # text( x = thedata$x, 
+    #       y = thedata$y,
+    #       col = run_dist_calc$cluster_vec,
+    #       labels = round(run_dist_calc$dist_from_medoid_vec, digits=2),
+    #       pos = 2,
+    #       cex = 0.8
+    # )
+}
+
+# plot the starting situation:
+run_dist_calc <- calc_tot_within_dist( medoid_indices = current_medoid_indices )
+draw_current_plot()
+
+prev_best_sumdist <- run_dist_calc$tot_dist
+sumdist_still_improving_flag <- 1
+
+while( sumdist_still_improving_flag == 1 ){
+  
+  # generate list of swaps to try:
+  swaps_to_try_list <- list()
+  
+  non_medoid_indices <- setdiff( 1:nrow(distmat), current_medoid_indices )
+  
+  # populate the swaps_to_try_list:
+  for( clustr in 1:k ){
+  
+    swaps_to_try_list[[clustr]] <- 
+      cbind( non_medoid_indices,  
+             sapply( current_medoid_indices[-clustr],
+                     function(x){ rep(x, length(non_medoid_indices) ) }
+                   )
+            )
+  }
+  
+  # bind swaps table into a single table:
+  swaps_to_try <- do.call( rbind, swaps_to_try_list )
+  
+  # create a vector to store the sum of distances for each possible swap:
+  swap_total_sumdist <- rep(NA, nrow(swaps_to_try) ) 
+  
+  # calculate sum of distances under each possible swap:
+  # and store this information
+  for( swap_i in 1:length(swap_total_sumdist) ){
+    
+    swap_total_sumdist[swap_i] <- 
+      calc_tot_within_dist( medoid_indices = swaps_to_try[swap_i, ] )$tot_dist
+    
+  }
+  
+  # identify best swap (index):
+  swap_with_best_improvement <- which.min(swap_total_sumdist)
+  
+  # is the best swap better than the current clustering?
+  total_dist_best_swap <- 
+    calc_tot_within_dist( medoid_indices = swaps_to_try[swap_with_best_improvement,] )$tot_dist
+  
+  if( prev_best_sumdist > total_dist_best_swap ){  # if the best swap improves the clustering
+    
+    # update current medoids:
+    current_medoid_indices <- sort(  swaps_to_try[swap_with_best_improvement,]  )
+  
+    # assign each point to closest medoid:
+    run_dist_calc <- calc_tot_within_dist( medoid_indices = current_medoid_indices )
+    
+    # update the sum of distances of best clustering found so far:
+    prev_best_sumdist <- run_dist_calc$tot_dist
+  
+    # draw plot of current clustering:
+    draw_current_plot()
+  
+    # print( current_medoid_indices )
+    
+  } else{    # if we can't improve our clustering with a swap
+    
+    # stop the algorithm
+    sumdist_still_improving_flag <- 0
+    
+  }
+  
+}
+
+```
+
+Compare my final clustering result to the final result of the function cluster::pam() in R:
+
+```{r}
+results <- rbind( joes_calc = sort(current_medoid_indices), 
+                  pam_function_in_r = sort(run_pam$id.med) 
+                ) 
+colnames(results) <- paste("medoid",1:ncol(results) )
+
+results
+
+ggplot( data = bind_cols( thedata, tibble( cluster = factor(run_pam$clustering) ) ) %>%
+                  mutate( id = row_number() ) %>% 
+                  mutate( medoid = ifelse(id %in% run_pam$id.med, 2, 1) ) 
+          ,
+        aes( x=x, y=y, colour=cluster, size=medoid )
+      ) +
+  geom_point() +
+  labs( title="final output of cluster::pam() function")
+```
+
+# Silhouette Values
+* The **silhouette** value/metric is a measurement of the quality of a clustering.
+
+* Every point (row) in the dataset receives a **silhouette** value.
+
+* The **Silhouette** value is not specific to PAM, but can be applied to a clustering from any algorithm.
+
+* **Silhouette** takes into account both *cohesion*/*tightness* (average distance of a point to every other point in it's cluster) and *separation* (average distance of a point to all points in the next nearest different cluster). Both *cohesion* and *separation* are important for a good clustering. 
+
+* The **silhouette** value always falls in the range $[-1,1]$, where $-1$ is the least desirable value and $1$ the most desirable. 
+
+* The **silhouette** value can be used to identify well-performing clusters within a particular clustering, measure the overall quality of a particular clustering, and assist in choosing an optimal number of clusters to use (e.g. choice of $k$ in k-means or PAM clustering). A large number of low or negative silhouette values is a sign of a bad clustering.
+
+* The **silhouette** value can also be used to identify points/observations which do not fit well into the cluster to which they have been assigned.   
+
+* The **Silhouette** calculation depends on the measure of distance of points from one another. Hence, it requires the choice of a distance metric (I've again used *euclidean distance*).
+
+* Inferences on the quality of a particular clustering can be inferred from the distribution of **Silhouette** values within each cluster. 
+
+* The **Silhouette** value can be used to compare different clustering algorithms fit to the same data.
+
+The steps for calculating the **silhouette** value for a given point $p$ are as follows:
+
+$$a\Big(p\Big) \quad=\quad \displaystyle\frac{\displaystyle\sum_{\displaystyle j\in C_p}d\big(p,j\big)}{|C_p|-1}$$
+
+$a\Big(p\Big)$ is the average distance of point $p$ from every other point in it's cluster $C_p$
+
+$$b\Big(p\Big) \quad=\quad \underset{\displaystyle k \neq p}{\text{min}} \quad \displaystyle\frac{\displaystyle\sum_{\displaystyle j \in C_k} d\big(p,j\big)}{|C_k|}$$
+
+For every cluster $C_k$ that point $p$ is **not** in: the average distance between point $p$ and every point in cluster $C_k$ is calculated. $b\Big(p\Big)$ is then the smallest of these $k-1$ values calculated (i.e. it is the average distance of point $p$ to every point in the closest cluster).  
+
+The **silhouette** value of point $p$ is then:
+
+$$\begin{array}{lcl}
+\text{silhouette}\Big(p\Big) 
+&=& 
+\begin{cases} 
+\displaystyle\frac{b(p)-a(p)}{\text{max}\Big\{a(p),b(p)\Big\}} & \text{if } \quad |C_p|>1 \\
+0 & \text{if } \quad |C_p| = 1 \quad\quad (\text{i.e. if cluster contains only point } p )
+\end{cases}
+\end{array}$$
+
+The denominator term enforces that the value lies within the range [-1,1]. Intuitively, the *silhouette* is a measure of the average within-cluster distance relative to the distance to the nearest cluster. 
+
+Consider the following clustered data:
+
+```{r echo=FALSE}
+par(pty="s")
+sileg <- tibble(       x = c( 1, 2, 1, 4, 3,   8, 8, 9),
+                       y = c( 3, 1, 7, 5, 9,   11, 8, 9),
+                 cluster = c( 2, 2, 2, 2, 2,   3,  3, 3) 
+               )
+plot( sileg$y ~ sileg$x, 
+      xlim=c(0,12),
+      ylim=c(0,12),
+      axes=FALSE, 
+      col=sileg$cluster, 
+      pch=16, 
+      cex=1.5,
+      xlab="x", ylab="y"
+    )
+axis( side=1, at=0:15 )
+axis( side=2, at=0:15, las=1 )
+```
+
+We are going to calculate the silhouette value for this point '$p$' :
+```{r echo=FALSE}
+par(pty="s")
+plot( sileg$y ~ sileg$x, 
+      xlim=c(0,12),
+      ylim=c(0,12),
+      axes=FALSE, 
+      col=sileg$cluster, 
+      pch=16, 
+      cex=1.5,
+      xlab="x", ylab="y"
+    )
+axis( side=1, at=0:15 )
+axis( side=2, at=0:15, las=1 )
+arrows( x0=10, y0=3, x1=8, y1=8 )
+```
+
+The euclidean distances between this point and the other points in its own cluster are:
+```{r echo=FALSE}
+par(pty="s")
+get_dist <- dist( sileg[6:8,c("x","y")], method="euclidean" ) %>% as.matrix()
+
+plot( sileg$y ~ sileg$x, 
+      xlim=c(0,12),
+      ylim=c(0,12),
+      axes=FALSE, 
+      col=sileg$cluster, 
+      pch=16, 
+      cex=1.5,
+      xlab="x", ylab="y"
+    )
+axis( side=1, at=0:15 )
+axis( side=2, at=0:15, las=1 )
+segments( x0 = c(sileg$x[7],sileg$x[7]), 
+          y0 = c(sileg$y[7],sileg$y[7]),
+          x1 = c(sileg$x[6],sileg$x[8]),
+          y1 = c(sileg$y[6],sileg$y[8]),
+          lty = 2
+        )
+text( x = 7.5, y=10, labels=get_dist[2,1] )
+text( x = 9, y=8, labels= round(get_dist[2,3],6), adj=-0.001 )
+
+```
+
+SO, the average distance $a(p)$ of $p$ from the other points in it's cluster is
+
+$$a(p) \quad=\quad\displaystyle\frac{3+1.414214}{2} \quad=\quad 2.207107$$
+
+The distances from $p$ to the points in the next nearest cluster are:
+```{r echo=FALSE}
+par(pty="s")
+get_dist <- dist( sileg[c(1:5,7),c("x","y")], method="euclidean" ) %>% as.matrix()
+
+plot( sileg$y ~ sileg$x, 
+      xlim=c(0,12),
+      ylim=c(0,12),
+      axes=FALSE, 
+      col=sileg$cluster, 
+      pch=16, 
+      cex=1.5,
+      xlab="x", ylab="y"
+    )
+axis( side=1, at=0:15 )
+axis( side=2, at=0:15, las=1 )
+segments( x0 = rep( sileg$x[7], 5 ),
+          y0 = rep( sileg$x[7], 5 ),
+          x1 = sileg$x[1:5],
+          y1 = sileg$y[1:5],
+          lty = 2
+        )
+text( x =         c(2, 5, 3, 5, 5),
+      y =         c(4, 3, 7, 6, 9),
+      labels = c( round(get_dist[6,1], 6),
+                  round(get_dist[6,2], 6),
+                  round(get_dist[6,3], 6),
+                  get_dist[6,4],
+                  round(get_dist[6,5], 6)
+                  
+                )
+    ) 
+```
+
+So, the average distance $b(p)$ between point $p$ and every point in the next nearest other cluster is:
+
+$$b(p) \quad=\quad \displaystyle\frac{5.09902+7.7071068+5+8.602325+9.219544}{5} \quad=\quad 6.998391$$
+
+The makes the silhouette value for point $p$ 
+
+$$\begin{array}{lcl}
+\text{silhouette}(p)
+&=& \displaystyle\frac{b(p)-a(p)}{\text{max}\Big\{a(p),b(p)\Big\}} \\
+&=& \displaystyle\frac{6.998391-2.207107}{\text{max}\Big\{2.207107, 6.998391\Big\}} \\
+&=& 0.6846265 \\
+\end{array}$$
+
+The silhouette values for all of the points are:
+```{r echo=FALSE}
+get_silhouettes <- 
+  cluster::silhouette( sileg$cluster,
+                       dist = dist(sileg[,c("x","y")], method="euclidean")
+                     )
+
+par(pty="s")
+plot( sileg$y ~ sileg$x, 
+      xlim=c(0,12),
+      ylim=c(0,12),
+      axes=FALSE, 
+      col=sileg$cluster, 
+      pch=16, 
+      cex=1.5,
+      xlab="x", ylab="y"
+    )
+axis( side=1, at=0:15 )
+axis( side=2, at=0:15, las=1 )
+text( x = sileg$x,
+      y = sileg$y,
+      labels = round( get_silhouettes[,"sil_width"], 3),
+      pos = 3
+    )
+```
+
+Notice how the *silhouette* values measure both *separation* (distance from next nearest cluster) and *tightness* (closeness to own cluster), where the measure is relative to the average distance to the nearest cluster. 
+
+Here is an example of how a silhouette value can be negative (the value is -0.05):
+```{r}
+silhouette_example_dat <- 
+  tibble( x = c(3.5,  4,  4.5,  5,  6,  7,  9,  8,  14,                 16, 18, 19, 21, 23, 24, 26, 20, 19, 25, 24 ),
+          y = c(30,  29,  32,  30,  31, 28, 28, 29, 28,                 28, 27, 26, 26, 24, 24, 23, 20, 19, 20, 32  ),
+          cluster = c( rep(1, 8), rep(2,12) )
+        )
+plot( x = silhouette_example_dat$x,
+      y = silhouette_example_dat$y,
+      col = silhouette_example_dat$cluster
+     )
+points( x = 14, y=28, col=2, pch=16, cex=1.5 )
+
+cluster::silhouette( x = silhouette_example_dat$cluster,
+                     dist = dist(silhouette_example_dat[,c("x","y")], method = "euclidean")
+                   )[9,"sil_width"]
+```
+
+Here is my manual calculation of the **silhouette** values of all points in the PAM clustering done at the beginning of this post:
+
+```{r}
+# store matrix of euclidean distances between all of the points:
+distmat <- as.matrix( dist(thedata[,c("x","y")], method = "euclidean") )
+
+# create a table in which to do the calculation (currently filled with blank values):
+joe_silhouette_calc <- cbind( id = 1:nrow(distmat),    # assign a unique ID to every point 'p'
+                              cluster = run_pam$clustering,   # cluster assigned to point p
+                              a = rep( as.numeric(NA), nrow(distmat) ),   # average distance within own cluster
+                              b = rep( as.numeric(NA), nrow(distmat) ),   # average dist to closest neighbour cluster
+                              neighbour = rep( as.integer(NA), nrow(distmat) ),  # cluster number of closest neighbour cluster
+                              sil_width = rep( as.numeric(NA), nrow(distmat) )   # silhouette value
+                            ) %>% 
+  as_tibble()
+
+for( p in 1:nrow(joe_silhouette_calc) ){    # for each point (row in the table)
+  
+  # get the cluster number of this point:
+  cluster_of_p <- joe_silhouette_calc[p,"cluster"] %>% pull(cluster) 
+  
+  # pull out the row of the distance matrix corresponding to point p:
+  p_row_distmat <- distmat[p, which(joe_silhouette_calc$cluster==cluster_of_p) ]
+  
+  # get [a]: mean within cluster distance from this point:
+  joe_silhouette_calc[p,"a"] <- sum( p_row_distmat ) / ( length(p_row_distmat)-1 )
+  
+  # for all other clusters, get mean distance to point p:
+  store_b_per_other_cluster <- rep( NA, k-1 )        # create empty vector to store the distances in
+  
+  # get a list of names of the other clusters (i.e. all clusters not containing p):
+  other_cluster_nums <- 
+    joe_silhouette_calc %>% filter(cluster != cluster_of_p) %>% distinct(cluster) %>% pull(cluster)
+  
+  # calculate the average distance to point p for every cluster and store this info in 'store_b_per_other_cluster':
+  for( c in other_cluster_nums ){
+    store_b_per_other_cluster[ which(other_cluster_nums==c) ] <- 
+      mean( distmat[p, which(joe_silhouette_calc$cluster==c)] )
+  }
+  
+  # record which cluster is closest to point p (has smallest average distance to p):
+  joe_silhouette_calc[p, "neighbour"] <- other_cluster_nums[ which.min(store_b_per_other_cluster) ]
+  
+  # calculate b[p] for this point (average distance to closest neighbour cluster)
+  joe_silhouette_calc[p, "b"] <- store_b_per_other_cluster[ which.min(store_b_per_other_cluster) ]
+
+}
+
+joe_silhouette_calc <- 
+    joe_silhouette_calc %>% 
+      mutate( sil_width = case_when( a < b ~ 1 - a/b,
+                                     a > b ~ b/a - 1,
+                                     a == b ~ 0,
+                                     TRUE ~ as.numeric(NA)
+                                    )
+      )
+
+```
+
+
+Compare my silhouette calculation to those produced by the R function cluster::silhouette():
+
+```{r}
+get_silhouette <- 
+  cluster::silhouette( x = run_pam$clustering,
+                       dist = dist(thedata[,c("x","y")], method = "euclidean")
+                     )
+
+joe_silhouette_calc %>% 
+  select( id, sil_width ) %>% 
+  rename( joe_silhouette_val = sil_width ) %>% 
+  bind_cols( tibble( R_silhouette_val = get_silhouette[,3]) )
+
+# R silhouette calc plot:
+get_silhouette <- tibble( cluster = get_silhouette[,"cluster"],
+                         neighbor = get_silhouette[,"neighbor"],
+                         sil_width = get_silhouette[,"sil_width"]
+                       ) %>% 
+ arrange( cluster, sil_width ) %>% 
+ mutate( id = row_number() )
+
+ggplot( data = get_silhouette,
+       aes( x = id,
+            y = sil_width,
+            fill = as.factor(cluster) 
+           )
+     ) +
+ geom_bar( stat="identity" ) +
+ theme( legend.position = "none" ) +
+ labs( title = "R package silhouette calc")
+  
+
+# my manual silhouette calc plot:
+joe_silhouette_calc %>% 
+  mutate( sil_width = case_when( a < b ~ 1 - a/b,
+                                 a > b ~ b/a - 1,
+                                 a == b ~ 0,
+                                 TRUE ~ as.numeric(NA)
+                                )
+  ) %>% 
+ arrange( cluster, sil_width ) %>% 
+ mutate( id = row_number() ) %>% 
+
+ggplot( data = . ,
+       aes( x = id,
+            y = sil_width,
+            fill = as.factor(cluster) 
+           )
+     ) +
+ geom_bar( stat="identity" ) +
+ theme( legend.position = "none" ) +
+ labs( title = "Joe silhouette calc")
+
+```
+
+# Exploring binning/categorizing data before using it for clustering:
+As a tiny note, to be explored fully in a later post, I am very interested in the effect of binning continuous variables into ranked factors/categories and then applying clustering to these binned variables instead. 
+
+This makes the clustering focus on creating clusters that are easy to interpret (e.g. *this cluster contains mostly customers who spent over $1,000*), and could also be used to deal with outliers .
+
+In the example below, the variables **spend** and **frequency** are first binned into convenient categories. The categories are then ranked, and these ranks are used as numeric variables in the clustering (these are called **spend_rank** and **freq_rank** in the example below). This makes the distance between points based on how many category bins they are away from another (e.g. *spend_rank=3* is two spend categories away from *spend_rank=1*). Notice how the clustering based on the variables **spend_rank** and **freq_rank**, rather than **spend** and **frequency**, clusters points into clearly-defined square bins.    
+
+```{r}
+set.seed(13)
+bindata <- 
+  tibble( customer_id = 1:100 ) %>% 
+    mutate( frequency_type = sample( c("low", "medium","high"), size=n(), replace=TRUE ),
+            avg_spend_type = sample( c("low", "medium","high"), size=n(), replace=TRUE )
+    ) %>% 
+  mutate( frequency = case_when( frequency_type == "low" ~ round( runif( n(), 1, 5 ) ),
+                                 frequency_type == "medium" ~ round( runif( n(), 1, 20 ) ),
+                                 frequency_type == "high" ~ round( runif( n(), 1, 100 ) ),
+                                 TRUE ~ -99
+                                ),
+          spend = case_when( avg_spend_type == "low" ~ round( runif( n(), 10, 5000 ) ),
+                                 avg_spend_type == "medium" ~ round( runif( n(), 10, 10000 ) ),
+                                 avg_spend_type == "high" ~ round( runif( n(), 10, 50000 ) ),
+                                 TRUE ~ -99
+                                )
+        )
+
+bindata$freq_bin <- cut( bindata$frequency, breaks = c(0,25,50,100), include.lowest = TRUE )
+bindata$freq_rank <- as.numeric(bindata$freq_bin)
+bindata$spend_bin <- cut( bindata$spend/10000, breaks = c(0,1,2,5), include.lowest = TRUE )
+bindata$spend_rank <- as.numeric(bindata$spend_bin)
+
+bindata
+
+bindata %>% distinct(freq_bin, freq_rank) %>% arrange(freq_rank)
+bindata %>% distinct(spend_bin, spend_rank) %>% arrange(spend_rank)
+
+ggplot( data = bindata,
+        aes( x = frequency, y = spend )
+      ) +
+  geom_point( alpha=0.5 )
+
+```
+
+```{r fig.width=8}
+PAMS_on_raw_data <-
+  cluster::pam( x = bindata %>% select(frequency, spend) %>% scale(),
+                k = 6,
+                metric = "euclidean",
+                diss = FALSE,
+                stand = FALSE,
+                pamonce = 0
+              )
+
+PAMS_on_ranked_bins <-
+  cluster::pam( x = bindata %>% select(freq_rank, spend_rank),
+                k = 6,
+                metric = "euclidean",
+                diss = FALSE,
+                stand = FALSE,
+                pamonce = 0
+              )
+
+ggpubr::ggarrange(
+  
+  ggplot( data = bind_cols( bindata, 
+                            tibble( cluster = as.factor(PAMS_on_raw_data$clustering) )
+                          ),
+          aes( x = frequency, y = spend, colour=cluster, shape=cluster )
+      ) +
+  geom_point() +
+  theme( legend.position="none" ) +
+  labs( title = "Clustering on Raw Data (normalized)")
+  
+  ,
+  
+  ggplot( data = bind_cols( bindata, 
+                            tibble( cluster = as.factor(PAMS_on_ranked_bins$clustering) )
+                          ),
+          aes( x = frequency, y = spend, colour=cluster, shape=cluster )
+      ) +
+  geom_point() +
+  theme( legend.position="none" ) +
+  labs( title = "Clustering on Rank Data")
+  
+) 
+```
+
+# CLARA: [C]lustering [LAR]ge [A]pplications algorithm
+For large datasets (more than a few thousand points), the k-medoids PAM algorithm is infeasible - it will simply take too long to run. 
+
+For this reason, there are a number of variants and extensions to the PAM algorithm designed to be used on larger datasets. One of these is CLARA, which is implemented as follows:
+
+**CLARA** 
+
+1 Find several candidate sets of *medoids* by doing PAM clustering repeatedly on multiple different random subsets of the data (of chosen size, as large as possible).
+
+2 Choose the set of *medoids* out of all of the candidate sets identified that perform best on the entire (global) dataset (minimise the sum of distances of each point to it's *medoid*). 
+
+3 Proceeding with the chosen set of *medoids*: Clusters are obtained by assigning points in the global dataset to their closest *medoid*.
+
+
+# References
+
+the original PAM paper:
+
+* https://www.researchgate.net/publication/243777819_Clustering_by_Means_of_Medoids
+
+other resources that I used:
+
+* https://en.wikipedia.org/wiki/K-medoids
+
+* https://en.wikipedia.org/wiki/Silhouette_(clustering)

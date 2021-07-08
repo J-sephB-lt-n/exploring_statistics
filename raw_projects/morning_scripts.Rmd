@@ -1,0 +1,48 @@
+---
+title: "spectral_analysis_and_filtering"
+author: "Joseph Bolton"
+output: html_notebook
+---
+
+# Frequency Index parameter 
+
+```{r}
+t_seq <- seq( 0, 24, length.out=1000 )
+
+par( mfrow=c(3,1) )
+
+series1 <- 2 * cos( 2 * pi * (1/12) * t_seq + 0 )    # cycle every 12 time units
+series2 <- 2 * cos( 2 * pi * (1/6) * t_seq + 0 )    # cycle every 6 time units
+series3 <- 2 * cos( 2 * pi * (1/4) * t_seq + 0 )    # cycle every 4 time units
+
+plot( x = t_seq,
+      y = series1,
+      type = "l",
+      main = bquote( "A=2, "~omega*" =1/12 , "~phi*"=0" ),
+      xlab = "t",
+      ylab = bquote(x[t])
+    )
+axis( side=1, at=0:24 )
+
+plot( x = t_seq,
+      y = series2,
+      type = "l",
+      main = bquote( "A=2, "~omega*" =1/6 , "~phi*"=0" ),
+      xlab = "t",
+      ylab = expression(x[t])
+    )
+axis( side=1, at=0:24 )
+
+plot( x = t_seq,
+      y = series3,
+      type = "l",
+      main = bquote( "A=2, "~omega*" =1/4 , "~phi*"=0" ),
+      xlab = "t",
+      ylab = expression(x[t])
+    )
+axis( side=1, at=0:24 )
+```
+
+# Phase Parameter
+
+# Height/Amplitude Paramter

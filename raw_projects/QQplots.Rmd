@@ -1,0 +1,100 @@
+---
+title: "R Notebook"
+output: 
+  html_notebook:
+    code: hide
+---
+
+# normal 
+
+```{r}
+sampledata <- rnorm(1e4L, mean=50, sd = 19)
+qqplot_data <- 
+  tibble( ordered_data = sort(sampledata)
+        ) %>% 
+  mutate( theoretical_normal_quantile = qnorm( seq(0,1,length.out=1e4L) ) )
+
+par(mfrow=c(1,3))
+hist(sampledata, breaks=50, freq=FALSE)
+curve( dnorm( x, mean=mean(sampledata), sd=sd(sampledata)), add=TRUE, col=2 )
+plot( qqplot_data$ordered_data ~ qqplot_data$theoretical_normal_quantile )
+qqnorm( sampledata )
+qqline( sampledata, col=2 )
+```
+
+# t-distribution (thicker tails than the normal)
+
+```{r}
+sampledata <- rt(1e4L, df=2)
+sampledata <- scale(sampledata)
+
+qqplot_data <- 
+  tibble( ordered_data = sort(sampledata)
+        ) %>% 
+  mutate( theoretical_normal_quantile = qnorm( seq(0,1,length.out=1e4L) ) )
+
+par(mfrow=c(1,3))
+hist(sampledata, breaks=50, freq=FALSE)
+curve( dnorm( x, mean=0, sd=1), add=TRUE, col=2 )
+plot( qqplot_data$ordered_data ~ qqplot_data$theoretical_normal_quantile )
+qqnorm( sampledata )
+qqline( sampledata, col=2 )
+```
+
+# right skew
+```{r}
+
+sampledata <- rchisq(1e5L, df=5)
+sampledata <- scale(sampledata)
+
+qqplot_data <- 
+  tibble( ordered_data = sort(sampledata)
+        ) %>% 
+  mutate( theoretical_normal_quantile = qnorm( seq(0,1,length.out=1e5L) ) )
+
+par(mfrow=c(1,3))
+hist(sampledata, breaks=50, freq=FALSE)
+curve( dnorm( x, mean=0, sd=1), add=TRUE, col=2 )
+plot( qqplot_data$ordered_data ~ qqplot_data$theoretical_normal_quantile )
+qqnorm( sampledata )
+qqline( sampledata, col=2 )
+```
+
+
+# left skew
+```{r}
+
+sampledata <- -rchisq(1e5L, df=5)
+sampledata <- scale(sampledata)
+
+qqplot_data <- 
+  tibble( ordered_data = sort(sampledata)
+        ) %>% 
+  mutate( theoretical_normal_quantile = qnorm( seq(0,1,length.out=1e5L) ) )
+
+par(mfrow=c(1,3))
+hist(sampledata, breaks=50, freq=FALSE)
+curve( dnorm( x, mean=0, sd=1), add=TRUE, col=2 )
+plot( qqplot_data$ordered_data ~ qqplot_data$theoretical_normal_quantile )
+qqnorm( sampledata )
+qqline( sampledata, col=2 )
+
+```
+
+# bimodal
+```{r}
+
+sampledata <- c( rnorm(5000, mean=0, sd=1), rnorm(5000, mean=0, sd=0.5) )
+
+qqplot_data <- 
+  tibble( ordered_data = sort(sampledata)
+        ) %>% 
+  mutate( theoretical_normal_quantile = qnorm( seq(0,1,length.out=1e4L) ) )
+
+par(mfrow=c(1,3))
+hist(sampledata, breaks=50, freq=FALSE)
+curve( dnorm( x, mean=0, sd=1), add=TRUE, col=2 )
+plot( qqplot_data$ordered_data ~ qqplot_data$theoretical_normal_quantile )
+qqnorm( sampledata )
+qqline( sampledata, col=2 )
+```

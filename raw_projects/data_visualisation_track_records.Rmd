@@ -1,0 +1,205 @@
+---
+title: "Track_records_visualisation"
+author: "Joseph Bolton"
+date: "17 February 2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+library(ggcorrplot)
+library(knitr)
+library(GGally)             # for ggpairs()
+library(tidyr)
+library(formattable)
+```
+
+Here is the dataset, printed in full:
+
+```{r data_load}
+track_records_dataset <-
+  read.csv( "C:/Users/Joe Bolton/Desktop/sync_to_google_drive/UCT honours work/Multivariate Analysis/data/men.csv") %>% 
+  select(-Country) %>% 
+  rename( country = countrylabel) %>% 
+  mutate( country = as.factor(country) )
+  
+table_with_formatting <- 
+    formattable( track_records_dataset, 
+                 list(  m100 = color_tile("transparent", "pink"),
+                        m200 = color_tile("transparent", "green"),
+                        m400 = color_tile("transparent", "blue"),
+                        m800 = color_tile("transparent", "orange"),
+                        m1500 = color_tile("transparent", "red"),
+                        m5000 = color_tile("transparent", "yellow"),
+                        m5000 = color_tile("transparent", "purple"),
+                        m10000 = color_tile("transparent", "dark grey"),
+                        marathon = color_tile("transparent", "violet")
+                     )
+                )
+    
+table_with_formatting
+```
+    
+# Scatterplot Matrix
+```{r scaterplotmaytrickz, fig.width=9, fig.height=9}
+GGally::ggpairs( track_records_dataset %>% select(-country),
+                 diag = list(continuous = wrap("barDiag", bins=10) ),
+                 upper = list(continuous = "density",
+                              mapping = ggplot2::aes_string(fill = "..level..")
+                             ),
+                 lower = list(continuous = wrap("points", alpha = 0.3, size=1) )
+                )
+
+```
+
+All of the variables (events) look very positively correlated, meaning that high performance in one event is a good predictor of high performance in any other event. 
+
+The univariate distribution of each event record is more Gaussian for shorter events, and increasingly long-tailed on the right as events become longer (the long right tail is populated by very badly-performing countries).
+
+# Correlation plot
+```{r ggcorplotyo, fig.with=9}
+corr_matrix <- 
+  track_records_dataset %>% 
+    select(-country) %>% 
+    cor() %>% 
+    round(., digits=2)
+
+kable(corr_matrix)
+
+ggcorrplot( corr = corr_matrix,               # correlation matrix to visualise
+            type = "lower",         # only fill bottom diagonal
+            ggtheme = theme_bw,     # simple theme for plot
+            title = "Visualisation of Correlations Between Variables", 
+            show.legend = TRUE,
+            show.diag = TRUE,
+            legend.title = "Correlation",
+            hc.order = TRUE,         # order the coefficients       
+            lab = TRUE,              # show correlation coefficients on the plot 
+            lab_size = 3,            # size of displayed coefficients
+            method="circle",   
+            colors = c("tomato2", "white", "springgreen3")
+          )
+```
+
+The variables are all positively correlated, meaning that countries with high performance in any one event are likely to be high-performers in any other event (and likewise for poorly performing countries).
+
+The strongest correlations are between events with similar distances (e.g. short distance performance is strongly correlated with other short-distance event performance, and likewise long-distance event performance is strongly correlated with performance in other long-distance events).
+
+# Best event by country
+
+Now, event performances are reported by country, where each column of the data has been standardised (centred to have mean 0 and scaled to have standard deviation 1). This plot highlights whether each country is performing above or below the mean performance in each event. 
+
+```{r labeltheoptions, fig.width=12, fig.height=10}
+track_records_dataset %>%
+  mutate_if( is.numeric, scale) %>% 
+  gather( key="event", value="record", -country ) %>% 
+  mutate( event = factor(event, 
+                         levels = c("m100",
+                                    "m200",
+                                    "m400",
+                                    "m800",
+                                    "m1500",
+                                    "m5000",
+                                    "m10000",
+                                    "marathon")
+                         )
+        ) %>% 
+ggplot( data = .,
+        aes( x = event, 
+             y = record,
+             fill = event
+          )  
+     ) +
+ geom_bar( stat="identity", position="dodge") + 
+ theme( axis.text.x = element_text(angle = 90, hjust = 1),
+                 panel.background = element_rect(fill = "black",
+                                colour = "black",
+                                size = 0.5, linetype = "solid"),
+                 panel.grid = element_blank()
+      ) +
+ facet_wrap( ~country ) +
+ labs( title = "Event records by Country",
+       subtitle = "Variables (events) centred to have mean 0 and scaled to have standard deviation 1"  
+     )
+
+```
+
+Cook Islands performs by far the worst across all events, followed closely in poor performance by Samoa. 
+
+U.S.A. is clearly the best in the short-distance events. 
+
+Kenya looks like the strongest performer in all medium to long-distance events. 
+
+India and Sweden perform almost exactly on the average (mean) in all events. 
+
+Most of the Western European countries seem to perform better than average across all events: France, Germany, Great Britain, Italy, Netherlands, Switzerland, Portugal. 
+
+
+# Compare country performance by event
+```{r comparisons, fig.width=12, fig.height=12, warning=FALSE}
+
+track_records_dataset %>%
+  mutate_if( is.numeric, scale, scale=TRUE, center=FALSE ) %>% 
+  gather( key="event", value="record", -country ) %>%
+  ggplot( data = .,
+          aes( x = country,
+               y = record,
+               colour = record,
+               shape = event
+             )
+        ) +
+  geom_point(size=3) +
+  scale_colour_gradientn( colours = rainbow(4) ) + 
+  theme( axis.text.x = element_text(angle=45, hjust=1, vjust=1),
+         panel.background = element_rect(fill = "black",
+                                colour = "black",
+                                size = 0.5, linetype = "solid"),
+         panel.grid = element_blank()
+         ) +
+  scale_shape_manual( values = c("@","#","$","%","&","?","X","O") ) +
+  facet_grid( event~., scale="free_y") +
+  geom_vline( xintercept = 0:100, colour = "white", alpha=0.3 ) +
+  labs( title = "Country Performance by Event",
+        subtitle = "each variable standardised to have standard deviation of 1"
+  )
+  
+```
+
+# Event Rankings by Country
+
+```{r rankung, fig.width=12, fig.height=10}
+track_records_dataset %>% 
+  mutate_if(is.numeric, dense_rank ) %>% 
+  gather( key="event", value="rank", -country ) %>% 
+  mutate( event = factor(event, 
+                       levels = c("m100",
+                                  "m200",
+                                  "m400",
+                                  "m800",
+                                  "m1500",
+                                  "m5000",
+                                  "m10000",
+                                  "marathon")
+                       )
+        ) %>%
+ggplot( data = .,
+        aes( x = event,
+             y = rank,
+             fill = event
+          )  
+     ) +
+ geom_bar( stat="identity", position="dodge") + 
+ theme( axis.text.x = element_text(angle = 90, hjust = 1),
+        panel.background = element_rect(fill = "black",
+                  colour = "black",
+                  size = 0.5, linetype = "solid"),
+        panel.grid = element_blank()
+      ) +
+ facet_wrap( ~country ) +
+ labs( title = "Rank of each Record, by Country" )
+  
+```

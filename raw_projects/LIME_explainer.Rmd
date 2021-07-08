@@ -1,0 +1,209 @@
+---
+title: "R Notebook"
+author: "Joseph Bolton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_notebook
+---
+
+Original paper: https://arxiv.org/abs/1602.04938
+
+A very good introductory lecture on LIME: https://www.youtube.com/watch?v=CY3t11vuuOM
+
+LIME interface in R: https://cran.r-project.org/web/packages/lime/vignettes/Understanding_lime.html
+
+Using H2o in R: https://www.h2o.ai/wp-content/uploads/2018/01/RBooklet.pdf
+
+```{r setup}
+library(tidyverse)
+library(lime)
+#library(randomForest)
+library(h2o)
+```
+
+**LIME** (**L**ocal **I**nterpretable **M**odel-agnostic **E**xplanations) is an algorithm that aims to make the predictions of complicated or 'black box' predictive models more transparent by creating simplified model explanation plots. 
+
+**LIME** does this by assuming that *locally* (i.e. within a group of observations that are very similar to one another), the predictions of a complicated model can be approximated well by a much simpler model (a model whose output a human can easily interpret and understand). 
+
+The **LIME** framework has been designed to be *model agnostic*, meaning that the algorithm works for the predictions of any classification or regression model (even ones that haven't been invented yet). Although the original paper introduces **LIME** in the context of classification modelling, the R implementation of **LIME** can be applied to both classification and regression frameworks. 
+
+# The LIME algorithm
+For a given observation $\{\overset{\rightarrow{}}{\mathbf{x}}_i, y_i\}$, our complicated/'black box' model provides us with a prediction $\hat{y}_i = f(\overset{\rightarrow{}}{\mathbf{x}}_i)$ of $y_i$. 
+
+We wish to *explain* to some degree how the complicated/'black box' model came to this prediction $\hat{y}_i$.
+
+The **LIME** algorithm is:
+
+1. Permute the observation $\overset{\rightarrow{}}{\mathbf{x}}_i$ $n$ times. This creates $n$ observations 'similar' to $\overset{\rightarrow{}}{\mathbf{x}}_i$. How an observation is *permuted* is explained later.  
+
+2. For each of the $n$ permuted observations $\overset{\rightarrow{}}{\mathbf{x}}_i^{(j)}$, get a predicted value $\hat{y}_i^{(j)}=f\big(\overset{\rightarrow{}}{\mathbf{x}}_i^{(j)}\big)$ for this observation from the complicated/'black box' model.
+
+3. For each of the $n$ permuted observations, calculate the distance $\delta_{ij}$ between the original observation $\overset{\rightarrow{}}{\mathbf{x}}_i$ and the permuted observation $\overset{\rightarrow{}}{\mathbf{x}}_i^{(j)}$ using a chosen distance metric (e.g. *euclidean distance*).
+
+4. Convert the distance measure $\delta_{ij}$ into a similarity score. The similarity metric chosen will depend on the type of data.
+
+5. Select the $m$ 'most predictive' features from the data. 
+
+6. Fit a simple model to the permuted data: the simple model tries to predict the complex model predictions $\hat{y}_i^{(j)}$ using the $m$ chosen features from $\mathbf{x}_i^{(j)}$.
+
+7. Explain the prediction $\hat{y}_i^{(j)}$ of the complex/'black box' model by interpretting the fit of the simple model.
+
+
+# **LIME** example on a classification model
+From the help documentation for the **LIME** package in R:
+"Out of the box, lime supports the following model objects:
+* train from caret
+
+* WrappedModel from mlr
+
+* xgb.Booster from xgboost
+
+* H2OModel from h2o
+
+* keras.engine.training.Model from keras
+
+* lda from MASS (used for low-dependency examples)"
+
+```{r}
+# load the [biopsy] dataset from the MASS package
+data( "biopsy", package="MASS" )
+
+# count number of rows with an NA value in them:
+apply( X = biopsy, 
+       MARGIN = 1, 
+       FUN = anyNA
+     ) %>% 
+  sum()   
+
+biopsy[ apply(biopsy,1,anyNA), ]
+
+# remove the ID column:
+biopsy <- biopsy %>% select(-ID)
+
+biopsy <- na.omit(biopsy)       # remove rows with any NA values in them
+
+# clean up the column names:
+names(biopsy) <- c( 'clump_thickness',
+                    'uniformity_of_cell_size',
+                    'uniformity_of_cell_shape',
+                    'marginal_adhesion',
+                    'single_epithelial_cell_size',
+                    'bare_nuclei',
+                    'bland_chromatin',
+                    'normal_nucleoli',
+                    'mitoses',
+                    'class'
+                   )
+
+# make the table into tibble() format:
+biopsy <- as_tibble(biopsy) %>% select( class, everything() )
+
+# have a look at the data:
+biopsy
+
+# pull 10 observations out as a test set:
+test_indices <- sample( seq_len(nrow(biopsy)), size=10 )
+biopsy_train <- biopsy[-test_indices,]
+biopsy_test <- biopsy[test_indices,]
+```
+
+Let's fit a random forest model (with default hyperparameters) to predict the class of each tumour:
+```{r}
+# fit_rf <- 
+#   randomForest::randomForest( class ~ .,      # explain class using all of the predictors
+#                                data = biopsy_train
+#                             )
+# 
+# fit_rf
+```
+
+Predictions on the holdout/test set (10 observations):
+```{r}
+# bind_cols( tibble( true_label = biopsy_test$class ) 
+#            ,
+#            predict(fit_rf, newdata=biopsy_test, type="prob") %>% 
+#              as_tibble() %>% 
+#              rename( prob_benign = benign,
+#                      prob_malignant = malignant  
+#                    )
+#           )
+# 
+# test_set_predictions <- predict(fit_rf, newdata=biopsy_test, type="response")
+# 
+# tibble( true_label = biopsy_test$class,
+#         prediction = test_set_predictions
+#       ) %>%
+#   table()
+```
+
+fit a random forest model using H2o:
+```{r}
+h2o.init( nthreads=-1 )     # start an H2o instance
+h2o.clusterInfo()
+
+# Clean slate - just in case the cluster was already running:
+h2o.removeAll() 
+
+# convert our training dataset testing dataset into format useable by H2o:
+biopsy_train_h2o <- as.h2o(biopsy_train)
+biopsy_test_h2o <- as.h2o(biopsy_test)
+
+fit_biopsy_random_forest <- 
+  h2o.randomForest( training_frame = biopsy_train_h2o,
+                    y = 1,
+                    x = 2:10, 
+                    model_id = "biopsy_random_forest",
+                    ntrees = 200
+                  )
+
+fit_biopsy_random_forest
+
+```
+
+
+Run the LIME model explainer:  
+```{r}
+set.seed(69420)
+lime_explainer <- 
+  lime::lime(              x = biopsy_train,         # the data used to train the model
+                       model = fit_biopsy_random_forest,    # the trained 'black box' model  
+              bin_continuous = TRUE,        # bin continuous variables in the simple explanatory model
+                      n_bins = 4,           # number of bins when binning the continuous variables
+               quantile_bins = FALSE,       # define bin bounds using quantiles (else all bins same width) 
+                 use_density = NULL         # use kernel density estimation for permuting continuous vars?
+            )
+
+```
+
+Here is what the **LIME** object contains:
+```{r}
+lime_explainer
+```
+
+Now, we use the object *lime_explainer* created above using the **lime()** function to explain the set of 10 predictions that we set aside as a test set: 
+```{r}
+explanation <- lime::explain(         x = biopsy_test,     # the test set data
+                              explainer = lime_explainer,  # the explainer object made in the previous chunk
+                               n_labels = 1,               # number of response labels explain 
+                             n_features = 4,               # number of features to use in simple model
+                         n_permutations = 30,       # number of times to permute each observation 
+                         feature_select = "auto",   # feature selection method in simple model
+                               dist_fun = "gower",  # how to measure distance between original observation
+                                                    #     and its permutations  
+                           kernel_width = NULL,     # not used if using GOWER distance metric
+                              gower_pow = 1,        # parameter of Gower distance metric (this is the default value)
+                     single_explanation = FALSE     # "pool all text in x into a single explanation"
+                     
+                            )
+```
+
+```{r}
+explanation
+```
+
+```{r}
+lime::plot_explanations(explanation)
+```
+
+```{r}
+h2o.shutdown(prompt = FALSE)
+```

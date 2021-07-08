@@ -1,0 +1,617 @@
+---
+title: "A Visual Introduction to Regression Splines"
+author: "Joseph Bolton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    df_print: paged
+    theme: darkly
+    highlight: espresso
+---
+
+This post is an intuitive, visual, non-theoretical introduction to regression splines, assuming a basic knowledge of linear models. 
+
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 7px;
+text-align: center;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+<pre style="font-size: 12px; font-family: &quot;Ubuntu Mono&quot;; background-color: rgb(0, 0, 0); color: rgb(250,250,250); line-height: 9px;">....................................................................................................
+....................................................................................................
+....................................................................................................
+....................................................................................................
+..........................................................................7.........................
+.......................................................................717..........................
+.................................................................7.....771777717.777................
+...............................................................77..77777427722217.77................
+..............................................................7..721723651453342427742721...........
+...........................................................7777.143436854566600339566477777.........
+............................................................71.72385692777777774212356921177777.....
+..........................................................7775225425517.77777..7127771906617717.77..
+.........................................................711160177.77..177777.777717.77123831777....
+......................................................71542664537................77..17..135522227..
+..................................................77775955317.77...........................755564347
+............................................7..77.772425555277741.......................7.7734195042
+...............................................77..2269144777...........................7..77..74585
+77.........................................777777726947..7...................................77.7725
+717.......................................7777..7982447...........................................77
+277......................................77777456377.7.........................................7...7
+3147..............................77.....7717295337...7...........................................71
+2657774117.............................7777264211777..7.............................................
+7195532777.........................72772175523177...................................................
+1723993377777.....7777...........7177145903727......................................................
+7771774696547717.777......77.7..14777296777177......................................................
+...12711245517777717.7777777.777553555771717........................................................
+....77777725564333212477217722236332441717..........................................................
+.....777712174509366354909986566343127777...........................................................
+.........777131147731353466333317.727....7..........................................................
+.............77.7777177177772317.7..................................................................
+............777777777........7......................................................................
+.................7..77......7..7....................................................................
+....................................................................................................
+......................7.............................................................................
+....................................................................................................
+....................................................................................................
+....................................................................................................</pre>
+
+<!-- set code style back to normal -->
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 14px;
+text-align: left;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+
+All code in this post is **R** code. 
+
+Load required packages: 
+```{r setup, results='hide', message=FALSE}
+library(tidyverse)        # for basic data manipulation 
+library(splines)          # for fitting regression splines
+```
+
+```{r echo=FALSE}
+# change formatting of the code output:
+knitr::opts_chunk$set(
+  class.output  = "bg-primary",
+  class.message = "bg-info text-info",
+  class.warning = "bg-warning text-warning",
+  class.error   = "bg-danger text-danger"
+)
+```
+
+Suppose that we observe the following data, consisting of $(x_i,y_i)$ pairs:
+
+```{r}
+set.seed(5431)
+random_data <- tibble( y = sample(0:100, size=20),
+                       x = sample(-50:50, size=20)
+                     )
+
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white")
+plot( x=random_data$x, y=random_data$y, xlab="x", ylab="y", pch=16 )
+```
+
+We could model the relationship between $x$ and $y$ using a simple linear model $\quad y_i=\beta_0+\beta_1x_i + \epsilon_i \quad$ (a pretty useless model in this case):
+
+```{r echo=FALSE}
+x_seq <- seq( min(random_data$x)-30, max(random_data$x)+30, length.out=1000  ) 
+fit_lm <- lm( y ~ x, 
+              data = random_data 
+            )
+ 
+model_fitted_values <- predict( fit_lm, newdata = tibble(x=x_seq) )  
+
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white")
+plot(    x = random_data$x,
+         y = random_data$y,
+      xlab = "x",
+      ylab = "y",
+       pch = 16,
+      main = "linear model fit",
+      xlim = c( min(random_data$x)-20, max(random_data$x)+20 )
+    )
+lines(   x = x_seq,
+         y = model_fitted_values,
+       col = 2
+     )
+```
+
+If we calculate $x^2$ from $x$ and include $x^2$ as an additional variable in the linear model (i.e. we fit the model $\quad y_i=\beta_0+\beta_1x_i+\beta_2x_i^2 + \epsilon_i \quad$), then the linear model can fit a quadratic curve (parabola) shape to the data:
+
+```{r echo=FALSE}
+fit_lm_poly2 <- lm( y ~ poly(x, 2), 
+                    data = random_data 
+                  )
+
+model_fitted_values <- predict( fit_lm_poly2, newdata = tibble(x=x_seq) )  
+
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white")
+plot(    x = random_data$x,
+         y = random_data$y,
+      xlab = "x",
+      ylab = "y",
+       pch = 16,
+      main = "2nd degree polynomial linear model fit",
+      xlim = c( min(random_data$x)-20, max(random_data$x)+20 )
+    )
+lines(   x = x_seq,
+         y = model_fitted_values,
+       col = 2
+     )
+```
+
+Adding a further term $x^3$ allows the linear model to fit a polynomial curve of degree 3:
+
+(this model is $\quad y_i=\beta_0+\beta_1x_i+\beta_2x_i^2 + \beta_3x_i^3 + \epsilon_i \quad$)
+
+```{r echo=FALSE}
+fit_lm_poly3 <- lm( y ~ poly(x, 3), 
+                    data = random_data 
+                  )
+
+#coef(fit_lm_poly3)
+
+model_fitted_values <- predict( fit_lm_poly3, newdata = tibble(x=x_seq) )  
+
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white")
+plot(    x = random_data$x,
+         y = random_data$y,
+      xlab = "x",
+      ylab = "y",
+       pch = 16,
+      main = "3rd degree polynomial linear model fit",
+      xlim = c( min(random_data$x)-20, max(random_data$x)+20 )
+    )
+lines(   x = x_seq,
+         y = model_fitted_values,
+       col = 2
+     )
+```
+
+Adding further terms $x^4,x^5,x^6...etc.$ allows even more complex polynomial curves to be fitted. Here is a polynomial curve of degree 10 fit to the data:
+
+```{r echo=FALSE}
+fit_lm_poly10 <- lm( y ~ poly(x, 10), 
+                    data = random_data 
+                  )
+
+#coef(fit_lm_poly10)
+
+model_fitted_values <- predict( fit_lm_poly10, newdata = tibble(x=x_seq) )  
+
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white")
+plot(    x = random_data$x,
+         y = random_data$y,
+      xlab = "x",
+      ylab = "y",
+       pch = 16,
+      main = "10th degree polynomial linear model fit",
+      xlim = c( min(random_data$x)-20, max(random_data$x)+20 )
+    )
+lines(   x = x_seq,
+         y = model_fitted_values,
+       col = 2
+     )
+```
+
+Notice the radical behaviour of the fitted curve at the extreme values of $x$ ($x<-40$ and $x>50$). 
+
+Predictions of the model outside of these extreme values can definitely not be trusted. 
+
+# Regression Splines
+
+Regression splines are a more constrained form of the polynomial regression discussed above. 
+
+To fit a model with splines, we must first define **knot** points. **Knot** points (or **knots**) are selected values of $x$.   
+
+For example, we could place equidistant (uniform) **knots**: 
+
+```{r echo=FALSE}
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white")
+plot(    x = random_data$x,
+         y = random_data$y,
+      xlab = "x",
+      ylab = "y",
+       pch = 16,
+      main = "3 knots placed uniformly",
+      xlim = c( min(random_data$x)-20, max(random_data$x)+20 )
+    )
+
+range_x <- max(random_data$x) - min(random_data$x)
+knots <- min(random_data$x) + range_x * c( 0.25, 0.5, 0.75 )
+abline( v = c(min(random_data$x),max(random_data$x)) )
+abline( v = knots, lty=2 )  
+  
+```
+
+Alternatively, we could place the **knots** at the quantiles of $x$ (i.e. the same number of observations lie between each **knot**):
+
+```{r echo=FALSE}
+
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white")
+plot(    x = random_data$x,
+         y = random_data$y,
+      xlab = "x",
+      ylab = "y",
+       pch = 16,
+      main = "3 knots placed at quantiles of x",
+      xlim = c( min(random_data$x)-20, max(random_data$x)+20 )
+    )
+abline( v = quantile( x=random_data$x, probs=seq(0,1,length.out=5) ), lty=2 )
+abline( v = c( min(random_data$x), max(random_data$x) ) )
+```
+
+See plots below: a degree-1 spline fits a degree-1 linear model (line) between each knot, where the lines are constrained to connect (hinge) at every knot point.
+
+The positions of the lines are calculated using *Ordinary Least Squares* (OLS) just like a standard linear regression model, meaning that the fitted lines are those lines obeying the continuity (connection) constraints that minimise the sum of squared errors (squared vertical distances) between those lines and the points. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=5}
+par( mfrow=c(1,2), bg="black", col="white", col.axis="white", col.lab="white", col.main="white", mar=c(5,4,4,4))
+
+##### UNIFORM KNOTS #####
+plot(    x = random_data$x,
+         y = random_data$y,
+      xlab = "x",
+      ylab = "y",
+       pch = 16,
+      main = "3 knots placed uniformly \n (degree 1 splines)",
+      xlim = c( min(random_data$x)-20, max(random_data$x)+20 )
+    )
+
+range_x <- max(random_data$x) - min(random_data$x)
+knots <- min(random_data$x) + range_x * c( 0.25, 0.5, 0.75 )
+abline( v = c(min(random_data$x),max(random_data$x)) )
+abline( v = knots, lty=2 )
+
+fit_lm <- lm( y ~ bs(x, knots=knots, degree=1), data = random_data )
+lines( x = x_seq,
+       y = predict( fit_lm, newdata=tibble(x=x_seq) ),
+       col = 2
+     )
+
+##### QUANTILE KNOTS #####
+plot(    x = random_data$x,
+         y = random_data$y,
+      xlab = "x",
+      ylab = "y",
+       pch = 16,
+      main = "3 knots placed at quantiles of x \n (degree 1 splines)",
+      xlim = c( min(random_data$x)-20, max(random_data$x)+20 )
+    )
+
+knots <- quantile(      x = random_data$x,
+                    probs = c(0.25, 0.50, 0.75)  
+                 )
+
+abline( v = c( min(random_data$x), max(random_data$x)) )
+abline( v = knots, lty=2 )
+
+fit_lm <- lm( y ~ bs(x, knots=knots, degree=1), data = random_data )
+lines( x = x_seq,
+       y = predict( fit_lm, newdata=tibble(x=x_seq) ),
+       col = 2
+     )
+```
+
+A **degree-2** spline fits a quadratic (degree 2) curve between each knot, giving the linear model access to a wider range of shapes. The curves are constrained to connect at every knot point, and also to be continuous in the first derivative at each knot point (i.e. the slope of the curve is forced to change smoothly across each knot point):  
+ 
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white")
+plot(    x = random_data$x,
+         y = random_data$y,
+      xlab = "x",
+      ylab = "y",
+       pch = 16,
+      main = "Degree 2 basis spline - 3 knots placed uniformly",
+      xlim = c( min(random_data$x)-20, max(random_data$x)+20 )
+    )
+
+range_x <- max(random_data$x) - min(random_data$x)
+knots <- min(random_data$x) + range_x * c( 0.25, 0.5, 0.75 )
+#abline( v = c(min(random_data$x),max(random_data$x)) )
+abline( v = knots, lty=2 )  
+fit_lm <- lm( y ~ bs(x, degree=2, knots=knots), data=random_data )  
+lines(   x = x_seq,
+         y = predict( fit_lm, newdata=data.frame(x=x_seq) ),
+       col = 2
+     )
+```
+
+In general, a spline of degree $D$ fits polynomial curves of degree $D$ between each knot point, where these curves are constrained to be continuous in their $1^{\text{st}},2^{\text{nd}},...,(D-1)^{\text{th}}$ derivatives at the knot points. Effectively, these continuity constraints force different degrees of smoothness on the fitted curve where it crosses knot points.  
+
+Practically, splines are incorporated into a standard linear model by adding specific additional variables to the model, which are functions of the existing variables (a process similar to adding polynomial terms to a model to fit polynomial curves, as discussed at the beginning of this post). 
+In contrast to polynomial regression, regression splines require the specification of **knots**, which are chosen values of $x$ that constrain the fit of the curve.
+
+The parameters to be chosen when fitting regression splines in **R** are the *degrees of freedom* (*df*) of the splines and the *degree* of the polynomial curve. The *degrees of freedom* (*df*) determines the number of knot points, and the *degree* determines the flexibility of the curve (it is the degree of the polynomial curve shapes fitted). The default behaviour of the R **splines()** function is to place *knot* points at the quantiles of $x$, with the number of knots being $\quad (df \space-\space degree) \quad$.  Alternatively, instead of choosing $df$, the user can specify the desired locations of the knots manually.   
+
+What follow below are plots of splines with different parameters fit to the same dataset:
+(with the fitted model coefficients reported under each plot)
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+plot_fitted_model_ftn <- function( model_object, plot_title="", df, degree, ns=FALSE ){
+  
+  par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white")
+  
+  n_knots <- df - degree 
+  if( ns == TRUE ){ n_knots <- df - 1 }
+  
+  knots_at <- quantile( random_data$x, probs=seq(0,1,length.out=n_knots+2) )
+  knots_at <- knots_at[-c(1,length(knots_at))]   # remove 1st and last entry in "knots_at" 
+  
+  plot(    x = random_data$x,
+           y = random_data$y,
+        xlab = "x",
+        ylab = "y",
+         pch = 16,
+        main = plot_title,
+        xlim = c( min(random_data$x)-20, max(random_data$x)+20 )
+      )
+x_seq <- seq( min(random_data$x)-30, max(random_data$x)+30, length.out=1000  ) 
+model_fitted_values <- predict( model_object, newdata = tibble(x=x_seq) )  
+lines( x = x_seq, 
+       y = model_fitted_values,
+       col = 2
+     ) 
+abline( v = knots_at, lty=2 )
+
+if( ns==TRUE ){ abline( v = c( min(random_data$x), max(random_data$x) ) ) }
+}
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_bs_df3_deg1 <- lm( y ~ bs(x, df = 3, degree=1 ), 
+                      data = random_data 
+                    )
+
+plot_fitted_model_ftn( lm_bs_df3_deg1, "basis splines, df=3, degree=1", df=3, degree=1 )
+
+coef(lm_bs_df3_deg1)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_bs_df4_deg1 <- lm( y ~ bs(x, df = 4, degree=1 ), 
+                      data = random_data 
+                    )
+
+plot_fitted_model_ftn( lm_bs_df4_deg1, "basis splines, df=4, degree=1", df=4, degree=1 )
+
+coef(lm_bs_df4_deg1)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_bs_df5_deg1 <- lm( y ~ bs(x, df = 5, degree=1 ), 
+                      data = random_data 
+                    )
+
+plot_fitted_model_ftn( lm_bs_df5_deg1, "basis splines, df=5, degree=1", df=5, degree=1 )
+
+coef(lm_bs_df5_deg1)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_bs_df6_deg1 <- lm( y ~ bs(x, df = 6, degree=1 ), 
+                      data = random_data 
+                    )
+
+plot_fitted_model_ftn( lm_bs_df6_deg1, "basis splines, df=6, degree=1", df=6, degree=1 )
+
+coef(lm_bs_df6_deg1)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_bs_df3_deg2 <- lm( y ~ bs(x, df = 3, degree=2 ), 
+                      data = random_data 
+                    )
+
+plot_fitted_model_ftn( lm_bs_df3_deg2, "basis splines, df=3, degree=2", df=3, degree=2 )
+
+coef(lm_bs_df3_deg2)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_bs_df4_deg2 <- lm( y ~ bs(x, df = 4, degree=2 ), 
+                      data = random_data 
+                    )
+
+plot_fitted_model_ftn( lm_bs_df4_deg2, "basis splines, df=4, degree=2", df=4, degree=2 )
+
+coef(lm_bs_df4_deg2)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_bs_df5_deg2 <- lm( y ~ bs(x, df = 5, degree=2 ), 
+                      data = random_data 
+                    )
+
+plot_fitted_model_ftn( lm_bs_df5_deg2, "basis splines, df=5, degree=2", df=5, degree=2 )
+
+coef(lm_bs_df5_deg2)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_bs_df3_deg3 <- lm( y ~ bs(x, df = 3, degree=3 ), 
+                      data = random_data 
+                    )
+
+plot_fitted_model_ftn( lm_bs_df3_deg3, "basis splines, df=3, degree=3", df=3, degree=3 )
+
+coef(lm_bs_df3_deg3)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_bs_df4_deg3 <- lm( y ~ bs(x, df = 4, degree=3 ), 
+                      data = random_data 
+                    )
+
+plot_fitted_model_ftn( lm_bs_df4_deg3, "basis splines, df=4, degree=3", df=4, degree=3 )
+
+coef(lm_bs_df3_deg3)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_bs_df5_deg3 <- lm( y ~ bs(x, df = 5, degree=3 ), 
+                      data = random_data 
+                    )
+
+plot_fitted_model_ftn( lm_bs_df5_deg3, "basis splines, df=5, degree=3", df=5, degree=3 )
+
+coef(lm_bs_df5_deg3)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_bs_df6_deg3 <- lm( y ~ bs(x, df = 6, degree=3 ), 
+                      data = random_data 
+                    )
+
+plot_fitted_model_ftn( lm_bs_df6_deg3, "basis splines, df=6, degree=3", df=6, degree=3 )
+
+coef(lm_bs_df6_deg3)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_bs_df8_deg4 <- lm( y ~ bs(x, df = 8, degree=4 ), 
+                      data = random_data 
+                    )
+
+plot_fitted_model_ftn( lm_bs_df8_deg4, "basis splines, df=8, degree=4", df=8, degree=4 )
+
+coef(lm_bs_df8_deg4)
+```
+
+Notice that the extreme/undesirable behaviour at the extreme values of $x$, reminiscent of the polynomial regression at the beginning of this post, has not been mitigated in this case by using splines.  
+
+# Natural splines 
+
+*Natural splines* are cubic splines (degree-3 splines) that are constrained to be linear on the boundary (to the left of the left-most knot and to the right of the right-most knot). The default number of knots used for natural splines is $(df-1+2)$. $\quad (df-1)$ knots are placed at the quantiles of $x$, and an additional knot is placed at each of the highest (maximum) and lowest (minimum) value of $x$ (i.e. boundary knots are placed on the range of the data).  
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_ns_df1 <- lm( y ~ ns(x, df = 1 ), 
+                 data = random_data 
+               )
+
+plot_fitted_model_ftn( lm_ns_df1, "natural splines, df=1, degree=3", df=1, degree=3, ns=TRUE )
+
+coef(lm_ns_df1)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_ns_df2 <- lm( y ~ ns(x, df = 2 ), 
+                 data = random_data 
+               )
+
+plot_fitted_model_ftn( lm_ns_df2, "natural splines, df=2, degree=3", df=2, degree=3, ns=TRUE )
+
+coef(lm_ns_df2)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_ns_df3 <- lm( y ~ ns(x, df = 3 ), 
+                 data = random_data 
+               )
+
+plot_fitted_model_ftn( lm_ns_df3, "natural splines, df=3, degree=3", df=3, degree=3, ns=TRUE )
+
+coef(lm_ns_df3)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_ns_df4 <- lm( y ~ ns(x, df = 4 ), 
+                 data = random_data 
+               )
+
+plot_fitted_model_ftn( lm_ns_df4, "natural splines, df=4, degree=3", df=4, degree=3, ns=TRUE )
+
+coef(lm_ns_df4)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_ns_df5 <- lm( y ~ ns(x, df = 5 ), 
+                 data = random_data 
+               )
+
+plot_fitted_model_ftn( lm_ns_df5, "natural splines, df=5, degree=3", df=5, degree=3, ns=TRUE )
+
+coef(lm_ns_df5)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_ns_df6 <- lm( y ~ ns(x, df = 6 ), 
+                 data = random_data 
+               )
+
+plot_fitted_model_ftn( lm_ns_df6, "natural splines, df=6, degree=3", df=6, degree=3, ns=TRUE )
+
+coef(lm_ns_df6)
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+lm_ns_df10 <- lm( y ~ ns(x, df = 10 ), 
+                 data = random_data 
+               )
+
+plot_fitted_model_ftn( lm_ns_df10, "natural splines, df=10, degree=3", df=10, degree=3, ns=TRUE )
+
+coef(lm_ns_df10)
+```
+
+# Adding splines to many variables
+
+When it is desired that splines of the same type are to be added to many variables, typing out all of the variable names becomes tedious in R. What follows is an example of code to fix this problem.    
+
+```{r}
+random_dat <- tibble( y = runif(100),
+                      x1 = rnorm(100),
+                      x2 = sample(1:5, size=100, replace=TRUE) %>% factor(),
+                      x3 = rnorm(100),
+                      x4 = sample(1:9, size=100, replace=TRUE) %>% factor(),
+                      x5 = rnorm(100),
+                      x6 = rnorm(100)
+                    )
+random_dat
+```
+
+```{r}
+numeric_colnames <-
+  random_dat %>%
+    select(-y) %>%
+      select_if( is.numeric ) %>%
+      colnames(.)
+
+factor_colnames <-
+   random_dat %>%
+    select(-y) %>%
+      select_if( is.factor ) %>%
+      colnames(.)
+
+numeric_colnames
+
+formula_for_model <-
+  paste0( "y ~ ",
+          paste( "ns(", numeric_colnames, ",df=3 )", collapse=" + " ),   # numeric variables
+          " + ",
+          paste( factor_colnames, collapse=" + " )            # factor variables
+       ) %>%
+    as.formula()
+```
+
+this gives the following formula, which can be given to the lm() model:
+```{r}
+formula_for_model
+```
+
+```{r}
+lm( formula = formula_for_model,
+       data = random_dat
+  )
+```

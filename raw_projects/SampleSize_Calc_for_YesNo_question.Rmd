@@ -1,0 +1,419 @@
+---
+title: "SampleSize_Calc_for_YesNo_question"
+author: "Joe"
+date: "09 December 2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyr)
+library(kableExtra)
+```
+
+We have a question, for which a proportion of the population would answer YES, and the remaining proportion would answer NO. 
+
+For example, we might be interested in "Should Britain leave the EU?"
+
+We call the proportion of YES people in the population $\pi$. For example, if our population was 60% YES people and 40% NO people, then we'd have $\pi = 0.6$. 
+
+We obviously can't survey everyone in the entire population. Our goal is to conduct a survey - take a small subset of people from the population - and use this sample to try to work out what we think the population $\pi$ value is. So, we want to look at the proportion of YES people in our sample and use this to infer about the proportion of YES people in the population.
+
+We'll call the size of our sample $n$, and the proportion of YES people in our sample $p$. So, if there are 100 people in our sample and 59 of them are yes people, we'd have $n=100$ and $p=0.59$.
+
+Given that the following conditions are satisfied, then the number of YES people in our sample of size $n$ will follow a Binomial distribution:
+
+* The population is large enough that every time we draw someone at random from it, the probability of that person being a YES person is $\pi$.
+
+* Each individual in the population is equally likely to be chosen for the sample.
+
+* Each observation is independent (i.e. someone answering YES in our sample does not affect the likelihood of anyone else in our sample saying NO or YES - the probability of each randomly drawn person is always $\pi$, regardless of what everyone else in the sample has answered)
+
+* The population is at least 20 times larger than the sample. 
+
+Call the number of people in our sample who answer YES $X$. For example, if we took a sample of $n=150$ people, and 12 answered YES, then we'd have 
+
+$$x = 12$$
+$$p = \frac{x}{n} = \frac{12}{150} = 0.08$$
+
+Then, given that we've satisfied the assumptions above, we have the following probability for any chosen value $x$ of $X$:
+
+$$Pr[X = x] \quad = \quad \binom{n}{x}\pi^x(1-\pi)^{n-x} \quad = \quad \frac{n!}{x!(n-x)!}\pi^x(1-\pi)^{n-x} \quad \text{... for x = 0,1,2,3,....}$$
+
+For example, if we were taking many samples of size 5 (where probability of a YES is always 40%), we'd expect to see exactly 2 people answering YES in about 35% of the samples:
+
+$$Pr[X=2] = \frac{5!}{2!\times 3!} \times 0.4^2 \times 0.6^3 = 0.3456$$
+
+For example, if we simulate 10,000 different samples, we'd expect to see about 3,500 samples with exactly 2 YES answers:
+
+```{r hellothere}
+run_100 <- 
+replicate( 10000,
+           sample( c("Yes","No"), size=5, replace=TRUE, prob=c(0.4,0.6) )
+         )
+
+# count number of Yes answers:
+table( apply( run_100, 2, function(x){ sum( x=="Yes" ) } ) )
+```
+
+If we take infinitely many samples (each of the same size $n$) and take the average value of $X$ across all of them, then we'd get the average value $E[X] = n\pi$. The variance of $X$ across all of the infinite samples would be $\sigma^2_X = n\pi(1-\pi)$. We'd get very close to these values by taking a lot of samples (we obviously don't have time to take infinitely many), where the approximation improves as we increase the number of samples. 
+
+# Choosing a sample size ($n$)
+
+What we want to work out is: how big a sample ($n$) do we need to have in order to be comfortable that our sample proportion of YES people $p$ is a good estimate of the population proportion of YES people $\pi$?
+
+Given that we meet the following conditions:
+
+* $n \pi \geq 10$
+
+* $n \pi (1-\pi) \geq 10$
+
+Then the distribution of $p$ across many samples is very well approximated by the distribution 
+
+$$p \quad \sim \quad Normal \Big(\pi, \frac{\pi (1-\pi)}{n} \Big)$$
+
+So, as long as we have a fairly large sample ($n$), and the proportion of YES people in the population is not too close to 0 or 1, we can use this normal distribution result to quantify how confident we can be in using our sample estimate $p$ to infer about the population proportion of YES people $\pi$.     
+
+For example, suppose that in reality 40% of people in Britain want to leave the European Union.
+Suppose that we survey 1000 people (i.e. take a sample of $n=1000$ people), asking these 1000 people if they want to leave the EU. In our sample, 434 of them say that they would like to leave the EU, which gives us a sample proportion of YES people $p=\frac{434}{1000}=0.434$
+
+Because we know the population parameter $\pi=0.4$, we know that the distribution of 
+$p$ is approximately
+
+$$p \quad \sim \quad Normal \Big(0.4 \space ; \space \frac{0.4(0.6)}{1000}\Big)$$
+
+So, we can say that in about 99% of samples, we'll see a $p$ bigger than 
+
+```{r lower_bound}
+qnorm( 0.005, mean=0.4, sd=sqrt(0.4*0.6/1000) )
+```
+
+and a $p$ lower than:
+
+```{r uppabnd}
+qnorm( 0.995, mean=0.4, sd=sqrt(0.4*0.6/1000) )
+```
+
+Let's see that this is true by simulating 100,000 samples (each of size $n=1000$) where the probability of drawing a YES person is always $\pi=0.4$:
+
+```{r some_sim_in_R}
+sim_100k_sample_proportions <- 
+lapply( 1:100000,
+  function(x) { 
+    sum( 
+        sample( c("Yes","No"), 
+                replace=TRUE, 
+                size=1000, 
+                prob=c(0.4, 0.6) 
+              ) == "Yes" 
+                      
+       ) / 1000
+    }
+) %>% 
+  unlist()
+
+# show the first 10 sample values of 'p': 
+head(sim_100k_sample_proportions, 10)
+```
+
+And the percentage of samples in which $p$ falls inside our interval is:
+```{r check_the_interval}
+interval_lower <- qnorm( 0.005, mean=0.4, sd=sqrt(0.4*0.6/1000) )
+interval_lower
+interval_upper <- qnorm( 0.995, mean=0.4, sd=sqrt(0.4*0.6/1000) )
+interval_upper
+paste( 
+    sum( sim_100k_sample_proportions >= interval_lower & 
+         sim_100k_sample_proportions <= interval_upper 
+       ) /
+      length(sim_100k_sample_proportions) *100,
+    "%"
+)
+```
+
+Let's check that this also works if we have an extreme population proportion, like $\pi=0.03$: 
+
+```{r some_sim_in_R2}
+sim_100k_sample_proportions <- 
+lapply( 1:100000,
+  function(x) { 
+    sum( 
+        sample( c("Yes","No"), 
+                replace=TRUE, 
+                size=1000, 
+                prob=c(0.03, 0.97) 
+              ) == "Yes" 
+                      
+       ) / 1000
+    }
+) %>% 
+  unlist()
+
+# show the first 10 sample values of 'p': 
+head(sim_100k_sample_proportions, 10)
+```
+
+And the percentage of samples in which $p$ falls inside our interval is:
+```{r check_the_interval2}
+interval_lower <- qnorm( 0.005, mean=0.03, sd=sqrt(0.4*0.6/1000) )
+interval_lower
+interval_upper <- qnorm( 0.995, mean=0.03, sd=sqrt(0.4*0.6/1000) )
+interval_upper
+paste( 
+    sum( sim_100k_sample_proportions >= interval_lower & 
+         sim_100k_sample_proportions <= interval_upper 
+       ) /
+      length(sim_100k_sample_proportions) *100,
+    "%"
+)
+```
+
+Here is a table of the 99% confidence intervals for sample proportion $p$ for different true population percentages $\pi\times100$ and different sample sizes $n$:
+
+```{r table_of_99_percents}
+
+expand.grid( true_proportion = seq(0.05,0.95,0.05),
+             n = c(100,500,1000,2000,5000,10000)
+             ) %>% 
+  as_data_frame() %>% 
+  mutate( sample_p_lwr0.99 = qnorm( 0.005, 
+                                      mean=true_proportion, 
+                                      sd=sqrt(true_proportion*(1-true_proportion)/n) 
+                                    ),
+          sample_p_upr0.99 = qnorm( 0.995, 
+                                        mean=true_proportion, 
+                                        sd=sqrt(true_proportion*(1-true_proportion)/n) 
+                                    )
+        ) %>% 
+  # mutate( `sample p lwr 99%` = paste0( round(`sample p lwr 99%`*100,2), "%" ),
+  #         `sample p upper 99%` = paste0( round(`sample p upper 99%`*100,2), "%" )  
+  #       ) %>% 
+  mutate( confints = paste0( "[",
+                             round(sample_p_lwr0.99*100,2),
+                             "% , ",
+                             round(sample_p_upr0.99*100,2),
+                             "%]"
+                            )
+         ) %>%
+  select( true_proportion, n, confints ) %>% 
+  mutate( true_percent = paste0( true_proportion*100, "%") ) %>% 
+  mutate( n = paste0("n = ", n) ) %>% 
+  spread( key = n, value = confints ) %>% 
+  arrange( true_proportion ) %>% 
+  select( true_percent, 
+          "n = 100",
+          "n = 500",
+          "n = 1000",
+          "n = 2000",
+          "n = 5000",
+          "n = 10000" ) %>% 
+  kable(., "html") %>% 
+  kable_styling("striped", full_width=FALSE)
+
+```
+
+We can get the same intervals using simulated data:
+
+```{r sim_CI_0.99}
+
+sim_sample_prop_confint <- function( n = 1000,
+                                     n_sample = 500,
+                                     true_proportion = 0.5,
+                                     confidence = 0.99,
+                                     lower_upper = 0    # 0 for lower bound, 1 for upper
+                                    ){
+  
+  sample_prop_values <- 
+      lapply( 1:n_sample,
+              function(x){ data_frame( x = 
+                                           sample( c(0,1), 
+                                           size = n,
+                                           replace = TRUE,
+                                           prob = c(1-true_proportion, true_proportion)
+                                                  )
+                                       ) %>% 
+                           summarise( proportion_yes = sum(x==1) / nrow(.) ) %>% 
+                           pull(proportion_yes)
+                         }  
+            ) %>% 
+    unlist()
+  
+  if( lower_upper == 0 ){ return(
+    quantile( sample_prop_values, (1-confidence)/2 ) ) } else{
+    return( quantile(sample_prop_values, 1-(1-confidence)/2 ) )  
+    }
+  
+  # return( list( lower = quantile(sample_prop_values, (1-confidence)/2 ),
+  #               upper = quantile(sample_prop_values, 1-(1-confidence)/2 )
+  #             ) 
+  #       )
+}
+  
+# test the function:
+sim_sample_prop_confint( n = 100,
+                         n_sample = 100,
+                         true_proportion = 0.3,
+                         confidence = 0.99,
+                         lower_upper = 1
+                      )
+
+# grid of parameter combinations to feed into function::
+values_grid <- 
+  expand.grid( true_proportion = seq(0.05,0.95,0.05),
+               n = c(100,500,1000,2000,5000,10000)
+             ) %>%
+  as_data_frame() %>% 
+  mutate( n_sample = 1e5L,
+          confidence = 0.99,
+          lower_upper = 0
+        ) %>% 
+  as.matrix()
+
+head(values_grid)
+
+cbind( values_grid, 
+       lower0.99 = mapply( FUN = sim_sample_prop_confint,
+                           values_grid[,"n"],
+                           values_grid[,"n_sample"],
+                           values_grid[,"true_proportion"],
+                           values_grid[,"confidence"],
+                           values_grid[,"lower_upper"]
+                           ),
+       upper0.99 = mapply( FUN = sim_sample_prop_confint,
+                           values_grid[,"n"],
+                           values_grid[,"n_sample"],
+                           values_grid[,"true_proportion"],
+                           values_grid[,"confidence"],
+                           values_grid[,"lower_upper"]+1
+                           )
+     ) %>% 
+  #head(10)
+  as_data_frame() %>% 
+  mutate( sample_p_lwr0.99 = lower0.99,
+          sample_p_upr0.99 = upper0.99
+        ) %>%
+  # mutate( `sample p lwr 99%` = paste0( round(`sample p lwr 99%`*100,2), "%" ),
+  #         `sample p upper 99%` = paste0( round(`sample p upper 99%`*100,2), "%" )  
+  #       ) %>% 
+  mutate( confints = paste0( "[",
+                             round(sample_p_lwr0.99*100,2),
+                             "% , ",
+                             round(sample_p_upr0.99*100,2),
+                             "%]"
+                            )
+         ) %>%
+  select( true_proportion, n, confints ) %>% 
+  mutate( true_percent = paste0( true_proportion*100, "%") ) %>% 
+  mutate( n = paste0("n = ", n) ) %>% 
+  spread( key = n, value = confints ) %>% 
+  arrange( true_proportion ) %>% 
+  select( true_percent, 
+          "n = 100",
+          "n = 500",
+          "n = 1000",
+          "n = 2000",
+          "n = 5000",
+          "n = 10000" ) %>% 
+  kable(., "html") %>% 
+  kable_styling("striped", full_width=FALSE)
+
+```
+
+
+# Confidence Interval for $\pi$
+
+We can use results from the standard normal distribution to get a confidence interval for $\pi$:
+
+Because $p$ is normally distributed, $\frac{p-\mu}{\sigma}$ will have a standard normal distribution ($Normal(0,1)$) - (where $\sigma=\sqrt{\frac{\pi(1-\pi)}{n}}$).
+
+Because 99% of the density of a standard normal distribution lies between -2.575829 and 2.575829, we have that:
+
+$$Pr\Big[ -2.575829 \leq \frac{p-\pi}{\sigma} \leq 2.575829 \Big] = 0.99$$
+
+Re-arranging this, we can get a confidence interval for the population proportion $\pi$:
+
+$$\begin{array}{lcl} Pr\Big[ -2.575829 \leq \frac{p-\pi}{\sigma} \leq 2.575829 \Big] &=& 0.99 \\
+Pr\Big[ -2.575829\sigma \leq p-\pi \leq \sigma 2.575829 \Big] &=& 0.99 \\
+Pr\Big[ -2.575829\sigma + p \geq \pi \geq \sigma 2.575829 + p \Big] &=& 0.99 \\
+\end{array}$$
+
+We don't know the variance $\sigma$ of the population parameter $\pi$, so the best that we can do is to estimate it as $\hat{\sigma} = \sqrt{\frac{p(1-p)}{n}}$ using our sample $p$
+
+If we were to perform the same survey ($n=1000$ people in each survey) millions of times (this is a thought experiment), and in each of the samples we calculated a sample proportion $p$, and calculated the interval $\Big[p-2.575829\times \sqrt{\frac{p(1-p)}{1000}} \quad;\quad p-2.575829\times \sqrt{\frac{p(1-p)}{1000}} \Big]$, then in 99% of our samples, the true population proportion of YES people $\pi=0.4$ would lie within this interval. 
+
+We can see this in R:
+
+```{r label_the_options}
+get_samples_100k <- 
+ lapply( 1:1e5L,
+        function(x){  
+                      # draw random sample and calculate sample proportion 'p':    
+                      sample_p <- 
+                          sample( c("Yes","No"), 
+                                  size=1000, 
+                                  replace=TRUE,
+                                  prob = c(0.4, 0.6)
+                                ) %>% 
+                          table(.) %>% 
+                          prop.table(.) %>% 
+                          .["Yes"]
+                      
+                      # calculate confidence interval and check that pi=0.4 lies within it:
+                      interval_0.99_contains_0.4 <- 
+                          0.4 >= sample_p - qnorm(0.995)*sqrt(sample_p*(1-sample_p)/1000) &
+                          0.4 <= sample_p + qnorm(0.995)*sqrt(sample_p*(1-sample_p)/1000) 
+                      
+                      return(interval_0.99_contains_0.4)
+          }  
+        
+      ) 
+
+```
+
+So, the proportion of our samples in which the sample 99% confidence interval contained $pi=0.4$ was:
+
+```{r showmethechiknpi}
+sum( unlist(get_samples_100k) ) / length(get_samples_100k)
+```
+
+Let's try this with a much more rare value of $\pi$, like $\pi=0.05$:
+
+```{r more_risky}
+get_samples_100k <- 
+ lapply( 1:1e5L,
+        function(x){  
+                      # draw random sample and calculate sample proportion 'p':    
+                      sample_p <- 
+                          sample( c("Yes","No"), 
+                                  size=1000, 
+                                  replace=TRUE,
+                                  prob = c(0.05, 0.95)
+                                ) %>% 
+                          table(.) %>% 
+                          prop.table(.) %>% 
+                          .["Yes"]
+                      
+                      # calculate confidence interval and check that pi=0.4 lies within it:
+                      interval_0.99_contains_0.05 <- 
+                          0.05 >= sample_p - qnorm(0.995)*sqrt(sample_p*(1-sample_p)/1000) &
+                          0.05 <= sample_p + qnorm(0.995)*sqrt(sample_p*(1-sample_p)/1000) 
+                      
+                      return(interval_0.99_contains_0.05)
+          }  
+        
+      ) 
+
+```
+
+So, the proportion of our samples in which the sample 99% confidence interval contained $\pi=0.05$ was:
+
+```{r more_risky_the_result_the_movie}
+sum( unlist(get_samples_100k) ) / length(get_samples_100k)
+```
+
+
+
+

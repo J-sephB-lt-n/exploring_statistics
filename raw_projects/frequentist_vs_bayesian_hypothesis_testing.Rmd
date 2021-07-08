@@ -1,0 +1,129 @@
+---
+title: "Simple Frequentist vs. Bayesian Hypothesis Testing Example"
+author: "Joseph Bolton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    df_print: paged
+    theme: darkly
+    highlight: espresso
+---
+
+```{r setup}
+library(tidyverse)
+```
+
+*Bayesian Hypothesis Testing: An Alternative to Null Hypothesis Significance Testing (NHST) in Psychology and Social Sciences* by Alonso Ortega and Gorka Navarrete.
+
+Suppose we observe 62 people, as follows: 
+
+```{r echo=FALSE}
+mydata <- matrix( c(23, 24,
+                     8,  7
+                    ), 
+                  byrow = TRUE,
+                  ncol = 2
+                )
+rownames(mydata) = c("Yes","No")
+colnames(mydata) = c("Yes","No")
+
+mydata <- as.table(mydata)
+names( dimnames(mydata) ) <- c("Exposure","Disease")
+```
+
+```{r}
+
+mydata
+addmargins( mydata )
+prop.table( mydata, margin=1 )
+```
+
+Is the proportion of people getting the disease truly different between those who got the drug (exposed) and those who didn't get the drug (unexposed)?  
+
+# Frequentist Approach 
+```{r}
+chisq.test( mydata, correct=FALSE ) 
+```
+
+```{r echo=FALSE, eval=FALSE}
+
+# Suppose that Pr[Disease|Exp] = 0.3
+#              Pr[Disease|Not_Exp] = 0.6  
+possibilities_table <- 
+  tibble( a = 0:31 ) %>% 
+    mutate( b = 47 - a,
+            c = 31 - a,
+            d = 15-c
+          ) %>%
+    filter( a>=0 & b>=0 & c>=0 & d>=0 ) %>%      # remove negative counts
+    # check that the row and column totals are correct:
+    mutate( exposureYes_total = a+b,
+             exposureNo_total = c+d,
+             DiseaseYes_total = a+c,
+              DiseaseNo_total = b+d
+          ) %>% s
+    mutate( prob = 0.3^a * 0.7^b * 0.6^c * 0.4^d ) 
+  
+possibilities_table %>% 
+  sample_n(    size = 1e4L,
+            replace = TRUE,
+             weight = prob  
+          ) %>% 
+  # count( a,b,c,d, prob ) %>% arrange( desc(n) )
+  mutate( chisq_teststat = pmap_dbl( .l = list(a,b,c,d),
+                                     .f = function(a,b,c,d){
+                                        
+                                            chisq.test( matrix( c(a,c,b,d), ncol=2 ) )$statistic
+                                         
+                                       }  
+                                    ) 
+        ) %>% 
+  
+  pull(chisq_teststat) %>% 
+  hist( ., freq=FALSE, breaks=50 )
+  
+curve( dchisq(x, df=1), add=TRUE, col=2 )
+
+# n_sim <- 1e4L
+# store_test_statistics <- rep(NA, n_sim)
+# for( i in 1:n_sim ){
+#   
+#   # create hypothetical data:
+#   exposure_grp_n_diseased <- rbinom(n=1, size=23+24, prob=exposure_grp_p)
+#   exposure_grp_n_NOT_diseased <- 23+24-exposure_grp_n_diseased 
+#   non_exposure_grp_n_diseased <- rbinom(n=1, size=8+7, prob=non_exposure_grp_p)
+#   non_exposure_grp_n_NOT_diseased <- 23+24-non_exposure_grp_n_diseased
+#   simdata <- matrix( c(    exposure_grp_n_diseased, exposure_grp_n_NOT_diseased,
+#                        non_exposure_grp_n_diseased, non_exposure_grp_n_NOT_diseased
+#                        ), 
+#                      byrow = TRUE,
+#                       ncol = 2
+#                    )
+#   X_test_stat <- chisq.test(simdata)
+#   store_test_statistics[i] <- X_test_stat$statistic
+# }
+# 
+# hist(store_test_statistics, breaks=50, freq=FALSE)
+
+```
+
+# Bayesian Approach
+Here is the data again: 
+```{r}
+mydata
+addmargins(mydata)
+prop.table(mydata, margin=1)
+```
+
+$$\begin{array}{lcl} BF_{H_a;H_0} &=& \displaystyle\frac{\text{Posterior Odds } \frac{H_a}{H_0}}{\text{Prior Odds } \frac{H_a}{H_0}} \\
+&=& \displaystyle\frac{\frac{Pr\Big[H_a\Bigl|Data\Big]}{Pr\Big[H_0\Bigl|Data\Big]}}{\frac{Pr\Big[H_a\Big]}{Pr\Big[H_0\Big]}} \\
+&=& \displaystyle\frac{\frac{\Big( Pr\Big[Data\Bigl|H_a\Big]\cdot Pr\Big[H_a\Big] \Big) / \Big(Pr\Big[Data\Bigl|H_a\Big]\cdot Pr\Big[H_a\Big]+Pr\Big[Data\Bigl|H_0\Big]\cdot Pr\Big[H_0\Big]\Big)}{\Big( Pr\Big[Data\Bigl|H_0\Big]\cdot Pr\Big[H_0\Big] \Big) / \Big(Pr\Big[Data\Bigl|H_a\Big]\cdot Pr\Big[H_a\Big]+Pr\Big[Data\Bigl|H_0\Big]\cdot Pr\Big[H_0\Big]\Big)}}{\frac{Pr\Big[H_a\Big]}{Pr\Big[H_0\Big]}} \\
+&=& \displaystyle\frac{Pr\Big[Data\Bigl|H_a\Big]}{Pr\Big[Data\Bigl|H_0\Big]}\\
+\end{array}$$
+
+
+
+
+# References
+
+https://lingpipe-blog.com/2009/10/13/bayesian-counterpart-to-fisher-exact-test-on-contingency-tables/

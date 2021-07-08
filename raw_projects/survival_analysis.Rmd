@@ -1,0 +1,209 @@
+---
+title: "Survival Analysis & Survival Models"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(mixtools)         # for fitting mixture distributions
+```
+
+# A discrete example
+
+$\space$ | $\space$
+---------|----------------
+T        | Age (band) at which death will occur. A random variable.
+t        | A chosen value/outcome of random variable $T$ 
+f(t)     | $Pr[T=t]$
+$\space$ | Probability of dying while at age (band) $t$.
+$\space$ | Alternatively, proportion of population dying at age (band) $t$
+F(t)     | $Pr\Big[T<t \Big]$ 
+$\space$ | Probability of dying prior to reaching age (band) $t$
+$\space$ | Alternatively, proportion of population dying before reaching age (band) $t$
+S(t)     | $Pr \Big[T\geq t \Big]$
+$\space$ | Probability of surviving to age (band) $t$, or older
+$\space$ | Alternatively, proportion of population surviving to at least age (band) $t$
+$\space$ | $S(t)=1-F(t)$
+h(t)     | $Pr\Big[T=t \hspace{3mm} \Bigl| \hspace{3mm} T \geq t \Big]  \quad=\quad \displaystyle\frac{f(t)}{S(t)}$
+$\space$ | Probability of dying at age (band) $t$ given that you've reached this age
+$\space$ | Alternatively, proportion of population reaching age (band) $t$ that die at age (band) $t$
+
+```{r echo=FALSE}
+set.seed(1987)
+
+deathdata <-
+  tibble( age_lwr = c( 0, 10, 20, 30, 40, 50  ),
+          age_upr = c( 9, 19, 29, 39, 49, 59 ),
+          t =             c("0-9",
+                            "10-19",
+                            "20-29",
+                            "30-39",
+                            "40-49",
+                            "50+"
+                           )
+        ) %>%
+  mutate( `f(t)` =
+            c( 6, 4, 1, 2, 8, 10 )
+          ,
+          `f(t)` =
+              `f(t)` / sum(`f(t)`)
+        ) %>% 
+  mutate( `F(t)` = cumsum(`f(t)`) - `f(t)`,
+          `S(t)` = 1 - `F(t)`,
+          `h(t)` = `f(t)`/`S(t)`
+        )
+
+deathdata %>% select(-age_lwr, -age_upr)
+
+sum(deathdata$`f(t)`)
+```
+
+```{r echo=FALSE, fig.width=10, fig.height=4}
+deathdata %>% 
+  pivot_longer(     cols = 4:7,
+                names_to = "metric",
+                values_to = "value"
+              ) %>% 
+  mutate( metric = factor( metric, levels = c("f(t)","F(t)","S(t)","h(t)") ) ) %>% 
+  ggplot( data = .,
+          aes(     x = t,
+                   y = value,
+                fill = metric,
+               group = metric
+             )
+        ) +
+  geom_bar( stat="identity", width=0.3 ) +
+  geom_line() +
+  geom_point( size = 3 ) + 
+  coord_cartesian( ylim = c(0,1) ) + 
+  # geom_hline( yintercept = 1 ) + 
+  facet_grid( .~metric, scales="free_y" ) +
+  theme( legend.position = "none", axis.text.x=element_text(angle=90) )
+```
+
+# Continuous Survival Theory
+
+Random variable $T$ is the time until **event**. Let's call the event **death**, in which case $T$ is **survival time**.
+
+Let's consider $T$ the number of years from birth until death (i.e. length of life) for a single person.  
+
+$T$ is a non-negative continuous random variable.
+
+The distribution of $T$ is described by a density function $f(t)$. 
+
+The cumulative distribution function $\quad F(t)=Pr\Big[T<t\Big]=\int_{0}^t f(x) dx \quad$ gives the probability that the **event** (death) has happened by time $t$.
+
+The **survival function** $S(t)$ is $\quad S(t)=1-F(t)=Pr\Big[T\geq t\Big]=\int_{t}^\infty f(x) dx$.
+
+$S(t)$ gives the probability that the **event** has not yet happened by time $t$ (the probability of surviving until time $t$).
+
+For a person alive at time $t$: the probability of them dying in the next $\Delta t$ years is
+
+$$\begin{array}{lcl}
+Pr\Big[ \quad T \in [t, \space t+\Delta t)  \quad \Bigl| \quad T\geq t \quad \Big]
+&=& \displaystyle\frac{Pr\Big[ \quad T \in [t, \space t+\Delta t)  \quad \cap \quad T\geq t \quad\Big]}{Pr\Big[\quad T \geq t \quad \Big]} \hspace{5mm} \text{axiom of probability} \\
+&=& \displaystyle\frac{Pr\Big[ \quad T \in [t, \space t+\Delta t)  \quad \cap \quad T\geq t \quad\Big]}{Pr\Big[\quad T \geq t \quad \Big]} \hspace{5mm} \text{axiom of probability} \\
+&\approx& x \\
+\end{array}$$
+
+The **hazard function** $h(t)$ is:
+
+$$\begin{array}{lcl}
+h(t) &=& \underset{dt\rightarrow{}0}{lim} \displaystyle\frac{Pr\Big[t \leq T \leq t+dt  \quad \Bigl| \quad T\geq t\Big]}{dt} \\
+&=& \displaystyle\frac{f(t)}{S(t)} \\
+&=& -\displaystyle\frac{d}{dt} \Bigg\{ log \Big[S(t)\Big] \Bigg\} \\
+\end{array}$$
+
+
+# A quick simulation illustrating these principles
+Suppose that the distribution of **age at death** in our population is:
+
+```{r echo=FALSE}
+# create a population based on the discrete (age band) data, 
+# and fit a weibull distribution to this simulated population: 
+set.seed(1769)
+sim_population <- 
+  lapply( 1:nrow(deathdata),
+          function(rownum){ rnorm(    n = round( deathdata$`f(t)`[rownum]*1000 ),
+                                   mean =
+                                     (deathdata$age_upr[rownum]+deathdata$age_lwr[rownum])/2,
+                                     sd = 5
+                                 ) %>% 
+                              abs(.)
+                          }
+        ) %>% 
+    reduce( c ) 
+
+fit_mixture_dbn <- 
+  mixtools::gammamixEM( x = sim_population, k=2 )
+
+mixgamma_1_mix_proportion <- fit_mixture_dbn$lambda[1]
+mixgamma_1_shape <- fit_mixture_dbn$gamma.pars[1,1]
+mixgamma_1_scale <- fit_mixture_dbn$gamma.pars[2,1]
+
+mixgamma_2_mix_proportion <- fit_mixture_dbn$lambda[2]
+mixgamma_2_shape <- fit_mixture_dbn$gamma.pars[1,2]
+mixgamma_2_scale <- fit_mixture_dbn$gamma.pars[2,2]
+
+f_ <- function(t){ mixgamma_1_mix_proportion * 
+                       dgamma(     x = t,
+                               shape = mixgamma_1_shape,
+                               scale = mixgamma_1_scale
+                              ) +
+                   mixgamma_2_mix_proportion * 
+                       dgamma(     x = t,
+                               shape = mixgamma_2_shape,
+                               scale = mixgamma_2_scale
+                              )
+                }
+
+F_ <- function(t){ mixgamma_1_mix_proportion * 
+                       pgamma(     q = t,
+                               shape = mixgamma_1_shape,
+                               scale = mixgamma_1_scale
+                              ) +
+                   mixgamma_2_mix_proportion * 
+                       pgamma(     q = t,
+                               shape = mixgamma_2_shape,
+                               scale = mixgamma_2_scale
+                       )
+}
+
+S_ <- function(t){ 1 - F_(t) }
+
+hist(      x = sim_population, 
+      breaks = 40,
+        xlab = "Age",
+        main = "Distribution of Age at Death in Population",
+        freq = FALSE,
+        xlim = c(0, 80)
+      
+    )
+
+lines(   x = 0:80,
+         y = sapply( 0:80, function(t){ f_(t) } ),
+       col = 2
+ )
+
+```
+
+The fitted distribution (red line) is a mixture of Gamma distributions that has been fit to this data using the package **mixtools**. The fit isn't perfect, but is good enough for purposes of illustration. 
+
+```{r echo=FALSE, height=7, width=7}
+par( mfrow=c(4,1), mar=c(1.8,5,3,1) )
+plot( x=1:55, y=sapply(1:55, function(t){ f_(t) }), xlab="t", ylab="f(t)", type="l", las=1, col=2)
+plot( x=1:55, y=sapply(1:55, function(t){ F_(t) }), xlab="t", ylab="F(t)", type="l", las=1, col=2)
+plot( x=1:55, y=sapply(1:55, function(t){ S_(t) }), xlab="t", ylab="S(t)", type="l", las=1, col=2)
+plot( x=1:55, y=sapply(1:55, function(t){ f_(t)/S_(t) }), xlab="t", ylab="f(t) / S(t)", type="l", las=1, col=2, ylim=c(0, 0.05) )
+```
+
+# Resources
+1. https://data.princeton.edu/wws509/notes/c7.pdf
+
+2. https://cran.r-project.org/web/packages/mixtools/vignettes/mixtools.pdf
+
+3. https://stats.stackexchange.com/questions/218947/intuition-behind-the-hazard-rate
+
+4. https://en.wikipedia.org/wiki/Failure_rate

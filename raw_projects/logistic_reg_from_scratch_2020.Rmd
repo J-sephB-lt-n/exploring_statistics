@@ -1,0 +1,143 @@
+---
+title: "Logistic Regression from Scratch"
+output: html_notebook
+---
+
+```{r setup}
+library(tidyverse)
+library(mlbench)      # for the "BreastCancer" dataset
+library(Hmisc)      # for EDA
+```
+
+https://documentation.sas.com/?docsetId=statug&docsetTarget=statug_logistic_details25.htm&docsetVersion=15.1&locale=en
+
+Venzon, D. J. and Moolgavkar, S. H. (1988), “A Method for Computing Profile-Likelihood Based Confidence Intervals,” Applied Statistics, 37, 87–94.
+
+```{r}
+data(BreastCancer)
+breast_cancer_data_cleaned <- 
+  BreastCancer %>% 
+    rename( patient_id = Id,
+            y_tumour_class = Class,
+            x1_clump_thickness = Cl.thickness,
+            x2_uniformity_of_cell_size = Cell.size,
+            x3_uniformity_of_cell_shape = Cell.shape,
+            x4_marginal_adhesion_single_epithelial_cell = Marg.adhesion,
+            x5_single_epithelial_cell_size = Epith.c.size,
+            x6_bare_nuclei = Bare.nuclei,
+            x7_bland_chromatin = Bl.cromatin,
+            x8_normal_nucleoli = Normal.nucleoli,
+            x9_mitoses = Mitoses
+          ) %>% 
+  select( patient_id, y_tumour_class, everything() ) %>%
+  mutate_at( vars(matches("x")), as.numeric ) %>% 
+  tidyr::drop_na()       # drop rows which contain any NA values
+  
+Hmisc::describe(breast_cancer_data_cleaned)
+```
+
+```{r}
+breast_cancer_data_cleaned
+```
+
+So, we want to build a model to predict $y_i$ (*tumour class* of patient *i*) using patient features $x_1,x_2,...,x_9$
+
+Response/outcome variable $y$ is *binary* - it can only one of the values $y=1$ (malignant) and $y=0$ (benign).
+
+We assume that every observation $y_i$ is a random draw from it's own Bernoulli distribution:
+
+$$y_i \quad\sim\quad Bernoulli\Big(p_i\Big)$$
+
+We want to model $\pi_i=E\Big[y_i\Big]$ as a non-linear function of the predictors $x_{i1},x_{i2},...,x_{i9}$
+
+The *logistic regression* model, with the *logit* link function, is:
+
+$$\underset{\displaystyle \pi_i}{\underbrace{E\Big[y_i\Big]}} \quad=\quad \displaystyle\frac{1}{1+e^{-\eta_i}} \hspace{20mm} \eta_i=\beta_0+\beta_1x_{i1}+\beta_2x_{i2}+...+\beta_9x_{i9}$$
+
+In this binary case ($y_i\in\{0,1\}$), $E\Big[y_i\Big]=Pr\Big[y_i=1\Big]$.
+
+The likelihood of observing our dataset under a given model (i.e. a fixed set of parameters $\theta=\{\beta_0,\beta_1,...,\beta_9\}$) is:
+
+$$\begin{array}{lcl}\mathcal{L}\Big(y,\theta\Big) &=& \displaystyle\prod_{i=1}^{699} \Bigg( \Big(\displaystyle\frac{1}{1+e^{-\eta_i}} \Big)^{y_i}  \Big(1-\displaystyle\frac{1}{1+e^{-\eta_i}} \Big)^ {1-y_i} \Bigg) \\
+&=& \displaystyle\prod_{i=1}^{699} \Bigg( \pi_i^{y_i} (1-\pi_i)^ {1-y_i} \Bigg) \\
+\end{array}$$
+
+We choose the coefficients $\beta_0, \beta_1, ..., \beta_9$ by choosing the coefficients which maximise the likelihood function $\mathcal{L}\Big(y\Big)$.
+
+This is equivalent to maximising the log of the likelihood function $\mathcal{L}\Big(y,\theta\Big)$, which is less prone to loss of information through underflow:
+
+$$log\Bigg[\mathcal{L}\Big(y,\theta\Big)\Bigg] \quad=\quad \displaystyle\sum_{i=1}^{699}\Bigg( y_i\cdot log(\pi_i) \space+\space (1-y_i)\cdot log(1-\pi_i)\Bigg)$$
+
+```{r}
+X <- breast_cancer_data_cleaned %>% 
+        select(-patient_id,-y_tumour_class) %>% 
+        mutate_all(as.numeric) %>% 
+        as.matrix() %>% 
+        cbind( intercept=1, .)
+
+y <- if_else( breast_cancer_data_cleaned$y_tumour_class == "benign",
+              0,
+              1
+            )
+
+negative_of_log_likelihood_ftn <- function(theta){
+  
+     calc_eta <- c( X %*% as.matrix(theta,ncol=1) )
+     calc_pi <- 1 / (1 + exp(-calc_eta) )
+     
+     return( 
+             -sum( y * log(calc_pi) + (1-y)*log(1-calc_pi) )
+     )
+}
+
+run_optim <- optim( par=rep(0,10), fn=negative_of_log_likelihood_ftn, method="L-BFGS-B" )
+run_optim
+```
+
+```{r}
+fit_full_glm <- 
+  glm( y_tumour_class ~ x1_clump_thickness + 
+                        x2_uniformity_of_cell_size + 
+                        x3_uniformity_of_cell_shape + 
+                        x4_marginal_adhesion_single_epithelial_cell + 
+                        x5_single_epithelial_cell_size + 
+                        x6_bare_nuclei + 
+                        x7_bland_chromatin + 
+                        x8_normal_nucleoli + 
+                        x9_mitoses,
+       data = breast_cancer_data_cleaned,
+       family = binomial(link="logit")
+ )
+
+coef(fit_full_glm)
+```
+
+Let's see that we got the same coefficients as the *glm()* function in R:
+
+```{r}
+tibble(     variable_name = colnames(X),
+          glm_coefficient = coef(fit_full_glm),
+        optim_coefficient = run_optim$par 
+      )
+```
+
+The *glm()* function uses the method *Iteratively Weighted Least Squares*, which may explain the small discrepancy between the 2 results. 
+
+# Likelihood Ratio Test
+
+https://www.stern.nyu.edu/rengle/LagrangeMultipliersHandbook_of_Econ__II___Engle.pdf
+
+The likelihood ratio is the ratio of the probability of the observed data under 2 different models:
+
+$$\lambda = \displaystyle\frac{\mathcal{L}\Big(y\Big)}{\mathcal{L}\Big(\Big)}$$
+
+# Confidence Intervals for $\beta$ coefficients
+
+The confidence intervals reported by the R *glm()* function are *profile confidence intervals*.
+
+First, some contextual information:
+
+We can test the hypothesis $H_0: \space \beta_j=\beta_0$ (i.e. parameter $\beta_j$ has the value $\beta_0$) using a *likelihood ratio* hypothesis test:
+
+
+

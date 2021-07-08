@@ -1,0 +1,214 @@
+---
+title: "an extremely brief introduction to arules"
+author: "Joe"
+date: "09 September 2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(arules)    # for finding product assocation rules
+library(dplyr)        
+library(arulesViz)   # for product association visualisation
+
+```
+
+Suppose that we have n distinct items (products) 
+
+$$I \quad = \quad \{i_1, i_2, ... ,i_n\}$$
+
+For example, these could be 
+
+$$I \quad = \quad \{\text{bread},\text{butter},\text{beer},\text{chocolate},...etc.\}$$
+
+Suppose that we have data $D$ containing $m$ transactions/baskets $t_j$
+
+$$D \quad = \quad \{t_1, t_2, t_3, .... , t_m\}$$
+
+Each transaction $t_j$ is a shopping basket containing a combination of items. For example, the third observed transaction could be 
+
+$$t_3 = \{i_1,i_4\} = \{\text{bread}, \text{chocolate}\}$$
+
+We are interested in finding rules/patterns/associations in our data, meaning certain combinations of items which imply other combinations of items. For example, we might be interested to know that baskets containing both bread and beans also tend to contain cigarettes. 
+
+We define the support of an itemset $X$ (combination of items $X$) as:
+
+$$supp(X) \quad = \quad  \text{proportion of transactions (baskets) containing } X \quad = \quad P(X)$$
+
+A basket containing the items in the itemset $X$ plus other items which are not in $X$ is still considered to contain $X$.
+
+For example, in the transaction data below, $supp\Big(\{\text{milk,bread}\}\Big)=\frac{2}{5}$ (i.e. 40% of all transactions contain both bread and milk). The support measures how popular (frequently appearing) an itemset (combination of items) is. 
+
+transaction ID | items
+---------------|-------
+1              | milk, bread
+2              | bread, butter
+3              | beer
+4              | milk, bread, butter
+5              | bread, butter
+
+We are trying to use our data to find 'rules', where a rule is a map X=>Y from one itemset (X) to another (Y). For example, we might have the rule {milk,bread}=>{butter}, meaning that if a person buys bread and milk, then they are also likely to buy butter. 
+
+In order to measure the quality/performance of a rule, we define a measure called __confidence__, which is the number of baskets/transactions for which our rule is true as a proportion of the number of baskets/transactions for which we would want/expect the rule to be true. So, our __confidence__ in rule X=>Y is: 
+
+$$ conf \Big(X \Rightarrow Y \Big) \quad = \quad \frac{ supp\Big(X \cup Y\Big) }{ supp\Big(X\Big)} \quad = \quad \frac{\text{proportion of baskets containing combined itemset } \{X\cup Y\}}{\text{proportion of baskets containing itemset } X}$$
+
+i.e. the __confidence__ is the number of baskets for which our rule is actually true as a proportion of the number of baskets for which our rule should be true. 
+
+In the example data above, our __confidence__ in the rule {milk,bread}=>{butter} is 
+
+$$ \begin{array}{lcl}
+conf \Big(\text{ {milk,bread} } \Rightarrow \text{ {butter} } \Big) &=& \frac{\text{proprotion of baskets containining milk,bread and butter}}{\text{proportion of baskets containing milk and bread}} \\
+&=& \frac{1/5}{2/5} \\
+&=& \frac{1}{2} \\
+\end{array}$$
+
+We are only be interested in rules with high itemset support (product combinations that happen often), and in which we have high confidence (the rule turns out to be true very often).
+
+Another measure of the performance of a rule is __lift__, which compares how often we see 2 itemsets appearing together in the data compared to how how often we'd expect to see them together if they were truly independent of one another (if they occurred together by random chance alone). We define the lift as:
+
+$$\begin{array}{lcl} lift \Big( X \Rightarrow Y \Big) &=& \frac{ supp\Big( \{X \cup Y\}\Big) }{supp\Big(X\Big) \times supp \Big(Y\Big)} \\
+&=& \frac{\text{proportion of baskets containing X and Y}}{\text{expected proportion of baskets containing both X and Y by chance alone, assuming no relationship at all between X and Y}} \end{array}$$
+
+Here is an example of __lift__ using our previous rule and data: 
+
+transaction ID | items
+---------------|-------
+1              | milk, bread
+2              | bread, butter
+3              | beer
+4              | milk, bread, butter
+5              | bread, butter
+
+Let's look at the rule is {bread}=>{butter} (i.e. buying bread implies increased likelihood of buying butter): 
+
+* $supp\Big(\{bread\}\Big)$ = proportion of baskets/transactions containing bread = probability of a randomly drawn basket containing bread = 4/5 = 0.8 (bread is a very popular item)
+
+* $supp\Big(\{butter\}\Big)$ = proportion of baskets containing butter = probability of a randomly selected basket containing butter = 3/5 = 0.6
+
+* If we assume that there is no association/dependence whatsoever between buying {bread} and buying {butter} (i.e. if a basket contains bread, this tells us nothing about the probability of it also containing butter), then we'd expect the proportion of baskets containing bread and butter to be 
+
+$$P\Big[\text{ {bread,butter} }\Big] \quad = \quad P\Big[\text{ {bread}}\Big] \times P\Big[\text{{butter}}\Big] \quad = \quad \frac{4}{5} \times \frac{3}{5} \quad = \quad \frac{12}{25} \quad = \quad 0.48$$
+
+* The actual proportion of baskets containing bread and butter is 3/5=0.6, giving us a lift of $\frac{0.6}{0.48} = 1.25$. This indicates that we are 25% more likely to see bread and butter appear together than we'd expect if there was no assocation between buying bread and buying butter. 
+
+Here is how we perform the above examples using the arules package:
+
+```{r balbalba}
+
+transaction_dat <- 
+  data_frame( transaction_id = c(1,1,2,2,3,4,4,4,5,5),
+              items = c("milk","bread", # transaction 1
+                        "bread", "butter", # transaction 2
+                        "beer", # transaction 3
+                        "milk","bread","butter", # transaction 4
+                        "bread","butter" # transaction 5
+                        )
+            )
+
+transaction_dat
+
+# turn data_frame into a list format:
+transaction_dat_list <- 
+  split( f = paste( "t", transaction_dat$transaction_id, sep="" ),
+         x = transaction_dat$items
+        )
+
+transaction_dat_list
+
+transactions_for_arules <- as( transaction_dat_list, "transactions" )
+
+transactions_for_arules
+
+# print a summary of the transaction data: 
+summary( transactions_for_arules )
+
+# make an item frequency plot
+arules::itemFrequencyPlot( transactions_for_arules,   # the transaction data 
+                           topN = 50,                 # print top 50 items (our dataset only has 4 items)
+                           cex.names = 1,             # size of item names on x axis
+                           type = "relative"          # as opposed to "absolute" frequencies (i.e. counts)
+                         )
+
+# calculate the supports for all itemsets exceeding specified support and basketsize criteria:
+frequentItems <- 
+  arules::eclat( data = transactions_for_arules, 
+                 parameter = list( target = "frequent itemsets",
+                                   support = 0.01,     # itemsets must have at least this support (frequency/popularity) to be considered
+                                   minlen = 1,         # only itemsets containing at least this many items will be considered    
+                                   maxlen = 4          # itemsets containing more items than this will not be considered 
+                                   )
+                   )
+
+frequentItems
+
+inspect(frequentItems)
+
+# or can alternatively use:
+as( frequentItems, "data.frame")
+
+get_rules <- 
+  arules::apriori( data = transactions_for_arules, 
+                   parameter = list( support = 0.01,       # minimum support (itemset frequency) to be considered
+                                     conf = 0.5            # minimimum confidence for a rule to be considered
+                                    )
+                                   
+                 )
+
+# sort the rules by confidence: 
+sort( get_rules, by="confidence", decreasing=TRUE ) %>% inspect()
+# sort the rules by lift:
+sort( get_rules, by="lift", decreasing=TRUE ) %>% inspect()     
+
+```
+
+For reference, our transaction dataset was 
+
+transaction ID | items
+---------------|-------
+1              | milk, bread
+2              | bread, butter
+3              | beer
+4              | milk, bread, butter
+5              | bread, butter
+
+## Relationships between lhs, rhs, support, confidence, lift, count
+For any one of the rules, the following relationships and observations are useful:
+
+**count** is the number of baskets containing **lhs** and **rhs**
+
+**support** is the proportion of baskets containing **lhs** and **rhs**
+
+the number of baskets containing **lhs** is $\frac{\text{count}}{\text{confidence}}$
+
+the proportion of baskets containing **lhs** $\frac{\text{support}}{\text{confidence}}$
+
+the total number of baskets is $\frac{\text{count}}{\text{support}}$ (    this is the same number for any rule!)      
+
+## some final notes
+Lift gives the same value for a rule X=>Y as for the rule Y=>X. It does not show direction, but only which products tend to be bought together (it cannot say whether one product is causing the purchase of the other) 
+
+In cases of product add-ons, confidence can be a misleading measure of the performance of a rule. Consider, for example
+
+transaction_id | items
+---------------|--------
+1              | flashlight, batteries           
+2              | flashlight, batteries
+3              | flashlight, batteries
+4              | flashlight
+5              | flashlight
+
+The rule flashlight => batteries gives confidence $\frac{3/5}{5/5}=0.6$
+The rule batteries => flashlight gives confidence $\frac{3/5}{3/5}=1$
+
+It doesn't make that much sense to recommend flashlights to people who buy batteries. This false confidence is occurring because batteries are not being bought on their own in this data. 
+
+Sources:
+1. https://cran.r-project.org/web/packages/arules/vignettes/arules.pdf
+2. http://r-statistics.co/Association-Mining-With-R.html
+
+
+

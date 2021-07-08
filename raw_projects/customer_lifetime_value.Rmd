@@ -1,0 +1,13 @@
+---
+title: "Measuring Customer Lifetime Value (CLTV)"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+```
+
+The *Customer Lifetime Value* of a customer today is the **expected future revenue** of that customer less **expected future costs** incurred on this customer, discounted using an appropriate rate back to today's date.
+
+
+

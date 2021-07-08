@@ -1,0 +1,1298 @@
+---
+title: "Recommenders Part I: Representing Customers & Items as Vectors"
+author: "Joseph Bolton"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    df_print: paged
+    theme: darkly
+    highlight: espresso
+---
+
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 7px;
+text-align: center;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+<pre style="font-size: 10px; font-family: &quot;Ubuntu Mono&quot;; background-color: rgb(0,0,0); color: rgb(255,255,255); line-height: 8px;">................................................................................11111111................................................................................................................
+.........................................................................1111..11000000000001111111.....................................................................................................
+........................................................................1111..1110000000000000000000000111111...........................................................................................
+........................................................................111..111100000000000000000000000000001..........................................................................................
+......................................................................1111...111100000000000000000000000000001..........................................................................................
+......................................................................111...111.100000000011111100000000000001..........................................................................................
+......................................................................11...111..100000000001111111111111111001..........................................................................................
+......................................................................1...111...100000000001111111111111111111..........................................................................................
+.........................................................................111...1100000000001111111111111111111..........................................................................................
+........................................................................1111..11100000000001111111111111111111........111111.1111111....................................................................
+.......................................................................1111..111100000000000111111111111111111....11111111.1..111111111.................................................................
+......................................................................1111..1111100000000000111111111111111111.....11111.0.0..000000111.................................................................
+......................................................................111..1111.100000000000111111111111111111.....11111.0.0..000000001.................................................................
+......................................................................11..1111..100000000000111111111111111111.....11111.0.0..000000001.................................................................
+......................................................................1..1111..1100000000000111111111111111111.....11111.0.0..000000001.................................................................
+...................................................10111111..............111...1100000000000011111111111111111.....11111.0.0..000000001.................................................................
+............................................1.1111.10000000000011.......111...11100000000000011111111111111111.....11111.0.0..000000001.................................................................
+.....................................1111.1.....11.100000000000001....1111...111100000000000011111111111111111.....11111.0.0..000000001.................................................................
+...................................111......1.1....100000000000001....111...111.100000000000011111111111111111.....11111.0.0..000000001.................................................................
+...................................1111.......1111.100000000000001....11...111..100000000000001111111111111111.....11111.0.0..000000001.................................................................
+...................................1....1.1.1.1....100000000000001....1...111...100000000000001111111111111111.....11111.0.0..000000001.................................................................
+...................................1111.....1.1111.100000000000001.......1111..1100000000000001111111111111111.....11111.0.0..000000001.................................................................
+.......................................11.1.1...11.100000000000001......1111..11100000000000001111111111111111.....11111.0.0..000000001.................................................................
+...................................11.....1.1.111..100000000000001.....1111..111100000000000000111111111111111.....11111.0.0..000000001.................................................................
+.....................................1111.1...1.11.100000000000001....1111..1111100000000000000111111111111111.....111.1......000000001.................................................................
+........................................1.1.1.1....100000000000001....111..1111.100000000000000111111111111111........1.1.111.00000000011111............................................................
+.....................................11.1.......11.100000000000001....11..1111..100000000000000011111111111111..111.0.0.0.111.00000000000000............................................................
+...................................111111.1........100000000000001......1111....100000000000000011111111111111..111.0.0.0.111.00000000000000............................................................
+...................................1....1.1.1.111..100000000000001.......1111111100000000000000011111111111111..111.0.0.0.111.00000000000000............................................................
+.....................................11.1.....1.11.100000000000001..111111111111100000000000000011111111111111..111.0.0.0.111.00000000000000............................................................
+......................................1...1.1.1....100000000000001.1111111111111100000000000000001111111111111..111.0.0.0.111.00000000000000..111001....................................................
+.................1111111..............1.....1.1111.100000000000001.1111111111111100000000000000001111111111111..111.0.0.0.111.00000000000000111110001...................................................
+..........11100000000001...........1111...1.1......100000000000001.1111111111111100000000000000001111111111111..111.0.0.0.111.00000000000000111110001....................1001111........................
+.........111111111000001...........1....1.1.1.1111.100000000000001.1111111111111100000000000000001111111111111..111.0.0.0.111.00000000000000111110001................1...10000001.......................
+..........11111111000001...........1111.1..........100000000000001.1111111111111100000000000000000111111111111..111.0.0.0.111.00000000000000111110001................1...10000001.......................
+..........11111111000001..............111.1.1.1....100000000000001.1111111111111100000000000000000111111111111..111.0.0.0.111.00000000000000111110001..............111...10000001.......................
+..........1111111.1111111110111....11.......1.1.11.100000000000001.1111111111111100000000000000000111111111111..111.0.0.0.111.00000000000000111110001..............11..1.10000001.......................
+..........1111..1.1.1.1.1110000001...1111...1.1....100000000000001.1111111111111100000000000000000111111111111..111.0.0.0.111.00000000000000111110001.............11...1.10000001.......1111............
+..........1111..1.1.1.1.1110000000......1.1.1.1111.100000000000001.1111111111111100000000000000000011111111111..111.0.0.0.111.00000000000000111110011.........1000111..1.10000001......000000...........
+..........1111..1.1.1.1.1110000000.1111.1.1........100000000000001.1111111111111100000000000000000011111111111..111.0.0.0.111.0000000000000011................1000000111.10000001..1000000001...........
+..........1111..1.1.1.1.1110000000...1111.1.1...11.100000000000001.1111111111111100000000000000000011111111111..111.0.0.0.111.0000000000000011................1000000111.10000001.00000000110001........
+..........1111..1.1.1.1.1110000000.11.........1.11.100000000000001.1111111111111100000000000000000000111111111..111.0.0.0.111.0000000000000011................1000000111.10000001.10000000110001........
+..........1111..1.1.1.1.1110000000...11...1.1.1....100000000000001.1111111111111100000000000000000000000000001..111.0.0.0.111.0000000000000011................100000011..10000001..11111111.............
+..........1111..1.1.1.1.1110000000........1.1...11.100000000000001.1111111111111000000010000000000000000000000..111.0.0.0.111.0000000000000011................100000011..10000001........11.............
+.1000001..1111..1.1.1.1.1110000000.1111...1........100000000000001.111111111111000001......10000000000000000000.111.0.0.0.111.0000111000000011................1000000111101000001...1000001.......11....
+10000000010001..1.1.1.1.1110000000.1.1111.1.1.1111.100000000000001.1111111111111............10000000000000000000011.0.0.0.111.0001....00000011...............1100011111....000001..000000001111..00001..
+000000000000001.1.1.1.1.1110000000.1...............100001111000001.11111110000..............100000000000000000000001010101011.0001...100000011.......111111111.....1111111100000000000000000000001001...
+.10000000000001.1.1.1.1.1110000000.111111.1.1.1....10000.....00001.00000000000.............1000000000000000000000000000000001.00000110100000111111111.....11111111111....1.0000000000000000000000..1....
+..100110111111..1.1.1.1.1111.10000......1...1.1.11.1000011.1100001.000000000000111111.11..10000000000000000000000000000000001.0011011..1000011....1111111111.....11111000010000000000101111000000..1101.
+.10001.0..1111..1.1.1.1.1111..0000.1111.1...1......1000000.0110001.00000000000000000111....1000000000000000000000000000000001.00111110000000111111......11111111111111.....0000000000000111....11111....
+.10001101100001.1.1.1.1.1110111000.111111.1...1111.1000000.1110001.000000000000000001.1....0000000000000000000000000000000001.0000011000000011..11111111111............111.0000000000001111........1....
+.......00000001.1.1.1.1.1110111000.................1000000.0000001.000000000000000001.000000000000000000000000000000000000001.000001100000001111.......111111111000000000010000000000....11........1....
+.......00000001.1.1.1.1.1.10100001.111111.1.1.1111.1000000.000000..0000000000000000011000000000000000000000000000000000000001.0000011000000011111100000000000000000000000011000000000....11........1....</pre>
+
+<!-- set code style back to normal -->
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 14px;
+text-align: left;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+
+```{r include=FALSE}
+# change formatting of code output:
+knitr::opts_chunk$set(
+  class.output  = "bg-primary",
+  class.message = "bg-info text-info",
+  class.warning = "bg-warning text-warning",
+  class.error   = "bg-danger text-danger"
+)
+```
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(plotly)
+library(knitr)
+``` 
+
+For many recommender algorithms (algorithms for making personalised product recommendations to customers), it is convenient to represent products and customers as vectors of information.
+
+I refer here to the context of recommending *products* to *customers*, but the frameworks discussed could just as easily be used to recommend any kind of item (e.g. movie) to any kind of item consumer (e.g. web-page user). 
+
+This page explores and illustrates the concept of describing customers and products using numeric vectors.
+
+Suppose that our hypothetical business has the following four products to offer: 
+
+```{r echo=FALSE}
+product_data <- 
+  tibble( product_id = paste("product", 1:4, sep="_"), 
+          product_desc = c( "red, green, green, green",
+                           " red, blue, green",
+                           " blue, blue, blue",
+                           "red, red, blue"
+                           ),
+          product_desc_short = c("rggg", "rbg", "bbb", "rrb")
+        ) %>% 
+  mutate( tf_red = c( 1, 1, 0, 2),
+          tf_blue = c( 0, 1, 2, 1 ),
+          tf_green = c( 3, 1, 0, 0 ),
+        ) %>% 
+  mutate( red_idf = log( (1+4) / (1+3) ),
+          blue_idf = log( (1+4) / (1+3) ),
+          green_idf = log( (1+4) / (1+2) )
+        ) %>% 
+  mutate( red_tf_idf = tf_red * red_idf,
+          blue_tf_idf = tf_blue * blue_idf,
+          green_tf_idf = tf_green * green_idf
+        ) 
+
+```
+
+
+Suppose that the only attribute information that we have for these products is the colouring of these products i.e. the  amount of *red*, *blue* and *green* shown by each product. In real applications, each product vector could be thousands of attributes long, coding any desirable information about that product.  
+
+```{r}
+product_data %>% select( product_id, product_desc) %>% kable()
+product_data %>% select( product_id, product_desc, tf_red, tf_blue, tf_green) %>% kable()
+```
+
+Here are the four products, coded as numeric vectors
+
+$$(1,0,3)$$
+
+$$(1,1,1)$$
+
+$$(0,2,0)$$
+
+$$(2,1,0)$$
+
+Now that they are represented as vectors, we can visualise these four products in euclidean space: 
+
+```{r echo=FALSE}
+product1_vector <- product_data[1,] %>% 
+                      select(tf_red, tf_blue, tf_green) %>% 
+                      unlist() 
+
+product2_vector <- product_data[2,] %>% 
+                      select(tf_red, tf_blue, tf_green) %>% 
+                      unlist() 
+
+product3_vector <- product_data[3,] %>% 
+                      select(tf_red, tf_blue, tf_green) %>% 
+                      unlist() 
+
+product4_vector <- product_data[4,] %>% 
+                      select(tf_red, tf_blue, tf_green) %>% 
+                      unlist() 
+
+plot_ly( data = product_data,
+            x = ~tf_red,
+            y = ~tf_blue,
+            z = ~tf_green
+       ) %>% 
+  add_markers() %>% 
+  
+  # product 1:
+  add_trace( type = "scatter3d",
+             x = c( 0, product1_vector[1] ), 
+             y = c( 0, product1_vector[2] ),
+             z = c( 0, product1_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 1"
+            ) %>% 
+  add_trace( type = "scatter3d",
+             x = c( 0, product1_vector[1] ), 
+             y = c( 0, product1_vector[2] ),
+             z = c( 0, product1_vector[3] ),
+             mode = "text",
+             text = "rggg",
+             inherit = FALSE
+            ) %>%
+  
+    # product 2:
+    add_trace( type = "scatter3d",
+             x = c( 0, product2_vector[1] ), 
+             y = c( 0, product2_vector[2] ),
+             z = c( 0, product2_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 2"
+            ) %>% 
+    add_trace( type = "scatter3d",
+             x = c( 0, product2_vector[1] ), 
+             y = c( 0, product2_vector[2] ),
+             z = c( 0, product2_vector[3] ),
+             mode = "text",
+             text = "rbg",
+             inherit = FALSE
+            ) %>% 
+  
+    # product 3:
+    add_trace( type = "scatter3d",
+             x = c( 0, product3_vector[1] ), 
+             y = c( 0, product3_vector[2] ),
+             z = c( 0, product3_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 3"
+            )  %>% 
+      add_trace( type = "scatter3d",
+             x = c( 0, product3_vector[1] ), 
+             y = c( 0, product3_vector[2] ),
+             z = c( 0, product3_vector[3] ),
+             mode = "text",
+             text = "bbb",
+             inherit = FALSE
+            ) %>% 
+  
+    # product 4:
+    add_trace( type = "scatter3d",
+               x = c( 0, product4_vector[1] ), 
+               y = c( 0, product4_vector[2] ),
+               z = c( 0, product4_vector[3] ),
+               mode = "lines",
+               line = list(width = 4, color="black"),
+             name = "product 4"
+          )  %>% 
+        add_trace( type = "scatter3d",
+             x = c( 0, product4_vector[1] ), 
+             y = c( 0, product4_vector[2] ),
+             z = c( 0, product4_vector[3] ),
+             mode = "text",
+             text = "rrb",
+             inherit = FALSE
+            ) %>% 
+  
+  layout( scene = list( xaxis = list(title = 'RED', color='red'),
+                        yaxis = list(title = 'BLUE', color='blue'),
+                        zaxis = list(title = 'GREEN', color='green')
+                     )
+       ) %>% 
+  plotly::hide_legend()
+```
+
+In the language of *information retrieval*, these are called *term frequency* vectors, since they are counts of word occurrence in the bag-of-words describing each product. 
+
+The smaller the angle $\theta$ between any 2 product vectors, the more similar those 2 products are. Because we are only concerned with angle, we can scale each of the product vectors to have length 1 (L2 norm).
+
+Here are the same product vectors in the product space, scaled to have (L2) length 1:
+
+```{r echo=FALSE}
+scale_ftn <- function(x) {x / sqrt(sum(x^2))}
+
+product1_vector <- product_data[1,] %>% 
+                      select(tf_red, tf_blue, tf_green) %>% 
+                      unlist() %>% 
+                      scale_ftn()
+
+product2_vector <- product_data[2,] %>% 
+                      select(tf_red, tf_blue, tf_green) %>% 
+                      unlist() %>% 
+                      scale_ftn() 
+
+product3_vector <- product_data[3,] %>% 
+                      select(tf_red, tf_blue, tf_green) %>% 
+                      unlist() %>% 
+                      scale_ftn() 
+
+product4_vector <- product_data[4,] %>% 
+                      select(tf_red, tf_blue, tf_green) %>% 
+                      unlist() %>% 
+                      scale_ftn()
+
+scaled_product_data <- 
+    bind_cols( product_id = product_data$product_id
+               ,
+                   apply(   X = product_data %>% select(tf_red, tf_blue, tf_green),
+                          MAR = 1,    # apply function to every row
+                          FUN = function(row_i){ scale_ftn(row_i) }  
+                        ) %>% 
+                   t() %>% 
+                   as_tibble()
+             )
+
+plot_ly( data = scaled_product_data,
+            x = ~tf_red,
+            y = ~tf_blue,
+            z = ~tf_green
+       ) %>% 
+  add_markers() %>% 
+  
+  # product 1:
+  add_trace( type = "scatter3d",
+             x = c( 0, product1_vector[1] ), 
+             y = c( 0, product1_vector[2] ),
+             z = c( 0, product1_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 1"
+            ) %>%
+  add_trace( type = "scatter3d",
+             x = c( 0, product1_vector[1] ), 
+             y = c( 0, product1_vector[2] ),
+             z = c( 0, product1_vector[3] ),
+             mode = "text",
+             text = "rggg",
+             inherit = FALSE
+            ) %>%
+  
+  # product 2:
+    add_trace( type = "scatter3d",
+             x = c( 0, product2_vector[1] ), 
+             y = c( 0, product2_vector[2] ),
+             z = c( 0, product2_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 2"
+            ) %>% 
+  add_trace( type = "scatter3d",
+             x = c( 0, product2_vector[1] ), 
+             y = c( 0, product2_vector[2] ),
+             z = c( 0, product2_vector[3] ),
+             mode = "text",
+             text = "rbg",
+             inherit = FALSE
+            ) %>%
+  
+  # product 3:
+    add_trace( type = "scatter3d",
+             x = c( 0, product3_vector[1] ), 
+             y = c( 0, product3_vector[2] ),
+             z = c( 0, product3_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 3"
+            )  %>%
+  add_trace( type = "scatter3d",
+             x = c( 0, product3_vector[1] ), 
+             y = c( 0, product3_vector[2] ),
+             z = c( 0, product3_vector[3] ),
+             mode = "text",
+             text = "bbb",
+             inherit = FALSE
+            ) %>%
+  
+  # product 4:
+    add_trace( type = "scatter3d",
+               x = c( 0, product4_vector[1] ), 
+               y = c( 0, product4_vector[2] ),
+               z = c( 0, product4_vector[3] ),
+               mode = "lines",
+               line = list(width = 4, color="black"),
+             name = "product 4"
+          )  %>%
+  add_trace( type = "scatter3d",
+             x = c( 0, product4_vector[1] ), 
+             y = c( 0, product4_vector[2] ),
+             z = c( 0, product4_vector[3] ),
+             mode = "text",
+             text = "rrb",
+             inherit = FALSE
+            ) %>%
+  
+  layout( scene = list( xaxis = list(title = 'RED', color='red'),
+                        yaxis = list(title = 'BLUE', color='blue'),
+                        zaxis = list(title = 'GREEN', color='green')
+                     )
+       ) %>% 
+  plotly::hide_legend()
+```
+
+Notice that products with more attributes (colours) in common have a smaller angle between them.  
+
+The angles (in degrees) between the product vectors are:
+
+```{r echo=FALSE}
+vector_angles <- matrix( NA, 4, 4 )
+
+rad2deg <- function(rad) {(rad * 180) / (pi)}    # https://stackoverflow.com/questions/32370485/convert-radians-to-degree-degree-to-radians
+
+for( i in 1:4 ){
+  for( j in 1:4 ){
+    
+      vec_i <- product_data[ i, c("tf_red","tf_blue","tf_green") ] %>% unlist()  
+      vec_j <- product_data[ j, c("tf_red","tf_blue","tf_green") ] %>% unlist()     
+      vector_angles[i,j] <- acos( 
+                              min( 1,
+                                   c(vec_i%*%vec_j) / 
+                                       ( sqrt(sum(vec_i^2)) * sqrt(sum(vec_j^2))  )     
+                                  )
+                              ) %>% 
+                           rad2deg() %>% 
+                           round()
+  }
+}
+
+rownames(vector_angles) <- c("rggg", "rbg", "bbb", "rrb")
+colnames(vector_angles) <- c("rggg", "rbg", "bbb", "rrb")
+
+print( vector_angles )
+```
+
+The largest angle possible between a pair of products is $90^\circ$ ($\displaystyle\frac{\pi}{2}$ radians). This occurs when 2 products have no attributes in common.
+
+The smallest possible angle between a pair of products is **0** degrees. This occurs when the two products have identical attributes. 
+
+The cosine of the angle $\theta$ between 2 vectors gives a convenient metric for measuring similarity between the 2 vectors, since $cos(\theta)$ lies within the range [0,1]:
+
+$cos(\theta)$ | meaning
+--------------|---------------
+1             | vectors point in an identical direction (they are the same vector)
+0             | vectors are orthogonal ($90^\circ$)
+
+$cos(\theta)$, in this context, is called *cosine similarity*.
+
+Since in this context vectors are non-negative valued, only angles in $\theta\in[0^\circ,90^\circ]$ are possible
+
+```{r echo=FALSE}
+par( pty="s" )
+x_seq <- seq( 0, pi/2, length.out=1000 )
+plot( x = x_seq,
+      y = cos(x_seq),
+      type = "l",
+      ylab = bquote("cos("*theta*")"),
+      xlab = bquote(theta),
+      axes = FALSE
+    )
+
+axis( side = 2,
+        at = seq( -1, 1, by=0.2 )   
+    )
+
+abline( v = 0,
+        col = 2 
+      )
+axis(  side = 1,
+         at = 0,
+      label = bquote("0"*degree),
+        col.axis = 2
+    )
+
+abline( v = pi/4,
+        col = 2 
+      )
+axis(  side = 1,
+         at = pi/4,
+      label = bquote("45"*degree),
+        col.axis = 2
+    )
+
+abline( v = pi/2,
+        col = 2 
+      )
+axis(  side = 1,
+         at = pi/2,
+      label = bquote("90"*degree),
+        col.axis = 2
+    )
+
+abline( v = pi*0.75,
+        col = 2 
+      )
+axis(  side = 1,
+         at = pi*0.75,
+      label = bquote("135"*degree),
+        col.axis = 2
+    )
+
+abline( v = pi,
+        col = 2 
+      )
+axis(  side = 1,
+         at = pi,
+      label = bquote("180"*degree),
+        col.axis = 2
+    )
+
+abline( h = 0 )
+```
+
+The cosine similarities between the product vectors are:
+```{r echo=FALSE}
+cosine_sim <- matrix( NA, 4,4 )
+
+for( i in 1:4 ){
+  for( j in 1:4 ){
+    
+      vec_i <- scaled_product_data[ i, c("tf_red","tf_blue","tf_green") ] %>% unlist()  
+      vec_j <- scaled_product_data[ j, c("tf_red","tf_blue","tf_green") ] %>% unlist()     
+      cosine_sim[i,j] <- c(vec_i%*%vec_j) 
+  }
+}
+
+rownames(cosine_sim) <- c("rggg", "rbg", "bbb", "rrb")
+colnames(cosine_sim) <- c("rggg", "rbg", "bbb", "rrb")
+
+print(cosine_sim)
+
+```
+
+# Customers as Vectors
+If we can represent customers as vectors in the same euclidean space as the product vectors, then we could use the angle between a customer vector and a product vector as a measure of how appropriate ('similar') that product is to that customer. 
+
+For example, we might code a customer who likes the colour Red a lot, likes Blue a little, and dislikes Green as:
+
+$$\Big(5,2,0\Big)$$
+
+The angle between this customer and the product **rbg** is:
+
+$$\begin{array}{lcl} \theta &=& 
+cos^{-1}\Bigg(\displaystyle\frac{(5,2,0)\cdot(1,1,1)}{|(5,2,0)|\space|(1,1,1)|}\Bigg) \\
+&=& 0.722 \text{ radians} \\
+&=& 41.37^\circ \\
+cos(\theta) &=& 0.75 \end{array}$$
+
+```{r echo=FALSE, eval=FALSE}
+matlib::angle( c(5,2,0), c(1,1,1), degree=FALSE )
+matlib::angle( c(5,2,0), c(1,1,1), degree=TRUE )
+cos( matlib::angle( c(5,2,0), c(1,1,1), degree=FALSE ) )
+
+a <- c(5,2,0)
+b <- c(1,1,1)
+
+acos( c(a %*% b) / ( sqrt(sum(a^2)) * sqrt(sum(b^2))  ) )
+acos( sum(a*b) / ( sqrt(sum(a * a)) * sqrt(sum(b * b)) ) )
+```
+
+..whereas a product better suited to them might be **rb**, which has an angle of 
+
+$$\begin{array}{lcl} \theta &=& cos^{-1}\Bigg(\displaystyle\frac{(5,2,0)\cdot(1,1,0)}{|(5,2,0)|\space|(1,1,0)|}\Bigg) \\
+&=& 0.405 \text{ radians} \\
+&=& 23.2^\circ \\
+cos(\theta) &=& 0.92\\
+\end{array}$$
+
+between it and the customer vector
+
+```{r echo=FALSE, eval=FALSE}
+matlib::angle( c(5,2,0), c(1,1,0), degree=FALSE )
+matlib::angle( c(5,2,0), c(1,1,0), degree=TRUE )
+cos( matlib::angle( c(5,2,0), c(1,1,0), degree=FALSE ) )
+```
+
+One way to generate customer vectors like this (which have the same form as the product vectors) is to represent each customer as an aggregation of all of the products (vectors) that they have historically bought.
+
+For example, suppose now that a customer has bought the following products:
+
+Product   | Red | Blue | Green | n_bought
+----------|-----|------|-------|----------
+product_2 |   1 |   1  |   1   |    1
+product_4 |   2 |   1  |   0   |    1
+
+We can represent this customer as a vector in the product-vector space by averaging over these 2 product vectors that the customer has bought:
+
+$$\begin{array}{lcl}
+\overset{\rightarrow{}}{\text{customer}}_i &=& (\displaystyle\frac{1+2}{2} \space,\space \frac{1+1}{2} \space,\space \frac{1+0}{2})\\
+ &=& ( 1.5 \space,\space 1 \space,\space 0.5 )
+\end{array}$$
+
+Here is the customer plotted in the product-vector space:           
+```{r echo=FALSE}
+customer_vec <- ( c(1,1,1) +
+                  c(2,1,0)
+                ) / 2
+names(customer_vec) <- c("red","blue","green")
+
+L2_customer_vec <- scale_ftn( customer_vec )
+
+plot_ly( data = scaled_product_data,
+            x = ~tf_red,
+            y = ~tf_blue,
+            z = ~tf_green
+       ) %>% 
+  add_markers() %>% 
+  
+  # product 1:
+  add_trace( type = "scatter3d",
+             x = c( 0, product1_vector[1] ), 
+             y = c( 0, product1_vector[2] ),
+             z = c( 0, product1_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 1"
+            ) %>% 
+  add_trace( type = "scatter3d",
+                x = c( 0, product1_vector[1] ),
+                y = c( 0, product1_vector[2] ),
+                z = c( 0, product1_vector[3] ),
+             mode = "text",
+             text = "rggg",
+          inherit = FALSE
+            ) %>%
+
+  # product 2:
+    add_trace( type = "scatter3d",
+             x = c( 0, product2_vector[1] ), 
+             y = c( 0, product2_vector[2] ),
+             z = c( 0, product2_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 2"
+            ) %>% 
+    add_trace( type = "scatter3d",
+                x = c( 0, product2_vector[1] ), 
+                y = c( 0, product2_vector[2] ),
+                z = c( 0, product2_vector[3] ),
+             mode = "text",
+             text = "rbg",
+          inherit = FALSE
+            ) %>%
+  
+  # product 3:
+    add_trace( type = "scatter3d",
+             x = c( 0, product3_vector[1] ), 
+             y = c( 0, product3_vector[2] ),
+             z = c( 0, product3_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 3"
+            )  %>% 
+    add_trace( type = "scatter3d",
+                x = c( 0, product3_vector[1] ), 
+                y = c( 0, product3_vector[2] ),
+                z = c( 0, product3_vector[3] ),
+             mode = "text",
+             text = "bbb",
+          inherit = FALSE
+            ) %>%
+  
+  # product 4:
+    add_trace( type = "scatter3d",
+               x = c( 0, product4_vector[1] ), 
+               y = c( 0, product4_vector[2] ),
+               z = c( 0, product4_vector[3] ),
+               mode = "lines",
+               line = list(width = 4, color="black"),
+             name = "product 4"
+          )  %>% 
+    add_trace( type = "scatter3d",
+                x = c( 0, product4_vector[1] ), 
+                y = c( 0, product4_vector[2] ),
+                z = c( 0, product4_vector[3] ),
+             mode = "text",
+             text = "rrb",
+          inherit = FALSE
+            ) %>%
+  
+  # add t3h customer!
+    add_markers( x = c( 0, L2_customer_vec[1] ), 
+                y = c( 0, L2_customer_vec[2] ),
+                z = c( 0, L2_customer_vec[3] )
+              ) %>% 
+  
+    add_trace( type = "scatter3d",
+               x = c( 0, L2_customer_vec[1] ), 
+               y = c( 0, L2_customer_vec[2] ),
+               z = c( 0, L2_customer_vec[3] ),
+               mode = "lines",
+               line = list(width = 6, color="orange"),
+               name = "product 4"
+          ) %>% 
+    add_trace( type = "scatter3d",
+                  x = c( 0, L2_customer_vec[1] ), 
+                  y = c( 0, L2_customer_vec[2] ),
+                  z = c( 0, L2_customer_vec[3] ),
+               mode = "text",
+               text = "customer",
+            inherit = FALSE
+          )  %>% 
+  
+  
+  layout( scene = list( xaxis = list(title = 'RED', color='red'),
+                        yaxis = list(title = 'BLUE', color='blue'),
+                        zaxis = list(title = 'GREEN', color='green')
+                     )
+       ) %>% 
+  
+  plotly::hide_legend()
+```
+
+Notice that the customer vector likes precisely in the middle of the two products that they bought. 
+
+Suppose that this customer buys another of product_4, making their purchase history: 
+
+Product   | Red | Blue | Green 
+----------|-----|------|-------
+product_2 |   1 |   1  |   1   
+product_4 |   2 |   1  |   0         
+product_4 |   2 |   1  |   0         
+           
+The customer vector is now:
+
+$$\begin{array}{lcl}
+\overset{\rightarrow{}}{\text{customer}}_i &=& (\displaystyle\frac{1+2+2}{3} \space,\space \frac{1+1+1}{3} \space,\space \frac{1+0+0}{3})\\
+ &=& ( 1.67 \space,\space 1 \space,\space 0.33 )
+\end{array}$$
+           
+Here is the customer (under this new scenario) plotted in the customer/product euclidean space:      
+
+```{r echo=FALSE}
+customer_vec <- ( c(1,1,1) +
+                  c(2,1,0) +   
+                  c(2,1,0)
+                ) / 3
+names(customer_vec) <- c("red","blue","green")
+
+L2_customer_vec <- scale_ftn( customer_vec )
+
+plot_ly( data = scaled_product_data,
+            x = ~tf_red,
+            y = ~tf_blue,
+            z = ~tf_green
+       ) %>% 
+  add_markers() %>% 
+  
+  # product 1:
+  add_trace( type = "scatter3d",
+             x = c( 0, product1_vector[1] ), 
+             y = c( 0, product1_vector[2] ),
+             z = c( 0, product1_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 1"
+            ) %>% 
+    add_trace( type = "scatter3d",
+                x = c( 0, product1_vector[1] ),
+                y = c( 0, product1_vector[2] ),
+                z = c( 0, product1_vector[3] ),
+             mode = "text",
+             text = "rggg",
+          inherit = FALSE
+            ) %>%
+  
+  # product 2:
+    add_trace( type = "scatter3d",
+             x = c( 0, product2_vector[1] ), 
+             y = c( 0, product2_vector[2] ),
+             z = c( 0, product2_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 2"
+            ) %>% 
+    add_trace( type = "scatter3d",
+                x = c( 0, product2_vector[1] ),
+                y = c( 0, product2_vector[2] ),
+                z = c( 0, product2_vector[3] ),
+             mode = "text",
+             text = "rbg",
+          inherit = FALSE
+            ) %>%
+  
+  # product 3:
+    add_trace( type = "scatter3d",
+             x = c( 0, product3_vector[1] ), 
+             y = c( 0, product3_vector[2] ),
+             z = c( 0, product3_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 3"
+            )  %>% 
+    add_trace( type = "scatter3d",
+                x = c( 0, product3_vector[1] ),
+                y = c( 0, product3_vector[2] ),
+                z = c( 0, product3_vector[3] ),
+             mode = "text",
+             text = "bbb",
+          inherit = FALSE
+            ) %>%
+  
+  # product 4:
+    add_trace( type = "scatter3d",
+               x = c( 0, product4_vector[1] ), 
+               y = c( 0, product4_vector[2] ),
+               z = c( 0, product4_vector[3] ),
+               mode = "lines",
+               line = list(width = 4, color="black"),
+             name = "product 4"
+          )  %>% 
+    add_trace( type = "scatter3d",
+                x = c( 0, product4_vector[1] ),
+                y = c( 0, product4_vector[2] ),
+                z = c( 0, product4_vector[3] ),
+             mode = "text",
+             text = "rrb",
+          inherit = FALSE
+            ) %>%
+  
+  # add t3h customer!
+    add_markers( x = c( 0, L2_customer_vec[1] ), 
+                y = c( 0, L2_customer_vec[2] ),
+                z = c( 0, L2_customer_vec[3] )
+              ) %>% 
+    add_trace( type = "scatter3d",
+               x = c( 0, L2_customer_vec[1] ), 
+               y = c( 0, L2_customer_vec[2] ),
+               z = c( 0, L2_customer_vec[3] ),
+               mode = "lines",
+               line = list(width = 6, color="orange"),
+             name = "product 4"
+          )  %>% 
+    add_trace( type = "scatter3d",
+                x = c( 0, L2_customer_vec[1] ),
+                y = c( 0, L2_customer_vec[2] ),
+                z = c( 0, L2_customer_vec[3] ),
+             mode = "text",
+             text = "customer",
+          inherit = FALSE
+            ) %>%
+  
+  
+  layout( scene = list( xaxis = list(title = 'RED', color='red'),
+                        yaxis = list(title = 'BLUE', color='blue'),
+                        zaxis = list(title = 'GREEN', color='green')
+                     )
+       ) %>% 
+  
+  plotly::hide_legend()
+```
+
+Notice that by buying this product (**rrb**), this customer (vector) has shifted closer to that product (vector).  
+
+The angle (in degrees) between this customer vector and each of the product vectors is:
+
+```{r echo=FALSE}
+customer_to_product_angles <- vector( "list", length=4 ) 
+product_desc_list <- c("rggg", "rbg", "bbb", "rrb")
+names(customer_to_product_angles) <- 
+  paste("customer angle to product vector", 1:4, ": (", product_desc_list, ")", sep="")
+
+rad2deg <- function(rad) {(rad * 180) / (pi)}    # https://stackoverflow.com/questions/32370485/convert-radians-to-degree-degree-to-radians
+
+for( i in 1:4 ){
+  
+  product_vec_i <- scaled_product_data[i, c("tf_red", "tf_blue", "tf_green")] %>% unlist()
+  
+  customer_to_product_angles[[i]] <-
+    acos(  product_vec_i %*% L2_customer_vec  )
+
+}
+
+lapply( customer_to_product_angles,
+        rad2deg
+      )
+```
+
+The customer, naturally, is closest to the products that they actually bought.  
+
+Suppose now that we want to recommend one of the following 2 products to this customer:
+
+Product  |Red|Blue|Green|angle $\theta$ between customer & product vectors|$cos(\theta)$
+---------|---|----|-----|-------------------------------------------------|-------------
+product_5|0  |  1 | 1   | $61^\circ$                                      | 0.4780914
+product_6|1  |  1 | 0   | $17^\circ$                                      | 0.9561829
+   
+Because the angle between the customer vector and the *product_6* vector is smaller than the angle between the customer vector and *product_5*, we'd recommend *product_6* to them. We could have also made this decision based on $cos(\theta)$ being larger.
+
+As a reminder, the customer vector is $\Big(1.67, 1, 0.33\Big)$.
+
+```{r echo=FALSE}
+product5_vector_bg <- c(0,1,1) %>% scale_ftn(.)
+product6_vector_rb <- c(1,1,0) %>% scale_ftn(.)
+names(product5_vector_bg) <- names(product1_vector)
+names(product6_vector_rb) <- names(product1_vector)
+
+plot_ly( data = scaled_product_data,
+            x = ~tf_red,
+            y = ~tf_blue,
+            z = ~tf_green
+       ) %>% 
+  add_markers() %>% 
+  
+  # product 1:
+  add_trace( type = "scatter3d",
+             x = c( 0, product1_vector[1] ), 
+             y = c( 0, product1_vector[2] ),
+             z = c( 0, product1_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 1"
+            ) %>% 
+    add_trace( type = "scatter3d",
+                x = c( 0, product1_vector[1] ),
+                y = c( 0, product1_vector[2] ),
+                z = c( 0, product1_vector[3] ),
+             mode = "text",
+             text = "rggg",
+          inherit = FALSE
+            ) %>%
+  
+  # product 2:
+    add_trace( type = "scatter3d",
+             x = c( 0, product2_vector[1] ), 
+             y = c( 0, product2_vector[2] ),
+             z = c( 0, product2_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 2"
+            ) %>% 
+    add_trace( type = "scatter3d",
+                x = c( 0, product2_vector[1] ),
+                y = c( 0, product2_vector[2] ),
+                z = c( 0, product2_vector[3] ),
+             mode = "text",
+             text = "rbg",
+          inherit = FALSE
+            ) %>%
+  
+  # product 3:
+    add_trace( type = "scatter3d",
+             x = c( 0, product3_vector[1] ), 
+             y = c( 0, product3_vector[2] ),
+             z = c( 0, product3_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 3"
+            )  %>% 
+    add_trace( type = "scatter3d",
+                x = c( 0, product3_vector[1] ),
+                y = c( 0, product3_vector[2] ),
+                z = c( 0, product3_vector[3] ),
+             mode = "text",
+             text = "bbb",
+          inherit = FALSE
+            ) %>%
+  
+  # product 4:
+    add_trace( type = "scatter3d",
+               x = c( 0, product4_vector[1] ), 
+               y = c( 0, product4_vector[2] ),
+               z = c( 0, product4_vector[3] ),
+               mode = "lines",
+               line = list(width = 4, color="black"),
+             name = "product 4"
+          )  %>% 
+    add_trace( type = "scatter3d",
+                x = c( 0, product4_vector[1] ),
+                y = c( 0, product4_vector[2] ),
+                z = c( 0, product4_vector[3] ),
+             mode = "text",
+             text = "rrb",
+          inherit = FALSE
+            ) %>%
+  
+  # add t3h customer!
+    add_markers( x = c( 0, L2_customer_vec[1] ), 
+                y = c( 0, L2_customer_vec[2] ),
+                z = c( 0, L2_customer_vec[3] )
+              ) %>% 
+    add_trace( type = "scatter3d",
+               x = c( 0, L2_customer_vec[1] ), 
+               y = c( 0, L2_customer_vec[2] ),
+               z = c( 0, L2_customer_vec[3] ),
+               mode = "lines",
+               line = list(width = 6, color="orange"),
+             name = "product 4"
+          )  %>% 
+    add_trace( type = "scatter3d",
+                x = c( 0, L2_customer_vec[1] ),
+                y = c( 0, L2_customer_vec[2] ),
+                z = c( 0, L2_customer_vec[3] ),
+             mode = "text",
+             text = "customer",
+          inherit = FALSE
+            ) %>%
+  
+    # product 5:
+    add_trace( type = "scatter3d",
+             x = c( 0, product5_vector_bg[1] ), 
+             y = c( 0, product5_vector_bg[2] ),
+             z = c( 0, product5_vector_bg[3] ),
+             mode = "lines",
+             line = list(width = 4, color="pink"),
+             name = "product 5"
+            ) %>% 
+    add_trace( type = "scatter3d",
+                x = c( 0, product5_vector_bg[1] ),
+                y = c( 0, product5_vector_bg[2] ),
+                z = c( 0, product5_vector_bg[3] ),
+             mode = "text",
+             text = "product 5: BG",
+          inherit = FALSE,
+          textfont = list(color="pink")
+            ) %>%
+  
+      # product 6:
+    add_trace( type = "scatter3d",
+             x = c( 0, product6_vector_rb[1] ), 
+             y = c( 0, product6_vector_rb[2] ),
+             z = c( 0, product6_vector_rb[3] ),
+             mode = "lines",
+             line = list(width = 4, color="pink"),
+             name = "product 6"
+            ) %>% 
+    add_trace( type = "scatter3d",
+                x = c( 0, product6_vector_rb[1] ),
+                y = c( 0, product6_vector_rb[2] ),
+                z = c( 0, product6_vector_rb[3] ),
+             mode = "text",
+             text = "product 6: RB",
+          inherit = FALSE,
+          textfont = list(color="pink")
+            ) %>%
+  
+  layout( scene = list( xaxis = list(title = 'RED', color='red'),
+                        yaxis = list(title = 'BLUE', color='blue'),
+                        zaxis = list(title = 'GREEN', color='green')
+                     )
+       ) %>% 
+  
+  plotly::hide_legend()
+```
+
+# Inverse Document Frequency (I.D.F.)
+
+If some product attributes are more common than others (e.g. 80% of products have colour 'black' in them), then we would like to place less weight on these attributes in the cosine similarity calculation. For example, if a customer has bought lots of products with the word *black* in their product description, then the customer should not be described as having a preference for the colour *black* if the word *black* appears in almost all of the products.     
+
+A commonly heuristic used to combat this behaviour is *Inverse Document Frequency (IDF)*. 
+
+*IDF* doesn't have a single definition, but many variants (see examples at  https://en.wikipedia.org/wiki/Tf-idf).
+
+The definition of *IDF* used by the python library *scikit-learn* (when using the default settings) is
+
+$$\begin{array}{lcl} 
+idf(w) &=& log\Bigg(\displaystyle\frac{1+n}{1+df(w)}\Bigg) \\
+w &=& \text{particular word/attribute under consideration} \\
+n &=& \text{total number of products} \\
+df(w) &=& \text{total number of products containing this word/attribute}
+\end{array}$$
+
+[https://scikit-learn.org/stable/modules/feature_extraction.html#text-feature-extraction]
+
+*IDF* upweights words that are rare and downweights words that are common.
+
+Here is how this *IDF* function looks for a database of 1000 different unique products:
+```{r echo=FALSE}
+n <- 1000
+tibble( df_w = 1:1000 ) %>% 
+  mutate( idf_w = log( (1+n) / (1+df_w) ) ) %>% 
+  ggplot( data = .,
+          aes( x = df_w,
+               y = idf_w
+             )
+        ) +
+  geom_point() +
+  labs( x = "DF(w): number of products containing this word",
+        y = "IDF(w)",
+        title = "IDF function for a list of n=1000 products"
+      )
+```
+
+Here is how the inclusion of *IDF* affects the product vectors in our example:
+
+```{r echo=FALSE}
+product_data %>% 
+  select(-product_desc_short) %>% 
+  kable()
+```
+
+Each element (word/attribute) of a product vector is now the term frequency (number of times a word/attribute appears in this product) multiplied by the *IDF* weighting for this word/attribute (scaling for word rarity). 
+
+Here are the *TF-IDF*-transformed product vectors (all vectors are normalised to have L2 unit length):
+
+```{r echo=FALSE}
+product1_vector <- product_data[1,] %>% 
+                      select(tf_red, tf_blue, tf_green) %>% 
+                      unlist() %>% 
+                      scale_ftn()
+
+product1_vector_tf_idf <- product_data[1,] %>% 
+                          select(red_tf_idf, blue_tf_idf, green_tf_idf) %>% 
+                          unlist() %>% 
+                          scale_ftn()
+
+product2_vector <- product_data[2,] %>% 
+                      select(tf_red, tf_blue, tf_green) %>% 
+                      unlist() %>% 
+                      scale_ftn() 
+
+product2_vector_tf_idf <- product_data[2,] %>% 
+                          select(red_tf_idf, blue_tf_idf, green_tf_idf) %>% 
+                          unlist() %>% 
+                          scale_ftn()
+
+product3_vector <- product_data[3,] %>% 
+                      select(tf_red, tf_blue, tf_green) %>% 
+                      unlist() %>% 
+                      scale_ftn() 
+
+product3_vector_tf_idf <- product_data[3,] %>% 
+                          select(red_tf_idf, blue_tf_idf, green_tf_idf) %>% 
+                          unlist() %>% 
+                          scale_ftn()
+
+product4_vector <- product_data[4,] %>% 
+                      select(tf_red, tf_blue, tf_green) %>% 
+                      unlist() %>% 
+                      scale_ftn()
+
+product4_vector_tf_idf <- product_data[4,] %>% 
+                          select(red_tf_idf, blue_tf_idf, green_tf_idf) %>% 
+                          unlist() %>% 
+                          scale_ftn()
+
+scaled_product_data <- 
+    bind_cols( product_id = product_data$product_id
+               ,
+                   apply(   X = product_data %>% select(tf_red, tf_blue, tf_green),
+                          MAR = 1,    # apply function to every row
+                          FUN = function(row_i){ scale_ftn(row_i) }  
+                        ) %>% 
+                   t() %>% 
+                   as_tibble()
+             )
+
+plot_ly( data = scaled_product_data,
+            x = ~tf_red,
+            y = ~tf_blue,
+            z = ~tf_green
+       ) %>% 
+  add_markers() %>% 
+  
+  # product 1:
+  add_trace( type = "scatter3d",
+             x = c( 0, product1_vector[1] ), 
+             y = c( 0, product1_vector[2] ),
+             z = c( 0, product1_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 1"
+            ) %>%
+  add_trace( type = "scatter3d",
+             x = c( 0, product1_vector[1] ), 
+             y = c( 0, product1_vector[2] ),
+             z = c( 0, product1_vector[3] ),
+             mode = "text",
+             text = "rggg",
+             inherit = FALSE
+            ) %>%
+  
+  # tf idf product 1:
+  add_trace( type = "scatter3d",
+             x = c( 0, product1_vector_tf_idf[1] ), 
+             y = c( 0, product1_vector_tf_idf[2] ),
+             z = c( 0, product1_vector_tf_idf[3] ),
+             mode = "lines",
+             line = list(width = 4, color="grey"),
+             name = "product 1 tfidf"
+            ) %>%
+  add_trace( type = "scatter3d",
+             x = c( 0, product1_vector_tf_idf[1] ), 
+             y = c( 0, product1_vector_tf_idf[2] ),
+             z = c( 0, product1_vector_tf_idf[3] ),
+             mode = "text",
+             text = "[rggg TF-IDF]",
+             inherit = FALSE,
+             color = "red"
+            ) %>%
+  
+  
+  # product 2:
+    add_trace( type = "scatter3d",
+             x = c( 0, product2_vector[1] ), 
+             y = c( 0, product2_vector[2] ),
+             z = c( 0, product2_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 2"
+            ) %>% 
+  add_trace( type = "scatter3d",
+             x = c( 0, product2_vector[1] ), 
+             y = c( 0, product2_vector[2] ),
+             z = c( 0, product2_vector[3] ),
+             mode = "text",
+             text = "rbg",
+             inherit = FALSE
+            ) %>%
+  
+  # tfidf prod 2:
+  add_trace( type = "scatter3d",
+             x = c( 0, product2_vector_tf_idf[1] ), 
+             y = c( 0, product2_vector_tf_idf[2] ),
+             z = c( 0, product2_vector_tf_idf[3] ),
+             mode = "lines",
+             line = list(width = 4, color="grey"),
+             name = "product 2 tfidf"
+            ) %>%
+  add_trace( type = "scatter3d",
+             x = c( 0, product2_vector_tf_idf[1] ), 
+             y = c( 0, product2_vector_tf_idf[2] ),
+             z = c( 0, product2_vector_tf_idf[3] ),
+             mode = "text",
+             text = "[rbg TF-IDF]",
+             inherit = FALSE,
+             color = "red"
+            ) %>%
+  
+  # product 3:
+    add_trace( type = "scatter3d",
+             x = c( 0, product3_vector[1] ), 
+             y = c( 0, product3_vector[2] ),
+             z = c( 0, product3_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="black"),
+             name = "product 3"
+            )  %>%
+  add_trace( type = "scatter3d",
+             x = c( 0, product3_vector[1] ), 
+             y = c( 0, product3_vector[2] ),
+             z = c( 0, product3_vector[3] ),
+             mode = "text",
+             text = "bbb",
+             inherit = FALSE
+            ) %>%
+  
+  # tf idf prod 3:
+  add_trace( type = "scatter3d",
+             x = c( 0, product3_vector_tf_idf[1] ), 
+             y = c( 0, product3_vector_tf_idf[2] ),
+             z = c( 0, product3_vector_tf_idf[3] ),
+             mode = "lines",
+             line = list(width = 4, color="grey"),
+             name = "product 3 tfidf"
+            ) %>%
+  add_trace( type = "scatter3d",
+             x = c( 0, product3_vector_tf_idf[1] ), 
+             y = c( 0, product3_vector_tf_idf[2] ),
+             z = c( 0, product3_vector_tf_idf[3] ),
+             mode = "text",
+             text = "[bbb TF-IDF]",
+             inherit = FALSE,
+             color = "red"
+            ) %>%
+  
+  # product 4:
+    add_trace( type = "scatter3d",
+               x = c( 0, product4_vector[1] ), 
+               y = c( 0, product4_vector[2] ),
+               z = c( 0, product4_vector[3] ),
+               mode = "lines",
+               line = list(width = 4, color="black"),
+             name = "product 4"
+          )  %>%
+  add_trace( type = "scatter3d",
+             x = c( 0, product4_vector[1] ), 
+             y = c( 0, product4_vector[2] ),
+             z = c( 0, product4_vector[3] ),
+             mode = "text",
+             text = "rrb",
+             inherit = FALSE
+            ) %>%
+  
+  # tf idf product 4:
+  add_trace( type = "scatter3d",
+             x = c( 0, product4_vector_tf_idf[1] ), 
+             y = c( 0, product4_vector_tf_idf[2] ),
+             z = c( 0, product4_vector_tf_idf[3] ),
+             mode = "lines",
+             line = list(width = 4, color="grey"),
+             name = "product 4 tfidf"
+            ) %>%
+  add_trace( type = "scatter3d",
+             x = c( 0, product4_vector_tf_idf[1] ), 
+             y = c( 0, product4_vector_tf_idf[2] ),
+             z = c( 0, product4_vector_tf_idf[3] ),
+             mode = "text",
+             text = "[rrb TF-IDF]",
+             inherit = FALSE,
+             color = "red"
+            ) %>%
+  
+  layout( scene = list( xaxis = list(title = 'RED', color='red'),
+                        yaxis = list(title = 'BLUE', color='blue'),
+                        zaxis = list(title = 'GREEN', color='green')
+                     )
+       ) %>% 
+  plotly::hide_legend()
+```
+
+Notice that the influence of the word *green* is stronger than the influence of the words *blue* or *red*. For example, the product "RedBlueGreen" has a smaller angle with the *green* axis than it does with the *blue* or *red* axes. *Green*, being a more rare attribute, has been upweighted by the *TF-IDF* relative to the other attributes.
+
+# Further Reading
+* **Statistical Methods for Recommender Systems**. Deepak K. AGARWAL, Bee-Chung CHEN. 2016.

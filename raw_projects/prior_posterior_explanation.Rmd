@@ -1,0 +1,108 @@
+---
+title: "R Notebook"
+output: 
+  html_notebook:
+    code: hide
+---
+
+```{r load_pkgs}
+library(dplyr)
+library(knitr)
+```
+
+# Bayes Theorem for densities
+
+$$f\Big(\theta|x\Big) \quad = \quad \frac{p\Big(x|\theta\Big)f\Big(\theta\Big)}{p\Big(x\Big)} \quad = \quad \frac{p\Big(x|\theta\Big)f\Big(\theta\Big)}{\int_\theta \space p\Big(x|\theta\Big)f\Big(\theta\Big)d\theta}$$
+
+# Example 1 (Gamma prior, Poisson likelihood, Gamma posterior)
+If the likelihood function $p\Big(x|\lambda\Big)$ is a product of **Poisson** distributions with rate $\lambda$:
+$$p\Big(x|\lambda\Big) \quad = \quad \prod_{i=1}^n \frac{\lambda^{x_i}e^{-\lambda}}{x_i!} \hspace{10mm} x\in\{0,1,2,3,4,....\}$$
+
+and the prior distribution $f\Big(\lambda\Big)$ of $\lambda$ is a Gamma distribution with shape $\alpha$ and rate $\beta$:
+
+$$f\Big(\lambda\Big)\quad=\quad \frac{\beta^{\alpha}}{\Gamma\Big(\alpha\Big)}\lambda^{\alpha-1}e^{-\beta\lambda}$$
+
+then the posterior distribution $f\Big(\lambda|x\Big)$ is also a Gamma distribution, this one with shape $\alpha_{\text{posterior}}=\alpha+\sum_{i=1}^n x_i$ and rate $\beta_{\text{posterior}}=\beta+n$:
+
+$$\begin{array}{lcl} f\Big(\lambda|x\Big) &=& 
+\frac{p\Big(x|\lambda\Big)f\Big(\lambda\Big)}{\int_\lambda \space p\Big(x|\lambda\Big)f\Big(\lambda\Big)d\lambda} 
+&=&
+\frac{\Big(\prod_{i=1}^n \frac{\lambda^{x_i}e^{-\lambda}}{x_i!}\Big) \space \space \frac{\beta^{\alpha}}{\Gamma\Big(\alpha\Big)}\lambda^{\alpha-1}e^{-\beta\lambda}}{\int_{\lambda=0}^{\lambda=\infty} d\lambda}
+&=&
+\frac{\Big(\beta+n\Big)^{(\sum x_i)+\alpha}}{\Gamma\Big((\sum x_i)+\alpha\Big)} \lambda^{(\sum x_i)+\alpha-1}e^{-(\beta+n)\lambda}
+\end{array}$$
+
+We can see this result via simulation: 
+
+If we draw draw 1 million random $\lambda$ values (independent draws) from the prior distribution $f\Big(\lambda\Big)=\text{Gamma}\Big(\alpha=8, \beta=3\Big)$:
+
+```{r plot_the_prior}
+# choose parameters of prior
+alpha <- 8
+beta <- 3
+lambda_seq <- seq(0,10,0.001)
+prior <- function(x){ dgamma(x, shape=alpha, rate=beta) }
+plot( y = prior(lambda_seq), 
+      x = lambda_seq, 
+      xlab=expression(lambda), 
+      ylab=expression(f(lambda)), 
+      type="l",
+      main=bquote("f("*lambda*") - prior distribution of "*lambda) 
+    )
+
+# simulate 1 million lambda values from the prior:
+lambda_sim <- rgamma(2e6L, shape=alpha, rate=beta )
+```
+
+Here is the histogram of the simulated $\lambda$ values:
+```{r hist_drawn_from_prior}
+hist( lambda_sim, breaks=200 )
+```
+
+Then, for each 1 of these simulated rates, we generate a dataset of 5 random values from a Poisson distribution with that rate.
+
+Here are the first 10 rows:
+
+```{r gen_pois}
+# for each simulated lambda value, simulate a dataset of size 4 from a Poisson distribution
+sim_x_data <- 
+    lapply( lambda_sim,
+            function(l){ rpois(4, lambda=l) }
+          ) %>% 
+      do.call(rbind, .) 
+
+sim_x_data <- cbind( lambda_sim, sim_x_data )
+
+colnames(sim_x_data) <- c( "rate", paste("X", 1:4, sep="" ) )
+sim_x_data <- as_tibble(sim_x_data)
+
+head(sim_x_data, 10) %>% kable()
+```
+
+Now, if we isolate only the datasets with the exact values:
+
+$X_1$ | $X_2$ | $X_3$ | $X_4$
+------|-------|-------|--------
+  1   |   2   |   1   |   3
+
+Then, the posterior distribution of rates $\lambda$ over these datasets is the distribution 
+
+$$\text{Gamma}\Big(\alpha_{\text{posterior}}=\alpha_{\text{prior}}+\sum_{i=1}^4 x_i \quad , \quad \beta_{\text{posterior}}=\beta_{\text{prior}}+n\Big) \quad = \quad \text{Gamma}\Big(8+(1+2+1+3) \quad , \quad 3+4 \Big)$$
+
+```{r show_by_sim}
+# so, let's look at all of the datasets where x1=3,x2=1,x3=2
+condition_x_data <- sim_x_data %>% filter(X1==1, X2==2, X3==1, X4==3 )
+# condition_x_data
+
+hist( condition_x_data$rate, breaks=40, freq=FALSE, main=bquote("Posterior Distribution of "*lambda*" given X1=1, x2=2, X3=1, X4=3") )
+curve( dgamma( x, shape=alpha+1+2+1+3, rate=(beta+4) ), col=2, add=TRUE )
+```
+
+# Example 2 (Beta prior, Binomial likelihood, beta posterior)
+Prior is a beta distribution with shape parameters $\alpha$ and $\beta$:
+
+$$f\Big(p\Big) \quad = \quad \frac{1}{\text{Beta}\Big(\alpha,\beta\Big)}x^{\alpha-1}(1-x)^{\beta-1}$$
+
+Likelihood function is a product of $N$ independent binomial distributions:
+
+$$p\Big(x|p\Big) \quad = \quad \prod_{i=1}^N \binom{n}{p}p^{x_i}(1-p)^{n-x_i}$$

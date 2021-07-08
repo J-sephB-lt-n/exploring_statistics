@@ -1,0 +1,254 @@
+---
+title: "Gradient Descent"
+author: "Joe Bolton"
+coverImage: //d1u9biwaxjngwg.cloudfront.net/cover-image-showcase/city.jpg
+date: '2018-08-22'
+output:
+  html_document:
+    df_print: paged
+metaAlignment: center
+coverMeta: out
+tags:
+- gradient descent
+- optimisation
+- machine learning
+- gradient
+- derivative
+- model
+- estimation
+thumbnailImage: //d1u9biwaxjngwg.cloudfront.net/cover-image-showcase/city-750.jpg
+thumbnailImagePosition: left
+---
+
+A simple introduction to gradient descent for function optimisation. 
+
+<!--more-->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Gradient descent is a technique used to find the input values which minimise a function with multiple input variables, used frequently in many machine learning applications (such as model parameter estimation). 
+
+I introduce the basic technique here with 2 simple examples.
+
+# example 1 
+Suppose that we want to find the values of $x$ and $y$ that minimise the function
+
+$$L(x,y) \quad = \quad x^2 - 6x + y^2 - 10y + 30$$
+
+The values which minimise this simple function can be found analytically (they are  $(x,y) = (3,5)$), but we will find these values using gradient descent. The value in gradient descent is that it can be used to minimise more complicated functions that are difficult to find closed form solutions to, or that do not have a closed form solution.
+
+Gradient descent is an iterative algorithm. It performs many steps, at each step moving a small amount toward a solution. 
+
+The gradient of the function $L$ that we want to minimise is 
+
+$$\nabla L(x,y) \quad = \quad \begin{pmatrix} \frac{\partial L}{\partial x} \\ \frac{\partial L}{\partial y} \\ \end{pmatrix} \quad = \quad \begin{pmatrix} 2x - 6 \\ 2y - 10 \end{pmatrix}$$
+
+Gradient descent works like this:
+
+We start with 2 guesses for $x$ and $y$. Let's choose $x=100$ and $y=-100$. 
+
+The value of the function at this point ${x,y}$ is 
+
+$$L(100,-100) \quad = \quad 20430 $$
+
+We calculate the gradient of the function at this point: 
+
+$$\nabla L(100,-100) \quad = \quad \begin{pmatrix} 194 \\ -210 \\ \end{pmatrix}$$
+
+What this gradient means is that at the exact point $(x,y)=(100,-100)$, the rate at which $L(x,y)$ changes is to increase in value by 194 for every 1 unit increase in $x$. Similarly, at this exact point, a 1 unit increase in $y$ would decrease the function -210.
+
+Note, however, that if we were to move 100 units in the $x$ direction (i.e. increase $x$ by 100), we would not be guaranteed to increase $L$ by 19400 since as we change $x$, we pass through points with different gradients (in fact, $L$ increases by 29400 for a 100 increase in $x$). But, for miniscule changes in $x$ and $y$ around a point, the gradient $\nabla L$ at that point is a good approximation of how the function will change in that small region.
+
+For example, if we start at the point $\{x,y\}=\{100,-100\}$ and increase $x$ by 0.001 to 100.001, then using $\nabla L$, we expect the function $L$ to increase approximately by 0.194. In fact, it increases by 0.194001 ($L(100,-100)=20430$ to $L(100.001,-100)=20430.194001$). 
+
+If we make bigger changes in $x$, then we get less accuracy using the gradient: increasing $x$ by 0.01, we'd expect $L$ to increase by 1.94, and it increases by 1.9401. Increasing $x$ by 1 increases $L$ by 195 rather than 194.
+
+How good an approximation the gradient achieves at a specific point is entirely dependent on how the function behaves around that point, but a small enough increment should always give some indication of the behaviour of the function within a small region.
+
+So, for gradient descent, what we do is to choose a "step size"/learning rate $\gamma$. A very small value of $\gamma$ can take very long to converge on a solution whereas a large $\gamma$ can cause us to move quickly toward a solution but possibly miss (leap over/overshoot) it. This is a parameter to be tuned (chosen by cross validation) when we fit a model.    
+
+In this example, we choose a learning rate $\gamma = 0.1$
+
+The starting point for the gradient descent algorithm is the point we chose 
+
+$$a_0 = (x,y)= \begin{pmatrix} 100 \\ -100 \\ \end{pmatrix}$$
+
+The gradient at this point is 
+
+$$\nabla L(a_0) = \nabla L(100,-100) = \begin{pmatrix} 194 \\ -210 \\ \end{pmatrix}$$
+
+Our next point $a_1$ is chosen as 
+
+$$a_1 = a_0 - \gamma \nabla L(a_0) = \begin{pmatrix} 100 \\ -100 \end{pmatrix} - 0.1 \begin{pmatrix} 194 \\ -210 \\ \end{pmatrix} = \begin{pmatrix} 80.6 \\ -79 \\ \end{pmatrix}$$
+
+What we are doing is changing $x$ and $y$ by a small amount (0.1) in the direction which the gradient tells us will reduce the value of $L$. 
+
+Notice that this is closer to the solution $(x,y)=(3,5)$ 
+
+We iterate again: 
+
+$$a_2 = a_1 - \gamma \nabla L(a_1)  = \begin{pmatrix} 80.6 \\ -79 \\ \end{pmatrix} - 0.1 \begin{pmatrix} 155.2 \\ -168 \\ \end{pmatrix} = \begin{pmatrix} 65.08 \\ -62.2 \end{pmatrix} $$
+
+We continue to iterate using this algorithm $a_{n+1} = a_n - \gamma \nabla L(a_n)$ until we reach a certain number of steps, or we meet some stopping criteria which we have specified. 
+
+In this case, we converge upon the exact solution $(x,y)=(3,5)$
+
+Here is an implementation of this in R:
+
+```{r introductory_grad_descent}
+
+L <- function(x,y){ x^2 - 6*x + y^2 - 10*y + 30 }
+grad_L <- function(x,y){ c(2*x-6, 2*y-10) } 
+gamma <- 0.1
+iteration <- 0
+xy <- c(100,-100)    # starting values of x and y
+numsteps <- 100
+
+for( i in 0:numsteps){
+    
+    print( 
+      paste0("iteration ", iteration, 
+             "  x=", round( xy[1], 5 ), 
+             "  y=", round( xy[2], 5 ), 
+             "  L(x,y)=", round( L(xy[1],xy[2]), 5),
+             "  gradient.L(x,y)=", paste(   round( grad_L(xy[1],xy[2]), 5 ), collapse="," )  ) 
+    )
+    
+    iteration <- iteration + 1
+    xy <- xy - gamma * grad_L( x = xy[1],     # update our point 
+                             y = xy[2]
+                            ) 
+}
+
+
+```
+
+The algorithm will work with different starting values for $x$ and $y$ (I tried a whole lot of different ones and it didn't seem to make any difference).
+
+# Example 2: using gradient descent to choose the parameters of a simple linear model
+
+Suppose that we want to fit a line to the following data: 
+
+```{r plot_data, echo=FALSE}
+
+set.seed(8020) 
+
+x <- runif( n=100, 0, 100)
+y <- 50 - 3*x + rnorm(100, 0, 70) + 200
+
+plot( y ~ x )
+
+```
+
+We can find a line of best fit to this data by fitting the simple linear regression model
+
+$$y_i \quad = \quad \beta_0 + \beta_1 x_i + \epsilon_i$$
+
+Where we choose the model parameters $\beta_0$ and $\beta_1$ as those which minimise the cost function 
+
+$$L(x,y,\beta_0,\beta_1) \quad = \quad \sum_{i=1}^n \Big( y_i - (\beta_0+\beta_1x_i)\Big)^2 \hspace{10mm} \text{...i.e. the sum of squared model errors (OLS)}$$
+
+The gradient of this cost function is 
+
+$$\nabla{L} \quad = \quad \begin{pmatrix} \frac{\partial L}{\partial \beta_0} \\ \frac{\partial L}{\partial \beta_1} \end{pmatrix} \quad = \quad \begin{pmatrix} \sum_{i=1}^n -2(y-\beta_0-\beta_1x_i)\\ \sum_{i=1}^n -2x_i(y-\beta_0-\beta_1x_i) \end{pmatrix}$$
+
+This model has a known closed form solution (which is $\underline{\beta}=(X^TX)^{-1}X^Ty$), but we will try to minimise $L$ using simple gradient descent. 
+
+I had to play around a bit with the learning rate for this application in order to make it converge: 
+
+Let's use the starting values:
+
+$$\text{intercept}: \quad \beta_0 = 350 $$
+$$\text{slope}: \quad \beta_1 = -1 $$
+
+I choose the learning rate $$\gamma \quad = \quad 0.000002$$
+
+The algorithm is run for 100,000 steps/iterations
+
+Here is the implementation in R
+
+```{r OLS_grad_desc}
+
+# the starting parameters
+params <- list( b0=350, b1=-1 ) 
+
+# define the cost function:
+L <- function( x,y,params ){ 
+  
+      y_hat <- params$b0 + params$b1*x
+      
+      L <- sum( 
+                (y-y_hat)^2 
+      )
+      
+      return( L )
+      }
+
+# define the gradient of the cost function:
+grad_L <- function( x,y,params){ 
+  
+  c(  sum(   -2*(y - params$b0 - params$b1*x)     ),   # derivative in terms of beta_0
+      sum( -2*x*(y - params$b0 - params$b1*x)     )    # derivative in terms of beta_1
+    )
+  }
+
+gamma <- 0.000002      # define learning rate
+iteration <- 0         # starting step/iteration number
+numsteps <- 1e5L       # specify number of steps
+
+for( i in 0:numsteps){
+    
+    if( i%%1000 == 0 ){          # print every 1000th interation/step: 
+         print( 
+           paste0("iteration ", iteration, 
+                  "  intercept=", round( params$b0, 5 ), 
+                  "  slope=", round( params$b1, 5 ), 
+                  "  L(b0,b1)=", round( L(x,y,params), 5),
+                  "  grad.L(b0,b1)=", paste(   round( grad_L(x,y,params), 5 ), collapse="," )  ) 
+         ) 
+    }
+    
+    iteration <- iteration + 1
+    
+    # update our parameter estimates:
+    next_point <- c(params$b0, params$b1) - gamma * grad_L(x,y,params)     
+    params$b0 <- next_point[1]
+    params$b1 <- next_point[2]
+                              
+}
+
+```
+
+The final parameter estimates from the gradient descent are:  
+
+```{r final_params}
+params$b0  # intercept 
+params$b1  # slope
+```
+
+The true values which minimise the cost function are:
+
+```{r true_OLS_params}
+coef( lm( y ~ x) )
+```
+
+The fitted line to the data using our gradient descent estimates is: 
+
+```{r plot_final_model}
+
+fitvals <- params$b0 + params$b1*x
+plot( y ~ x )
+lines( fitvals ~ x )
+
+```
+
+We can add the OLS line too (the true line of best fit in red):
+
+```{r best_fit_line}
+plot( y ~ x )
+lines( fitvals ~ x )
+abline( lm(y~x), col=2, lty = 3 )
+```
+

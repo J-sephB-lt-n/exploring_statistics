@@ -1,0 +1,314 @@
+---
+title: "Logistic Regression"
+author: "Joe"
+date: "15 October 2018"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(knitr)      # for kable()
+```
+
+Suppose that we have observed 10,000 individuals in the course of a study. We want to see if we can use their
+
+* age
+
+* number of previous convictions, prior to study.
+
+* employment status (EMPLOYED or UNEMPLOYED)
+
+* gender (MALE of FEMALE)
+
+to predict whether each individual committed a crime in the study period or not. We also want to try to measure/infer how each of these features (variables) affect the probability of someone committing a crime in general. 
+
+Let's simulate this data: 
+
+```{r simulate_data}
+set.seed(8008569)
+
+sample_size <- 1000
+
+test_dat <- 
+  tibble( age = ceiling( runif(sample_size, 18, 25) ),
+              previous_convictions = sample( 0:4, 
+                                             size=sample_size, 
+                                             replace=TRUE,
+                                             prob = c(0.6, 0.2, 0.1, 0.05, 0.05)),
+              employed = sample( c(1,0), size=sample_size, replace=TRUE ),
+              gender = sample( c(1,0), size=sample_size, replace=TRUE )
+            )
+
+coef_effects <- list( base = 0.05, 
+                      age = -0.001,
+                      previous_convictions = 0.02,
+                      employed = -0.15,
+                      gender = 0.05
+                    ) 
+
+test_dat_add_prob_col <- 
+  test_dat %>%
+      mutate( crime_prob = 0.25 + 
+                           age * coef_effects$age +
+                           previous_convictions * coef_effects$previous_convictions +
+                           employed * coef_effects$employed +
+                           gender * coef_effects$gender
+            ) %>% 
+      mutate( runif01 = runif( n(), 0, 1) ) %>% 
+      mutate( committed_crime = ifelse(crime_prob > runif01, 1, 0) )
+
+``` 
+
+So, what we have are various variables describing 10,000 observed individuals, as well as whether they committed a crime in the study period or not. Here are the first 20 rows of the data:
+
+```{r head_data}
+test_dat_add_prob_col %>%
+  select( age, previous_convictions, employed, gender, committed_crime ) %>% 
+  head(20)
+```
+
+We assume the following structure for the data:
+
+The response measurements _committed crime_, which take on either the value 0 or 1, we notate as $Z_1, Z_2, Z_3, ... , Z_{10,000}$. So if our first individual committed a crime in the study period we notate this $Z_1 = 1$. If the first observed individual did not commit a crime in the study period we would have $Z_1 = 0$. So, everyone in our study has a label $z_j$, indicating whether they committed a crime in the study period or not. 
+
+We impose the following structure/assumption on our data: we assume that everyone with the same observed features (same age, number of previous convictions, employment status and gender) has the same fixed probability of committing a crime. We denote this fixed probability $\pi_i$, meaning that if we group everyone with the same characteristics into the same group and label this group as group $i$, then everyone in group $i$ has probability $\pi_i$ of committing a crime in the study period. For example, if we have $\pi_3=0.3$, then we'd expect something like 30% of group 3 to have committed a crime in the study period. This is saying that each individual $Z_j$ is drawn from a Bernoulli distribution.
+
+If we group together people with the same features/characteristics like this, then we create a new random variable $Y_i$. For any given group $i$, $Y_i$ is the number of people committing a crime during the study period in that group (group $i$). For example, in our data, we could label as group 1 individuals with the following features:
+
+* age 19
+
+* 2 previous convictions
+
+* unemployed
+ 
+* female
+
+In our 10 000 people, there are `r test_dat_add_prob_col %>% filter(age==19 & previous_convictions==2 & employed == 0 & gender==0) %>% nrow()` people matching these characteristics. Of them, `r test_dat_add_prob_col %>% filter(age==19 & previous_convictions==2 & employed == 0 & gender==0 & committed_crime==1) %>% nrow()` committed a crime in the study period, meaning $Y_1 =$ `r test_dat_add_prob_col %>% filter(age==19 & previous_convictions==2 & employed == 0 & gender==0 & committed_crime==1) %>% nrow()`. So, we will have as many observations $Y_i$ as we have unique combinations of our features. 
+
+In logistic regression, we model $\pi_i$ - the probability of committing a crime for an individual in group $i$ - as some function of the features. For example, we assume that each of age, number of previous convictions, employment status and gender will contribute in some fixed way to determining what $\pi_i$ is.  
+
+Because we have assumed that each $Z_j$ is a random draw from a Bernoulli distribution, it follows that each $Y_i$ is a random draw from a Binomial distribution with parameters $n_i$ (size of group $i$) and $\pi_i$. 
+
+Here is a summary of our groups (there are `r test_dat_add_prob_col %>% 
+     distinct(age, previous_convictions, employed, gender) %>% nrow()` unique feature combinations):  
+
+```{r print_groups}
+# make a summary of each group, with observed and theoretical proportions: 
+test_dat_add_prob_col %>% 
+     group_by( age, previous_convictions, employed, gender ) %>% 
+     summarise( Y_i = sum(committed_crime == 1),
+                n_i = n(),
+                did_not_commit = sum(committed_crime == 0)
+     ) %>% 
+     ungroup() %>% 
+     mutate( proportion_crime_commit = Y_i / n_i ) %>% 
+  arrange( desc(proportion_crime_commit) ) %>%
+  
+  # add the theoretical probabilities back on for comparison:
+  left_join( test_dat_add_prob_col %>%
+               distinct( age, previous_convictions, employed, gender, crime_prob )
+           ) %>% 
+  kable()
+
+```
+
+
+Our logistic regression model is 
+
+$$\begin{array}{lcl} \pi_i &=& sigmoid \Big( \beta_0 + \beta_1 x^{\text{(age)}}_i + \beta_2 x^{\text{(prev. convict)}}_i + \beta_3 x^{\text{(employed)}}_i + \beta_4 x^{\text{(gender)}}_i \Big) \\
+&=& sigmoid \Big( \eta \Big) \\
+&=& \frac{1}{1+e^{-\eta}}\\ 
+\end{array}$$
+
+So, for each feature group $i$, we model the probability of committing a crime in this group $i$ as a linear combination of the features of this group put through a (non-linear) sigmoid transformation. The sigmoid transformation ensures that $\pi_i$ is constrained to $[0,1]$, as opposed to just a linear transformation which can take on any value in $(-\infty,\infty)$. The sigmoid function looks like this:
+
+```{r show_sigmoid}
+x <- seq(-10,10,0.001)
+plot( x = x,
+      y = 1 / (1+exp(-x)),
+      type = "l",
+      xlab = expression(x),
+      ylab = expression(f(x)),
+      yaxt = "n"
+      )
+
+axis( side = 2, at = seq(0,1,0.1), las=2)
+```
+
+We estimate the coefficients $\beta_0, \beta_1, \beta_2, \beta_3, \beta_4$ of our model using maximum likelihood estimation.  
+
+For any chosen group $i$, $Y_i$ is the number of people committing a crime in the study period in that group. $Y_i$ has a binomial distribution
+
+$$Y_i \quad \sim \quad \text{binomial} \bigg( n_i, \space \pi_i \bigg) $$
+
+..where $n_i$ is the total number of people in group $i$, and $\pi_i$ is the probability of any given individual in group $i$ committing a crime in the study period. 
+
+This allows us, for any group $i$, to calculate the probability 
+
+$$Pr\Big[Y_i=y_i \Big] \quad = \quad \binom{n_i}{y_i} \space \pi_i^{y_i} \space (1-\pi_i)^{n_i-y_i}$$
+
+For example, if group 15 were to have 20 people in it, with probability of any given member committing a crime in the study period of 0.4, then the probability that 18 members of group 15 would commit a crime in the study period is
+
+$$Pr\bigg[Y_{15}=20\bigg] \quad = \quad \binom{20}{18} \space (0.4)^{18} \space (0.6)^{2} \quad = \quad 0.000004700412$$
+
+If we assume that the groups are independent (i.e. that the probability of committing a crime in one group does not affect the probability of committing a crime in a different group), then we can create a likelihood function:
+
+$$\begin{array}{lcl}\mathcal{L} &=& \Pi_{i=1}^n \space Pr\bigg[Y_i = y_i\bigg] \\
+&=& \Pi_{i=1}^n \space \binom{n_i}{y_i} \space \pi_i^{y_i} \space (1-\pi_i)^{n_i-y_i} \\ \end{array}$$
+
+...where for each group, $y_i$ is the number of crimes committed in the study period that we have observed from our sample data.
+
+Where the group probabilities $\pi_i$ are already decided and fixed, we can put in a set of sample data $y_i$, and this function will tell us how likely that sample data is to be observed under the binomial structure that we've imposed. Where our sample data $y_i$ are fixed and we allow $\pi_i$ to vary, maximising this function allows us to find the probabilities $\pi_i$ that make our observed data the data which was the most likely to have occurred given our binomial model.  
+
+We can simplify this likelihood function, which will make it easier to maximise. The log of it is:
+
+$$log(\mathcal{L}) \quad = \quad \mathcal{l} \quad = \quad \sum_{i=1}^n \Bigg[ \space log \binom{n_i}{y_i} + y_i \space log \bigg(\frac{\pi_i}{1-\pi_i}\bigg) + n_i \space log \bigg(1-\pi_i\bigg) \Bigg]$$
+
+Recall that we are modelling each $\pi_i$ as $\pi_i = sigmoid \Big( \beta_0 + \beta_1 x^{\text{(age)}}_i + \beta_2 x^{\text{(prev. convict)}}_i + \beta_3 x^{\text{(employed)}}_i + \beta_4 x^{\text{(gender)}}_i \Big)$ 
+
+So, in $\mathcal{l}$, we will replace each $\pi_i$ with this expression.
+
+We can also drop the $log \binom{n_i}{y_i}$ term, because there are no parameters in here that are not fixed, so this is just a constant for each group that has no effect on the maximisation.
+
+First, we define the likelihood function in R:
+
+```{r fit_the_shit_myself}
+
+feature_groups <- 
+  test_dat_add_prob_col %>% 
+     group_by( age, previous_convictions, employed, gender ) %>% 
+     summarise( n_crime_committed = sum(committed_crime == 1),
+                n_no_crime = sum(committed_crime == 0),
+                groupsize=n()
+     ) %>% 
+     ungroup() %>% 
+     mutate( proportion_crime_commit = n_crime_committed / (n_crime_committed + n_no_crime)) %>% 
+     arrange( desc(proportion_crime_commit) )
+
+y_i <- feature_groups$n_crime_committed        # observed numbers of crime committed per group
+n_i <- feature_groups$groupsize                # observed group sizes
+
+sigmoid <- function(x) { 1 / (1+exp(-x) ) }
+
+log_likelihood_ftn <- 
+  function( coefs ){
+  
+  -sum(                       # we return the negative sum so that we can minimise this function
+      y_i * log( 
+                  # vector of pi_i:
+                    sigmoid( 
+                             coefs[1] + 
+                             coefs[2]*feature_groups$age +   
+                             coefs[3]*feature_groups$previous_convictions + 
+                             coefs[4]*feature_groups$employed +
+                             coefs[5]*feature_groups$gender  
+                    ) /
+                    
+                    # vector of (1 - pi_i)                 
+                    ( 1 - sigmoid( 
+                             coefs[1] + 
+                             coefs[2]*feature_groups$age +   
+                             coefs[3]*feature_groups$previous_convictions + 
+                             coefs[4]*feature_groups$employed +
+                             coefs[5]*feature_groups$gender  
+                                  )
+                    )
+      ) +
+      
+      n_i * log( 1 - sigmoid( 
+                             coefs[1] + 
+                             coefs[2]*feature_groups$age +   
+                             coefs[3]*feature_groups$previous_convictions + 
+                             coefs[4]*feature_groups$employed +
+                             coefs[5]*feature_groups$gender  
+                            )
+                    )
+  )
+}
+
+# log_likelihood_ftn( coefs = c( intercept = 0, 
+#                                   age = 0, 
+#                                   previous_convictions = 0,
+#                                   employed = 0.04,
+#                                   gender = -0.01
+#                                 )
+#                   )
+
+
+```
+
+Maximising this function using the optim() function in R gives us our coefficient estimates:
+
+```{r quick_optim}
+optim( par = c( intercept = 0, 
+                age = 0, 
+                previous_convictions = 0,
+                employed = 0,
+                gender = 0
+              ),
+       fn = log_likelihood_ftn,
+       control = list(maxit=1e4L)
+    )$par
+```
+
+and using the glm() package (IWLS):
+
+```{r use_the_glm_function}
+
+glm_fit <- glm( committed_crime ~ age + previous_convictions + employed + gender,
+                  family = binomial(link="logit"),
+                  data = test_dat_add_prob_col )
+glm_coefs <- glm_fit$coefficients
+glm_coefs
+```
+
+## interpretting the coefficients
+Recall that our logistic regression model is 
+
+$$\pi_i \quad = \quad sigmoid \Big( \beta_0 + \beta_1 x^{\text{(age)}}_i + \beta_2 x^{\text{(prev. convict)}}_i + \beta_3 x^{\text{(employed)}}_i + \beta_4 x^{\text{(gender)}}_i \Big) $$
+
+Rearranging this equation gives us a form which is interesting from an interpretation point of view. This rearrangement is:
+
+$$\frac{\pi_i}{1-\pi_i} \quad = \quad e^{ \Big( \beta_0 + \beta_1 x^{\text{(age)}}_i + \beta_2 x^{\text{(prev. convict)}}_i + \beta_3 x^{\text{(employed)}}_i + \beta_4 x^{\text{(gender)}}_i \Big)}$$
+
+$\frac{\pi_i}{1-\pi_i}$ is an odds ratio. For example, if the probability of committing a crime in the study period in group $i$ is 0.2, then the odds ratio for this group is $\frac{0.2}{0.8}=0.25$, meaning that the odds of committing a crime are 0.25:1, which is 1:4. We can interpret this as saying that we expect 1 crime-committing person for every 4 people not committing a crime in this group, or committing a crime is a quarter as likely as not committing one in this group.  
+
+```{r exp_coefs}
+exp(glm_coefs)
+```
+
+```{r checking_these_out}
+
+person1 <- 
+        tibble( age=21,
+                    previous_convictions=2,
+                    employed=0,
+                    gender=0
+                   )
+person2 <- 
+        tibble( age=21,
+                    previous_convictions=3,
+                    employed=0,
+                    gender=0
+                   )
+
+pi_person1 <- predict( glm_fit, newdata=person1, type = "response" )
+pi_person2 <- predict( glm_fit, newdata=person2, type = "response" )
+
+pi_person1
+pi_person2
+
+pi_person1 / (1-pi_person1)
+pi_person2 / (1-pi_person2)
+
+( pi_person2 / (1-pi_person2) )/
+( pi_person1 / (1-pi_person1) )  
+
+
+```
+
+Of course, can include splines, interactions, polynomials, GAMs etc. in the linear combination

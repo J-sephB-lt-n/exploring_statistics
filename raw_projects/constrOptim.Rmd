@@ -1,0 +1,163 @@
+---
+title: "Constrained Linear Optimisation in R"
+author: "Joseph Bolton"
+date: "08 February 2019"
+output: 
+  html_document:
+    theme: darkly
+    highlight: espresso  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(plotly)
+library(dplyr)
+```
+
+The **constrOptim()** function is used to minimise an objective function based on linear inequality constraints. 
+
+# Example 
+Suppose that we want to maximise the function
+
+$$f(\theta) \quad = \quad f(x,y) \quad = \quad x^2 + y^2$$ 
+
+subject to the constraints
+
+$$\begin{array}{lcl} 
+   \frac{8}{5}x + y &\leq& 15 \\
+   x &\geq& 0 \\
+   y &\geq& 0 \\
+\end{array}$$
+
+Here is an interactive visualisation of the objective function and 3 constraints (i.e. the allowable $x,y$ region):
+
+```{r show_the_function}
+
+plot_ly( data = expand.grid( x = seq(-15, 15, 1),
+                             y = seq(-15, 20, 1)
+                           ) %>% 
+                   mutate(f_xy = x^2+y^2), 
+         x = ~x, 
+         y = ~y, 
+         z = ~f_xy
+        ) %>% 
+  add_trace(type="mesh3d", opacity=0.5) %>% 
+  add_markers( data = expand.grid( x = seq(0,50,0.1),
+                                   y = seq(0,50,0.1)
+                                   ) %>%
+                 mutate( constraint = 8/5*x + y,
+                         f_xy = x^2 + y^2
+                       ) %>%
+                 filter( constraint <= 15 ),
+                 x = ~x,
+                 y = ~y,
+                 z = 0,
+                 size = 0.1
+              ) 
+  
+     
+```
+
+**constrOptim()** requires the constraints in the form
+
+$$\text{ui} \space \theta \quad \geq \quad \text{ci}$$
+
+our constraints are 
+
+$$\begin{array}{lcl} 
+   \frac{8}{5}x + y &\leq& 15 \\
+   x &\geq& 0 \\
+   y &\geq& 0 \\
+\end{array}$$
+
+which in the notation $\text{ui} \space \theta \geq \text{ci}$ is:
+
+$$\begin{bmatrix} -\frac{8}{5} & -1 \\ 1 & 0 \\ 0 & 1\end{bmatrix}\begin{bmatrix}x \\ y \end{bmatrix} \quad \geq \quad \begin{bmatrix} -15 \\ 0 \\ 0\end{bmatrix}$$
+
+```{r specify_in_R}
+my_ui <- matrix( c( -8/5, -1,
+                       1,  0,
+                       0,  1
+                   ),
+                 byrow=TRUE,
+                 ncol=2
+               )
+my_ci <- matrix( c(-15,0,0), ncol=1)                 
+                 
+my_ui
+my_ci
+                
+```
+
+We specify the function to maximise:
+```{r ftn_to_max}
+ftn_to_max <- function(theta){ theta[1]^2 + theta[2]^2 }
+```
+
+**constrOptim()** by default minimises functions, so we maximise $f(\theta)$ by using **constrOptim()** to minimise $g(\theta)=-f(\theta)$:
+
+$$g(\theta) \quad = \quad -f(\theta) \quad = \quad -x^2 - y^2$$
+
+```{r ftn_to_min}
+ftn_to_min <- function(theta){ -ftn_to_max(theta) }
+```
+
+**constrOptim()** requires the gradient function (function returning all partial first derivatives) of the objective function. This function in our case is:
+
+$$\nabla g(\theta) \quad = \quad \Big(\frac{\partial g}{ \partial x} \space,\space \frac{\partial g}{ \partial y} \Big) \quad = \quad \Big( -2x \space, -2y \space \Big)$$
+
+We specify the gradient function in R:
+
+```{r give_grad_ftn}
+grad_ftn <- function(theta){ c(-2*theta[1], -2*theta[2]) }
+```
+
+and for our grande finale:
+```{r grand_finish}
+do_the_optimisation <- 
+    constrOptim( theta = c(1,1),    # starting parameter guesses
+                 f = ftn_to_min,    # function to minimise
+                 ui = my_ui,
+                 ci = my_ci,
+                 grad = grad_ftn
+    )
+
+do_the_optimisation
+```
+
+So the values maximising $f(x,y)$ are $x=$ `r round(do_the_optimisation$par[1],2)` and $y=$ `r round(do_the_optimisation$par[2],2)`
+
+We can see that the calculation is correct by plotting this optimal value:
+```{r last_show}
+
+plot_ly( data = expand.grid( x = seq(-15, 15, 1),
+                             y = seq(-15, 20, 1)
+                           ) %>% 
+                   mutate(f_xy = x^2+y^2), 
+         x = ~x, 
+         y = ~y, 
+         z = ~f_xy
+        ) %>% 
+  add_trace(type="mesh3d", opacity=0.5) %>% 
+  add_markers( data = expand.grid( x = seq(0,50,0.1),
+                                   y = seq(0,50,0.1)
+                                   ) %>%
+                 mutate( constraint = 8/5*x + y,
+                         f_xy = x^2 + y^2
+                       ) %>%
+                 filter( constraint <= 15 ),
+                 x = ~x,
+                 y = ~y,
+                 z = 0,
+                 size = 0.1
+              ) %>% 
+  add_markers( data = data.frame( x = do_the_optimisation$par[1],
+                                  y = do_the_optimisation$par[2],
+                                  f_xy = -do_the_optimisation$value
+                                  ),
+               x = ~x,
+               y = ~y,
+               z = ~f_xy
+            )
+
+```

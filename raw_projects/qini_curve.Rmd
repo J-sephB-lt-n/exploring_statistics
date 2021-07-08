@@ -1,0 +1,231 @@
+---
+title: "Evaluating Uplift Models: Qini Curve & Qini Coefficient"
+author: "Joseph Bolton"
+output: html_notebook
+---
+
+```{r setup}
+library(tidyverse)
+#install.packages("tools4uplift")
+library(tools4uplift)
+```
+
+https://humboldt-wi.github.io/blog/research/theses/uplift_modeling_blogpost/
+
+https://dms.umontreal.ca/~murua/research/UpliftRegression.pdf
+
+Generate an experiment with 400 people: 200 treated and 200 in the control group: 
+```{r}
+simdata <- tibble(        id = 1:400,
+                   treatment = c( rep(1,200), rep(0,200) )   
+                 )
+```
+
+generate a single attribute $X_1$ for each person:
+```{r}
+simdata$X1 <- runif(   n = nrow(simdata), 
+                     min = 0,
+                     max = 100  
+                   ) %>% 
+              round(., digits=2)
+ggplot( data = simdata,
+        aes(      x = id,
+                  y = X1, 
+             colour = as.factor(treatment)
+           )
+       ) +
+  geom_point() 
+```
+
+Simulate some true uplift signal:
+
+```{r}
+sigmoid_ftn <- function(x) exp(x) / (exp(x)+1)
+
+tibble( x = 0:100 ) %>% 
+  mutate( y_prob = 
+     map_dbl( .x = x,
+              .f = function(x1) 0.8 * ( -0.25 + sigmoid_ftn( -0.0005*(x1-30)^2 ) )                              )
+        ) %>% 
+  ggplot( data = .,
+          aes( x = x,
+               y = y_prob,
+               group = 1
+             )
+        ) +
+  geom_line() +
+  labs(    title = "true uplift signal",
+        subtitle = "(additional probability added by treatment)",
+               x = bquote( x[1] ),
+               y = "additional probability added"
+      )
+
+set.seed(6969)
+
+simdata <- 
+  simdata %>% 
+    mutate( base_y_prob = 0.3 ) %>%          # base probability of responding 
+    mutate( added_treat_prob = 
+              map_dbl( .x = X1,
+              .f = function(x1) 0.8 * ( -0.25 + sigmoid_ftn( -0.0005*(x1-30)^2 ) )                                      )
+          ) %>% 
+    mutate( added_treat_prob = added_treat_prob*treatment ) %>%    
+    mutate( y_prob_final = base_y_prob + added_treat_prob ) %>% 
+    mutate( y = map_dbl( .x = y_prob_final,
+                         .f = function(prob)
+                                            { 
+                                              sample(           0:1, 
+                                                         size = 1,
+                                                         prob = c(1-prob, prob)
+                                                    )
+                                            } 
+                      )
+          )
+
+simdata
+```
+
+```{r}
+ggplot( data = simdata,
+        aes(      x = X1,
+                  y = y, 
+             colour = as.factor(treatment)
+           )
+       ) +
+  geom_jitter( height = 0.3 ) 
+```
+
+
+
+
+
+
+```{r}
+data("SimUplift")
+SimUplift
+```
+
+code that follows is adapted from https://dms.umontreal.ca/~murua/research/UpliftRegression.pdf
+
+```{r}
+set.seed(1988)
+
+split_data <- 
+  tools4uplift::SplitUplift(  data = SimUplift,
+                                 p = 0.7, 
+                             group = c("treat", "visit")
+                            )
+
+train <- split_data[[1]]
+valid <- split_data[[2]]
+```
+
+```{r}
+#Hmisc::describe(train)
+```
+
+fit 2-model to training data:
+```{r}
+base.tm <- 
+ tools4uplift::DualUplift(       data = train,
+                                treat = "treat",
+                              outcome = "y",
+                           predictors = colnames( train[, 3:22] )
+                         )
+
+# baseline model for control group:
+base.tm[[1]]
+
+# baseline model for treatment group:
+base.tm[[2]]
+```
+
+
+Predict the uplift on the **validation** set using the 2-model:
+(also return Qini Curve and Uplift Barplot)
+```{r}
+base.tm.valid <- 
+  tools4uplift::DualPredict( data = valid,
+                             treat = "treat",
+                             outcome = "y",
+                             model = base.tm,
+                             nb.group = 5,     # number of groups 
+                             plotit = FALSE   # don't return QiniCurve and QiniBarPlot
+                           )
+```
+
+```{r}
+# the validation set, with 'uplift_prediction' (for each individual) column added:
+base.tm.valid[[1]]
+
+# Qini value:
+base.tm.valid[[2]]
+```
+
+get other uplift model assessment metrics:
+
+metric        | description
+--------------|--------------------------
+cum_per       | $\phi$ = cumulative % of customers (ordered by predicted_uplift descending)
+T_Y1          | Number of customers with y==1 and treat==1
+T_n           | Number of customers with treat==1
+C_Y1          | Number of customers with y==1 and treat==0
+C_n           | Number of customers with treat==0
+incremental_Y1| $h(\phi)=\text{T_Y1}-\frac{\text{T_n}}{\text{C_n}}\cdot\text{C_Y1}$
+inc_uplift    | $g(\phi)=\frac{h(\phi)}{\sum_i T_i}$
+uplift        | $\text{E[y|treat==1]-E[y|treat==0]}$ in this group of customers
+Qini Curve    | Plots y=cum_per against x=inc_uplift
+
+```{r}
+base.tm.perf <- 
+  tools4uplift::QiniTable(       data = base.tm.valid[[1]],
+                                treat = "treat",
+                              outcome = "y",   
+                           prediction = "uplift_prediction",
+                             nb.group = 5
+                         )
+
+base.tm.perf
+tools4uplift::QiniCurve( base.tm.perf )
+points(x=20, y=8.595229, pch=16)
+tools4uplift::QiniBarPlot( base.tm.perf )
+tools4uplift::QiniArea( base.tm.perf )
+
+```
+
+```{r}
+valid_treat_ppl <- base.tm.valid[[1]] %>% filter(treat==1) %>% select(y, uplift_prediction)
+valid_control_ppl <- base.tm.valid[[1]] %>% filter(treat==0) %>% select(y, uplift_prediction)
+
+treat_0.2_grp <- valid_treat_ppl %>% top_n( 22, wt=uplift_prediction ) 
+control_0.2_grp <- valid_control_ppl %>% top_n( 38, wt=uplift_prediction ) 
+
+table( treat_0.2_grp$y )
+table( control_0.2_grp$y )
+
+# uplift:
+mean(treat_0.2_grp$y)-mean(control_0.2_grp$y)
+
+# Qini Plot:
+par(mfrow=c(1,2))
+tools4uplift::QiniCurve( base.tm.perf )
+plot( x = c(0, base.tm.perf$cum_per),
+      y = c(0, base.tm.perf$inc_uplift),
+      type = "l"
+    )
+lines( x = c(0, 1),
+       y = c(0, base.tm.perf$inc_uplift[5]) 
+     )
+
+# incremental uplift h(phi) in top 20%:
+sum(treat_0.2_grp$y) - (22/38) * sum(control_0.2_grp$y)
+base.tm.perf_0.2 <- base.tm.perf[1,]
+h_phi <- 
+  base.tm.perf_0.2$T_Y1 - 
+  (base.tm.perf_0.2$T_n/base.tm.perf_0.2$C_n) * base.tm.perf_0.2$C_Y1
+h_phi
+
+# relative incremental uplift g(phi):
+h_phi / 139
+```
+

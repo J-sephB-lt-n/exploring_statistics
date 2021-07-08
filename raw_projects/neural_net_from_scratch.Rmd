@@ -1,0 +1,2239 @@
+---
+title: "Feed-Forward Neural Network from Scratch in R"
+author: "Joseph Bolton"
+date: "20 September 2018"
+output:
+  html_document:
+    df_print: paged
+    theme: darkly
+    highlight: espresso
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)     # for plotting
+options(scipen=999)
+
+# change formatting of code output:
+knitr::opts_chunk$set(
+  class.output  = "bg-primary",
+  class.message = "bg-info text-info",
+  class.warning = "bg-warning text-warning",
+  class.error   = "bg-danger text-danger"
+)
+
+# ggplot styling
+theme_set( theme_bw() + 
+            theme( plot.background	= element_rect(fill="black"),
+                   panel.background = element_rect(fill="black"),
+                   axis.text = element_text(colour="white"),
+                   axis.title = element_text(colour="white"),
+                   plot.title = element_text(colour="white"),
+                   legend.text = element_text(colour="white"),
+                   legend.title = element_text(colour="white"),
+                   legend.background = element_rect(fill="black"),
+                   legend.key = element_rect(fill="black"),
+                   panel.grid.major = element_line(colour="grey20"),
+                   panel.grid.minor = element_line(colour="grey20")
+                 )
+          ) 
+```
+
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 7px;
+text-align: center;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+<pre style="font-size: 12px; font-family: &quot;Ubuntu Mono&quot;; background-color: rgb(0,0,0); color: rgb(255,255,255); line-height: 8px;">..............................................730888047.............................................
+............................................7688888888057...........................................
+...........................................488888888888887..........................................
+..........................................7888888888888888..........................................
+..........................................70888888888888882.........................................
+......................................71427588888888888882751.......................................
+.................................774417...762088888888897...757.....................................
+.............................72427.......23...713555417.......757...................................
+..........746009517.....714477.........767......................757.................................
+........48888888808574417.............15..........................757...............................
+.......688888888888887...............51.............................157.............................
+......7888888888888882.............767........735006317...............157...........................
+.......8888888888888832222777.....44........5888888888867...............237.........................
+.......18888888888886......77714396777.....088888888888087................43........................
+........738888888867237........15...7712225888888888888885..................34......................
+...........71111751...731.....57..........188888888888888522217..............732....................
+..................15.....23776.............08888888888889.....7724217..........751.7712177..........
+...................767.....962..........7347198888888802............7722217......60808888084........
+.....................23..767.7237.....157......7122277....................77244108888888888887......
+......................7543......7517327........................................688888888888889......
+.......................552.......15437.........................................088888888888888......
+.....................76..767..732....757..........7...........................7588888888888881......
+....................32.....6457........7447..73088888047................7722277.7988888888807.......
+..................767....75115............156888888888085.........7724417.......75225900527.........
+............7777.44...7237...767...........088888888888885..7724417...........732...................
+.........20888888847731........23....777223888888888888888417................32.....................
+.......78888888888885........7716952777....088888888888886.................44.......................
+......788888888888888112222177....32.......70888888888886................23.........................
+......7888888888888882.............757.......16888888857...............237..........................
+.......088888888888887...............51.........77777................137............................
+.......79888888888893277..............15...........................157..............................
+.........7408888037....724277..........767.......................157................................
+...........................772427........23....7717777.........757..................................
+................................772417....76730888888802.....757....................................
+.....................................774417488888888888807.757......................................
+..........................................108888888888888657........................................
+..........................................7888888888888888..........................................
+...........................................988888888888882..........................................
+............................................5088888888801...........................................
+.............................................7158888047.............................................</pre>
+
+<!-- set code style back to normal -->
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 14px;
+text-align: left;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+
+The purpose of these notes is to explore the basic architecture and mathematics underlying a feed-forward neural network. I don't build a high-performing neural network, nor do I explore techniques for improving the performance of the network once that I have built it. This code is my personal exploration of feed-forward neural networks, so all of my code is designed to aid clarity and understanding, and not built for efficiency nor speed. 
+
+The 4 resources to which I referred most closely are (in order of use):
+
+1 http://neuralnetworksanddeeplearning.com
+
+2 http://www.deeplearningbook.org/
+
+3 https://matrices.io/deep-neural-network-from-scratch/
+
+4 https://selbydavid.com/2018/01/09/neural-network/ 
+
+All of these resources are amazing. 
+
+Others that were useful were:
+
+5 https://medium.com/@iliakarmanov/neural-networks-from-scratch-in-r-dcf97867c238
+
+6 https://theclevermachine.wordpress.com/2014/09/06/derivation-error-backpropagation-gradient-descent-for-neural-networks/ 
+
+I first build a network with a single hidden layer to solve a simple classification problem. Then, I build a deeper regression network, going a bit deeper into how back-propagation works.
+
+These notes do not explain all of the concepts required to understand it. To fully understand the content of these notes, read the first 2 chapters of http://neuralnetworksanddeeplearning.com before reading these notes.   
+
+I use the terms _cost function_ and _loss function_ interchangeably throughout these notes.
+
+# Neural Network Classifier
+
+For the classifier, we wish to make a neural network which can predict the class of each point/observation in our dataset using the 2 features/explanatory variables $X_1$ and $X_2$.
+First we simulate some data:
+
+## simulate some data:
+```{r simulate_data}
+library(mlbench)    
+set.seed(69420)
+
+sim_dataset <- mlbench.spirals(500, cycles=1, sd=0)
+
+sim_dataset <- 
+   tibble( x1 = sim_dataset$x[,1] + rnorm(100,0,0.1),
+               x2 = sim_dataset$x[,2] + rnorm(100,0,0.1),
+                y = as.numeric( sim_dataset$classes )-1
+   ) 
+
+
+ggplot( data = sim_dataset %>% mutate(class_of_y = factor(y)),
+           aes( x = x1, 
+                y = x2, 
+                colour = class_of_y
+              )
+      ) +
+  geom_point()
+
+```
+
+
+## Feed Forward Classifier
+
+Here is a diagram of the network which we are going to build to solve this problem:
+
+![](C:\Users\Joe Bolton\Desktop\sync_to_google_drive\courses\neural networks\from_scratch\simple_feedforward.PNG)
+
+Layers between the input and output layers are called hidden layers. This network is a very shallow network, with only 1 hidden layer.
+
+Consider a function which switches on when given a positive input, and is off for negative input:
+```{r plot_switch_ftn, echo=FALSE}
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white")
+x <- seq(-10,10,0.01)
+plot( x = x,
+      y = ifelse( x > 0, 1, 0)
+      )
+abline( v=0 )
+```
+
+A neural network is a network of neurons: each layer of neurons takes in information, transforms this information, then feeds it forward as input into the next layer of neurons. A simple type of neuron is a perceptron, whose activation function is this switch function. Inputs into a perceptron neuron are combined into a single value, this value is then put through the switch function, and the neuron outputs either a 0 or a 1. 
+
+The sigmoid function is like a smoothed switch, allowing neurons to output a value between 0 and 1 - a gradient between on and off. Using this can allow a model to learn more slowly, because a small change in the input does not cause a big leap into the output (0,1).
+
+The sigmoid function is
+
+$$\text{sigmoid}(x) \quad = \quad \frac{e^x}{1+e^x} \quad = \quad \frac{1}{1+e^{-x}}$$
+
+We can define it in R like this: 
+```{r define_sigmoid_ftn}
+
+sigmoid <- function(x){ 1/( 1+exp(-x) ) }
+
+```
+
+and it looks like this: 
+
+```{r plot_sigmoid_ftn}
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white")
+x <- seq(-10,10,0.01)
+plot( x = x, y = sigmoid(x) )
+abline( v = 0 )
+
+```
+
+Sigmoid functions are no longer the activation function of choice when building neural networks because they are known to saturate (generate extremely large weights), but they will do fine for this explanation. In practice, ReLU activation functions are a more popular choice. 
+
+We define a function to feed forward a matrix of input features through the network (this is known as *forward propagation*): 
+
+```{r define_feedforward_ftn}
+feedforward <- function( X,    # design matrix (including column of 1s)
+                         w1,   # weights between input layer and hidden layer
+                         w2    # weights between hidden layer and output layer
+){
+    z1 <- X%*%w1
+    h <- sigmoid(z1)
+    H <- cbind(1,h)
+    z2 <- H %*% w2
+    y_predict <- sigmoid( z2 )
+    return( sigmoid(z2) )
+}
+
+
+# here is a faster version of the above function:
+feedforward2 <- function( X, w1, w2){  sigmoid( cbind(1,sigmoid(X%*%w1)) %*% w2 )  }
+
+```
+
+Given a network that has already been created, this function takes in inputs and gives us the output of the network. 
+
+*Forward propagation* means passing the input values through the network, where each node that a value passes through applies a (possibly non-linear) function to that value. This allows the neural network to perform a complex non-linear transformation/function of the input variables to produce a prediction, where the complexity of the transformation/function is controlled by the depth of the network (number of hidden layers and number of neurons in each layer). For a thorough treatment of *forward propagation*, refer to http://neuralnetworksanddeeplearning.com/chap1.html 
+
+## The loss/cost function
+We have many observations in our dataset, but consider a single observation $i$. This observation has some true label $y_i$, which we are trying to build a model to predict. 
+
+For this classification problem, we have 2 features $x_{i1}$ and $x_{i2}$ for this observation. We give these features to our neural network model and it outputs a predicted label $\hat{y}_i$. This prediction will be a value somewhere in $\Big[0,1\Big]$. For predictions closer to 1, the model is more certain in it's prediction that the true value is 1, and vice versa for a label of 0. 
+
+Some examples: 
+
+* $\hat{y}_i=0.99$ is predicting that the true label for observation $i$ is very likely a 1.
+
+* $\hat{y}_i=0.7$ is predicting a 1 for observation $i$, but is only moderately certain.
+
+* $\hat{y}_i=0.05$ is a confident prediction of label 0.  
+
+* $\hat{y}_i=0.5$ means the model is very uncertain in it's prediction.  
+
+We can interpret $\hat{y}_i$ as $\hat{y}_i=Pr\Big[y_i = 1 \Big]$ and $1-\hat{y}_i$ as 
+$Pr\Big[y_i = 0 \Big]$ 
+
+For any single observation $i$, we can improve our model's accuracy by increasing the value of 
+
+$$\hat{y}_i^{y_i} \space (1-\hat{y}_i)^{1-y_i}$$
+
+This is because if the true label of observation $i$ is $y_i=1$, then we want to increase the value of the prediction $\hat{y}_i$, and if the true label is $y_i=0$ then we want to decrease the value of the prediction $\hat{y}_i$.
+
+Here is how this function looks: 
+
+```{r show_loss_gain_ftn, echo=FALSE}
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white")
+y_hat <- seq( 0,1,0.01 )
+
+par(mfrow = c(1,2))
+plot( x = y_hat, y = y_hat, xlab=expression(hat(y)), ylab="model performance",
+      main = "true label y=1")
+plot( x = y_hat, y = (1-y_hat), xlab=expression(hat(y)), ylab="model performance",
+      main = "true label y=0")
+
+```
+
+We can see that, using this performance-measuring function, our gain in model performance is linearly related to our prediction.
+
+If we take the log of the function, then we get: 
+
+$$y_i \space log(\hat{y}_i) \quad + \quad (1-y_i) \space log(1-\hat{y}_i)$$
+
+This measure of model performance is nice because there are smaller gains in model performance (less reward) as the model prediction gets closer to the true y label (the correct prediction). This means that if we are trying to maximise our model performance over many observations, then we can use this log function to make our model focus on improving it's predictions for observations that it is getting very wrong, and focus less on ones that are closer to being right. 
+
+Here is how this cost function looks:
+
+```{r show_log_ftn, echo=FALSE}
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white")
+y_hat <- seq( 0,1,0.01 )
+
+par(mfrow = c(1,2))
+plot( x = y_hat, y = log(y_hat), xlab=expression(hat(y)), ylab="model performance",
+      main = "true label y=1")
+plot( x = y_hat, y = log(1-y_hat), xlab=expression(hat(y)), ylab="model performance",
+      main = "true label y=0")
+```
+
+We can measure the performance of our whole model, over all of the $n$ observations in our data, by measuring the performance of each individual, then summing these:
+
+$$\sum_i^n \space \Big( y_i \space log(\hat{y}_i) \quad + \quad (1-y_i) \space log(1-\hat{y}_i) \Big)$$
+
+We can turn this into a loss function (which we want to minimise in order to improve our model) by multiplying it by -1:
+
+$$\mathcal{L} \quad = \quad -\sum_i \space \Big( y_i \space log(\hat{y}_i) \quad + \quad (1-y_i) \space log(1-\hat{y}_i) \Big)$$
+
+Here is how this function is specified in R:
+
+```{r define_loss_ftn}
+
+loss_ftn <- function(y,     # vector of true labels 
+                     y_hat  # vector of predicted labels
+                    ){
+     -sum( 
+            y*log(y_hat) + (1-y)*log(1-y_hat)
+         )    
+                      }
+
+```
+
+We will use this loss function to train our model. Training a neural network means choosing the weights on each neuron in the network, which we do based on how changes to the weights affect the loss function that we've chosen.
+
+The loss function that we have chosen here is only a function of our predicted labels and the true observation labels. In practice, we might add more features/components to the cost function, allowing us to control how our network learns (for example, a *regularisation* term penalising large weights could be added). 
+
+## Back propagation
+
+The *back propagation* algorithm allows us to calculate the gradient (rate of change of the loss function) for every individual weight in the network. Knowing how a change in any individual weight in the network will affect the loss function allows us to choose the weights of the network in a way that reduces the loss function value. 
+
+Let's explore how this works:
+
+Suppose for a moment that we have a training set with 10 samples/observations in it:
+
+```{r example_trainset}
+subset_obs <- sim_dataset[1:10,]
+subset_obs
+```
+
+$y$ are the true labels for these observations, and $x_1$ and $x_2$ are the features which the model will use to try to predict these labels.   
+
+So, our design matrix for these 10 observations is:
+
+```{r design_mat}
+X <- cbind(intercept=1, subset_obs[,-3]) %>% as.matrix()
+X
+```
+
+Refer back to the diagram at the beginning of this page for the structure of the neurons and weights in the network.
+
+We initialise the model with random weights:
+
+```{r initial_weights}
+set.seed(696969420)
+# create the weight matrices (random weights)
+w1 <- matrix( rnorm(3*5), nrow=3, ncol=5 )
+w2 <- matrix( rnorm(6*1), nrow=6, ncol=1 )
+w1
+w2
+```
+
+With these random weights and sample data, the output of the network (predictions $\hat{y}$) is:
+
+```{r predict_inital_model}
+feedforward( X = X, w1 = w1, w2 = w2 )
+```
+
+These predictions are currently meaningless because we've used random weights. We want to keep adjusting these weights (using our cost/loss function) to improve the predictions of our model. 
+
+We can plug our current (random) predictions into our loss function, which gives us a loss of:
+
+```{r random_loss}
+loss_ftn( y = subset_obs$y,
+          y_hat = feedforward( X = X, w1 = w1, w2 = w2 )
+        )
+```
+
+Now, we calculate the gradient of our loss function with respect to our weights. This tells us how changing any particular weight affects the output of our loss function. 
+
+The gradient in terms of $W_2$ (our matrix of weights to the right of the hidden layer) is
+
+```{r dW2}
+# some things we need to calculate the gradient:
+y <- subset_obs$y
+y_hat <- feedforward( X = X, w1 = w1, w2 = w2 )
+h <- sigmoid( X %*% w1 )
+H <- cbind(1, h)
+  
+# the gradient/derivative of our loss function with respect to w2 is 
+dL_dW2 <- t(H) %*% (y_hat - y)
+dL_dW2
+```
+
+What this says is that with our current weights, if we increase our first $W_2$ weight, but keep all of the other weights unchanged, then our loss function will change at a rate of `r dL_dW2[1,1]` per 1 unit increase in this first $W_2$ weight. Note that this only refers to the change (gradient/slope) at that exact point - it doesn't mean that a 1 unit increase will result in exactly a change of `r dL_dW2[1,1]` in the loss function, because moving 1 unit takes us away from that point, passing points with different rates of change. However, it does mean that if we move a small amount (like -0.001), then we can expect a change in the loss of approximately -0.001$\times$`r dL_dW2[1,1]` = `r dL_dW2[1,1]*(-0.001)`. The actual change is:     
+
+```{r w2_change_example}
+
+adjusted_w2 <- w2 + c(-0.001, 0, 0, 0, 0, 0)
+
+# the change in the loss function is:
+loss_ftn( y = y, 
+          y_hat = feedforward( X = X, w1 = w1, w2 = adjusted_w2 ) ) -
+loss_ftn( y = y, 
+          y_hat = feedforward( X = X, w1 = w1, w2 = w2 ) )
+
+```
+
+We can see how close this approximation is. 
+
+Similarly, the gradient of the loss function with respect to the first weights (weights before the hidden layer) is:
+
+```{r gradient1_expliecit}
+dh  <- (y_hat - y) %*% t( w2[-1, drop = FALSE] )
+dL_dW1 <- t(X) %*% (h * (1 - h) * dh)
+dL_dW1
+```
+
+This tells us, for example, that we can change our loss by around 0.001$\times$`r dL_dW1[2,4]` = `r dL_dW1[2,4]*0.001`  by increasing the 4th weight on $x_1$ by 0.001 (keeping all other weights equal). The actual change is:
+
+```{r show_them}
+adjusted_w1 <- w1 + matrix( c( 0, 0, 0, 0,     0,
+                               0, 0, 0, 0.001, 0,
+                               0, 0, 0, 0,     0
+                               ),
+                                byrow = TRUE,
+                                nrow=3, ncol = 5
+                          )
+loss_ftn( y = y, 
+          y_hat = feedforward( X = X, w1 = adjusted_w1, w2 = w2 ) ) -
+loss_ftn( y = y, 
+          y_hat = feedforward( X = X, w1 = w1, w2 = w2 ) )
+```
+
+We can select the weights in the network (train the model) by simultaneously updating all of the weights in our network. We update the weights a very small amount at a time; updating weights by a large amount would make the gradients (instantaneous rates of change) an inaccurate estimate of the effect on the loss function. We control the rate at which the weights are updated in each iteration using a constant (a hyperparameter that we choose) called the __learning rate__.
+
+We iteratively update each weight according to the rule:  
+
+$$W_{t+1} \quad = \quad W_t \quad - \quad \lambda \space \nabla \space \mathcal{L(W_t)}  $$
+
+So, for each weight (weights updated simultaneously): 
+
+* We get the rate of change of the loss function for this weight at it's current value $\nabla \space \mathcal{L(W_t)}$, assuming that all other weights do not change.
+
+* We update this weight by a very small (controlled by $\lambda$) amount in the direction in which we expect to reduce the loss function.
+
+We make a function in R to do this:
+
+```{r explore_backpropagation}
+
+backpropagate <- function( X,          # design matrix (with first column of 1s)
+                           y,          # vector of true observed outcomes
+                           y_hat,      # vector of current model predictions
+                           w1,         # matrix of current weights between input layer and hidden layer
+                           w2,         # matrix of current weights between hidden layer and output layer
+                           learnrate   # the chosen learning rate (lambda) 
+){
+      
+     h <- sigmoid(X%*%w1)
+     H <- cbind( 1, h )
+     dL_dw2 <- t(H) %*% (y_hat - y)       # calculate the gradients for W2
+     dL_dh  <- (y_hat - y) %*% t(w2[-1, , drop = FALSE])
+     dL_dw1 <- t(X) %*% (h * (1 - h) * dL_dh)  # calculate the gradients for W1
+  
+  w1 <- w1 - learnrate * dL_dw1         # update the weights W1
+  w2 <- w2 - learnrate * dL_dw2         # update the weights W2
+  
+  return(  list(w1 = w1, w2 = w2)  )
+     
+}
+
+```
+
+
+As a reminder, our initial (random) weights are:
+
+```{r weights_reminder}
+w1
+w2
+```
+
+After 1 iteration of weight updating, we get the following updated weights:
+
+```{r backprop_example}
+
+y_hat <- feedforward( X = X, w1 = w1, w2 = w2 )          
+  
+backpropagate( X = X,          # design matrix (with first column of 1s)
+               y = y,          # vector of true observed outcomes
+               y_hat = y_hat,      # vector of model predictions
+               w1 = w1,         # matrix of weights between input layer and hidden layer
+               w2 = w2,         # matrix of weights between hidden layer and output layer
+               learnrate = 0.001   # the learning rate (lambda) 
+)
+
+```
+
+## Testing our classifier network
+We are now going to fit our feed-forward network to the full dataset. I'm not splitting into a training and validation set, just seeing how well the neural network can fit to the training data.
+
+Rather than the 6 neurons shown in the initial network diagram, I am going to put 30 neurons in the hidden layer.  
+
+So, our design matrix (input features) are:
+
+```{r input_features}
+X <- cbind(1, sim_dataset[,1:2]) %>% as.matrix()
+
+# first 10 rows:
+head(X,10)
+
+# count number of rows:
+nrow(X)
+```
+
+with true labels y:
+
+```{r y_response}
+y <- sim_dataset$y
+y
+```
+
+We initialise our weights with random normal values with mean 0 and variance 1:
+
+```{r initialise_weights}
+current_w1 <- matrix( rnorm(3*30), ncol=30, nrow=3)
+current_w2 <- matrix( rnorm(31*1), nrow=31, ncol=1 )
+
+current_w1
+current_w2
+```
+
+I am going to update the weights 10,000 times, so I make a vector of length 1000 to store the cost/loss of the output (label predictions) of the network at each update (so that we can refer to this later to see how our cost changed as the network learned). Initially, each element of this vector just contains an NA value.   
+
+```{r store_cost_vector}
+store_cost <- as.numeric( rep( as.numeric(NA), 10000) )
+
+# show first 10 values
+head( store_cost, 10 )
+
+```
+
+With our initial weights, the output of the network is:
+
+```{r init_outp}
+current_y_hat <- feedforward( X = X,
+                              w1 = current_w1,
+                              w2 = current_w2
+                            )
+
+# show first 10 values
+head( current_y_hat, 10)
+```
+
+Giving us a cost/loss of 
+```{r cost_or_loss_bicherz}
+loss_ftn( y = y, y_hat = current_y_hat )
+```
+
+Now, we perform the following sequence 10,000 times:
+
+1. *forward propagation*:Feed our inputs through the network and get the network output.
+
+2. Calculate our loss/cost for our current network predictions (output) and store this to refer to later. 
+
+3. *back propagation*: Calculate the gradient (rate of change) of the cost/loss function with respect to each weight in the network for the current weights. 
+
+4. Simultaneously update all of our weights by a small amount using the gradient of the cost function.
+
+```{r do_it}
+
+for( i in 1:10000){
+  
+  #print(i)
+  
+  # get network output for current weights:
+  current_y_hat <- feedforward( X = X, 
+                                w1 = current_w1,
+                                w2 = current_w2
+                            )
+  
+  # store the cost/loss at this point:
+  store_cost[i] <- loss_ftn( y = y, y_hat = current_y_hat )
+  
+  # calculate the gradient (back propagate) and update the weights:
+  do_backprop <- backpropagate( X = X,          # design matrix (with first column of 1s)
+                                y = y,          # vector of true observed outcomes
+                                y_hat = current_y_hat,      # vector of model predictions
+                                w1 = current_w1,         # matrix of weights between input layer and hidden layer
+                                w2 = current_w2,         # matrix of weights between hidden layer and output layer
+                                learnrate = 0.001   # the learning rate (lambda) 
+                              )
+  
+  # store the new weights:
+  current_w1 <- do_backprop$w1
+  current_w2 <- do_backprop$w2
+  
+}
+
+```
+
+We can look at how our loss has changed over each iteration:
+
+```{r}
+plot( x = 1:length(store_cost),
+      y = store_cost,
+      xlab = "iteration",
+      ylab = "loss/cost",
+      #type = "b",
+      cex = 0.5
+    )
+```
+
+If we consider a network output (prediction) of greater than 0.5 as a predicted label __1__ and 0.5 or less as a __0__ label, then the predictions of our trained network are: 
+
+```{r network_outs_predz}
+fitted_values <- as.numeric( current_y_hat > 0.5 )
+
+# show first 20 predictions
+head(fitted_values, 20)
+```
+
+We can compare our predictions to the true labels of the points using a confusion matrix:
+```{r confused_matrix}
+table( fitted_values, y )
+table( fitted_values, y ) %>% prop.table()
+```
+
+And we can plot the decision boundaries of our network predictions over the data that we trained the network on:
+```{r decision_boundaries, fig.width=8}
+pred_grid <- expand.grid( x1 = seq( min(sim_dataset$x1)-0.1, 
+                                   max(sim_dataset$x1)+0.1, 
+                                   0.01 ),
+                          x2 = seq( min(sim_dataset$x2)-0.1, 
+                                    max(sim_dataset$x2)+0.1, 
+                                   0.01 )
+                         )
+pred_grid_labels <- as.numeric( 
+                  feedforward( X = as.matrix( cbind(1,pred_grid) ),
+                               w1 = current_w1,
+                               w2 = current_w2
+                              ) > 0.5
+                  ) 
+
+ggplot( data = sim_dataset,
+           aes( x = x1, 
+                y = x2, 
+                colour = factor(y)
+              )
+      ) +
+  geom_point( data = cbind( pred_grid, y = pred_grid_labels),
+              aes(x = x1 , y = x2 ),
+              size = 0.02 ) +
+  geom_point()
+
+```
+
+Rather than plotting the hard decision boundary which we created using the rule $\hat{y}_{i}>0.5$, we can plot the actual output of the network using a gradient of colour - this gives us a fuzzy/blurry decision boundary because areas where the network is less certain of it's label predictions give a mix of the 2 label colours.  
+
+```{r joe_is_the_best}
+pred_grid_fitted_values <- 
+                  feedforward( X = as.matrix( cbind(1,pred_grid) ),
+                               w1 = current_w1,
+                               w2 = current_w2
+                              ) 
+
+ggplot( data = sim_dataset,
+           aes( x = x1, 
+                y = x2, 
+                colour = y
+              )
+      ) +
+  geom_point( data = cbind( pred_grid, y = pred_grid_fitted_values),
+              aes(x = x1, y = x2 ),
+              size = 0.02 ) +
+  geom_point()
+```
+
+# A Regression Network
+Now, I am going to build a deeper network, and one to solve a different prediction problem: regression.
+
+I am also switching the notation of the weights to the style used in the book http://neuralnetworksanddeeplearning.com. All of the notation and mathematics (aside from mistakes that I may have made) are from this resource.
+
+For the regression problem, I am going to use the quadratic cost function (mean squared error):
+
+$$C \quad = \quad \frac{1}{2} \times \frac{\sum_{i=1}^n \bigg( y_i - \hat{y}_i\bigg)^2}{n}$$
+
+This is not a popular choice of loss function any more (cross-entropy loss functions are preferred), but is fine for the purpose of explanation. 
+
+I will explore the mechanics of this problem using the following network:
+
+![](C:\Users\Joe Bolton\Desktop\sync_to_google_drive\courses\neural networks\from_scratch\deeper_feedforward.PNG)
+
+Following this exploration, I will generalise this network in R so that a user can specify how many network layers they would like, and how many neurons they would like in each layer, without rewriting the code each time they make a change.
+
+I use sigmoid activation functions in all layers except the last layer (the last layer will have a linear activation function). 
+
+suppose that we have a single observation (a single input to the network): 
+
+```{r single_observation}
+single_x <- matrix( rnorm(2), nrow=2 )
+single_x
+```
+
+Because we have 2 input neurons (2 features) in our network, this single input is a vector with 2 features.
+
+For a single input $x$, our quadratic cost function is:
+
+$$C_x \quad = \quad \frac{1}{2}\Big( y_x - \hat{y_x}\Big)^2$$
+..wherer $y_x$ is the true response value for our single observation and $\hat{y_x}$ is our neural network's prediction of this true response value.  
+
+We initialise all of the weights and biases with random values:
+
+```{r random_weights_biases}
+set.seed(69)
+
+W2 <- matrix( rnorm(4,0.5), nrow=2)
+W3 <- matrix( rnorm(4,0.5), nrow=2)
+W4 <- matrix( rnorm(4,0.5), nrow=2)
+W5 <- matrix( rnorm(2,0.5), nrow=1)
+b2 <- matrix( rnorm(2,0.5), nrow=2)
+b3 <- matrix( rnorm(2,0.5), nrow=2)
+b4 <- matrix( rnorm(2,0.5), nrow=2)
+b5 <- rnorm(1,2)
+
+```
+
+Here is how a few of them look:
+```{r show_some_of_the_init_weights}
+W2
+W4
+W5
+b2
+b5
+```
+
+We define a _feed-forward_ function in R. For a given set of weights, biases, and a single input, this function will give the output of the network (also outputting the intermediate steps).
+
+```{r feed_fourwurd}
+
+feed_forward <- function( single_x, W2, W3, W4, W5, b2, b3, b4, b5){
+  
+ z2 <- W2 %*% single_x + b2 
+ a2 <- sigmoid(z2)            # recall that the sigmoid function is:  function(x){ 1/( 1+exp(-x) ) }
+
+ z3 <- W3 %*% a2 + b3
+ a3 <- sigmoid(z3)
+ 
+ z4 <- W4 %*% a3 + b4
+ a4 <- sigmoid(z4)
+ 
+ z5 <- W5 %*% a4 + b5
+ a5 <- z5                # last layer has linear activation function (identity)
+ 
+ return( 
+    list( z2=z2,z3=z3,z4=z4,z5=z5,
+          a2=a2,a3=a3,a4=a4,a5=a5
+        )
+ )
+ 
+}
+
+```
+
+So, for the single observation we stated earlier and the weights which we initialised with random values, the output of our network is:
+
+```{r net_out}
+
+single_x_network_output <- 
+   feed_forward( single_x = single_x, 
+                       W2 = W2, 
+                       W3 = W3, 
+                       W4 = W4, 
+                       W5 = W5, 
+                       b2 = b2, 
+                       b3 = b3, 
+                       b4 = b4, 
+                       b5 = b5
+                )
+
+single_x_network_output$a5
+
+```
+
+We also stored all of the intermediate neuron outputs $a^l=\Big[a^l_j \Big]=\Big[ \sigma(z^l_j) \Big]$:
+
+```{r labeloptions}
+single_x_network_output
+```
+
+Assuming that the true response value for our single observation $x$ is $y_x=1$ (this is the value that we're trying to build out network to predict), our cost function for the single observation gives a cost of:
+
+```{r single_obs_cost}
+0.5 * ( 1-single_x_network_output$a5 )^2
+```
+
+For the $5^{th}$ layer, we define the *error* $\delta^5$:   
+
+$$\delta^5 \quad = \quad \frac{\partial C_x}{\partial a^5_1} \space \sigma ' (Z^5_1)$$
+
+The activation on the output layer is linear ($\sigma(z)=z$), so $\sigma'(z)=1$. This gives us, for the output layer:
+
+$$\begin{array}{lcl} \delta^5 &=& \frac{\partial C_x}{\partial a^5_1} \space \times \space 1 \\
+&=& \frac{\partial \space \Big[\frac{1}{2}(y-a^5_1)^2 \Big]}{\partial \space a^5_1} \\
+&=&  a^5_1 - y \\
+&=& z^5_1 - y \hspace{4cm} a^5_1=z^5_1 \text{ because the activation function is linear in the output layer}\\
+\end{array}$$
+
+$\delta^5$ gives us the rate of change of our cost function with respect to the output of our network ($a^5_1=z^5_1$).  
+
+This tells us that a very small change $\Delta z$ in our final network output $z_1^5$ results in approximately a change of $\Delta z\times\underset{\delta^5}{\underbrace{\Big( z^5_1 - y \Big)}}$ in our cost function.
+
+We can see that this is true in R:
+
+```{r show_this}
+
+# So, our original network output was 
+single_x_network_output$a5
+
+# which gave a cost of 
+0.5 * ( 1-single_x_network_output$a5 )^2
+
+# If we increase z5=a5 by 0.00001,
+# then we'd expect a change in our cost function of approximately:
+0.00001 * (single_x_network_output$a5 - 1)
+
+# and the actual change in our cost is:
+0.5 * ( 1- (single_x_network_output$a5+0.00001) )^2 -       # new cost
+0.5 * ( 1- (single_x_network_output$a5) )^2         # previous cost
+
+```
+
+The *error* one layer back (in the $4^{th}$ layer), we can derive from the *error* $\delta^5$ that we derived above:
+
+$$\begin{array}{lcl} \delta^4 &=& \begin{bmatrix} \delta^4_1 \\ \delta^4_2 \end{bmatrix} \hspace{5cm} \text{(1 error for each non-bias neuron in the 4th layer)} \\
+&=& \begin{bmatrix} \frac{\partial \space C_x}{\partial \space z^4_1 }\\
+\frac{\partial \space C_x}{\partial \space z^4_2 } \end{bmatrix} \\
+&=& \Bigg( \Big(W^5\Big)^T \delta^5 \Bigg) \odot \sigma'(z^4) \\
+&=& \Bigg( \begin{bmatrix} W^5_{11} \\ W^5_{12} \end{bmatrix} (z^5_1 - y) \Bigg) \space \odot \space \begin{bmatrix}  \sigma ' (z^4_1) \\ \sigma ' (z^4_2)\end{bmatrix} \\
+&=& \begin{bmatrix} W^5_{11} (z^5_1 - y) \times \sigma ' (z^4_1) \\ W^5_{12} (z^5_1 - y) \times \sigma ' (z^4_2) \end{bmatrix} \\
+&=& \begin{bmatrix} W^5_{11} (z^5_1 - y) \times \sigma(z^4_1)\Big( 1-\sigma(z^4_1)\Big) \\ W^5_{12} (z^5_1 - y) \times \sigma(z^4_2)\Big( 1-\sigma(z^4_2)\Big) \end{bmatrix} \hspace{5cm} \text{(because we are using a sigmoid activation function)}\\
+\end{array}  $$
+
+Because we know $\delta^5$ - the rate of change (gradient) of the cost function for changes in our last layer output ($z^5_1$) - and we know how our $4^{th}$ layer affects our $5^{th}$ layer, we can work out the rate of change of the cost function with respect to changes in our $4^{th}$ layer output. 
+For example, if the cost function changes by $\delta^5$ for every 1 unit increase in our last layer output $z^5_1$, then a 1 unit increase in the output $z^4_1$ (the first neuron in layer 4), will give us a change of $\sigma'(z^4_1)$ in $a^4_1$. This change in $a^4_1$ results in a change of $W^5_{11}\times\sigma'(z^4_1)$ in the network output $z^5_1=a^5_1$. This change in the final layer output $z^5_1$ results in a corresponding change of $W^5_{11}\times\sigma'(z^4_1)\times\delta^5$ in the cost function.  
+
+Since $z^4_1$ is itself a function of its weights, biases and inputs, we can derive the change/derivative of the cost function for a change in one of the weights or biases on the neuron whose output is $a^4_1$. For example, a 1 unit change in the weight $W^4_{12}$ will lead to an increase of $a^3_2$ in $z^4_1$. We know that the rate of change of the cost function with respect to $z^4_1$ is $W^5_{11}\times\sigma'(z^4_1)\times\delta^5$, so we can see that the instantaneous rate of change of the cost function for a 1 unit increase in the $4^{th}$ layer weight $W^4_{12}$ is 
+
+$$a^3_2 \space \times \space W^5_{11}\times\sigma'(z^4_1)\times\delta^5 \quad = \quad a^3_2 \times \delta^4_1$$
+
+So, we use $\delta^4$ to calculate how our cost function will change when we change the weights and biases in the 4th layer of our network.
+
+$\delta^4$ itself is:
+
+```{r show_use_of_delta4}
+
+delta5 <- c(single_x_network_output$z5)-1
+delta4 <- t(W5) * delta5 * sigmoid(single_x_network_output$z4)*(1-sigmoid(single_x_network_output$z4))
+delta4
+
+``` 
+
+So, if we change the weight $W^4_{12}$ by some small amount $\Delta w$. The change in our cost function (at this exact point) will be:
+
+$$\frac{\partial \space C}{\partial \space W^l_{jk}} \times \Delta w \quad = \quad a^{l-1}_k \delta^l_j \times \Delta w \quad = \quad \frac{\partial \space C}{\partial \space W^4_{12}} \times \Delta w \quad = \quad a^{3}_2 \space \delta^4_1 \times \Delta w$$
+
+So, for example, if we decrease our weight $W^4_{12}$ by $\Delta w = -0.00001$, then our cost function will change by approximately
+
+```{r small_change_example_1_billiyun}
+single_x_network_output$a3[[2]] * delta4[[1]] * (-0.00001)
+```
+
+We can see this by making this small change to $W^4_{12}$, calculating our new network output with this weight update, calculating the new cost, and comparing this new cost to that theoretical change:
+
+```{r changing_w4_12_effect}
+
+previous_output <- single_x_network_output$a5
+
+new_output <- 
+  feed_forward( single_x = single_x, 
+                W2 = W2,
+                W3 = W3, 
+                W4 = W4 + matrix(c(0,0,-0.00001,0),nrow=2),
+                W5 = W5, 
+                b2 = b2, 
+                b3 = b3, 
+                b4 = b4, 
+                b5 = b5
+                )$a5
+
+# change in cost:
+0.5 * ( 1 - new_output )^2 -      # new cost
+0.5 * ( 1 - previous_output )^2   # old cost
+  
+```
+
+Similarly, we can see the effect on our cost function of making a small change to one of the 4th layer bias weights:
+
+Changing $b^4_1$ by $\Delta b = 0.0001$ will give us approximately a change in our cost of:
+
+$$\frac{\partial \space C_x}{\partial \space b^l_j} \times \Delta b \quad = \quad \delta^l_j \times \Delta b \quad = \quad \frac{\partial \space C_x}{\partial \space b^4_1} \times 0.0001 \quad = \quad \delta^4_1 \times 0.0001 $$
+So, increasing the bias weight $b^4_1$ to $(b^4_1+0.0001)$ we'd expect a change in cost of approximately 
+
+```{r b41_to_b41_pluss_ome}
+delta4[[1]] * 0.0001
+```
+
+and the actual observed change in cost is:
+
+```{r changing_b4_1_effect}
+
+previous_output <- single_x_network_output$a5
+
+new_output <- 
+  feed_forward( single_x = single_x, 
+                W2 = W2,
+                W3 = W3, 
+                W4 = W4,
+                W5 = W5, 
+                b2 = b2, 
+                b3 = b3, 
+                b4 = b4 + matrix( c(0.0001, 0), nrow=2 ), 
+                b5 = b5
+                )$a5
+
+# change in cost:
+0.5 * ( 1 - new_output )^2 -      # new cost
+0.5 * ( 1 - previous_output )^2   # old cost
+  
+```
+
+This working backwards through the network to calculate the rate of change of the cost function for changes in the weights and biases is called __back propagation__. 
+
+The general rule for working out the change in the cost for a change in any specific bias or weight in the network is:
+
+$$\frac{\partial\space C_x}{\partial\space b^l_j} \quad = \quad \delta^l_j $$
+$$\frac{\partial\space C_x}{\partial\space W^l_{jk}} \quad = \quad a^{l-1}_{k} \times \delta^l_j $$
+
+Let's calculate the other errors (which will allow us to calculate the gradient of the cost function for weights earlier in the network):
+
+$$ \begin{array}{lcl} \delta^3 &=& \begin{bmatrix} \delta^3_1 \\ \delta^3_2 \end{bmatrix} \hspace{5cm} \text{(1 error for each non-bias neuron in the 3rd layer)} \\
+&=& \begin{bmatrix} \frac{\partial \space C_x}{\partial \space z^3_1 }\\
+\frac{\partial \space C_x}{\partial \space z^3_2 } \end{bmatrix} \\
+&=& \Bigg( \Big(W^4\Big)^T \delta^4 \Bigg) \odot \sigma'(z^3) \\
+&=& \Bigg( \begin{bmatrix} W^4_{11} & W^4_{21} \\ W^4_{12} & W^4_{22} \end{bmatrix}  \begin{bmatrix} \delta^4_1 \\ \delta^4_2 \end{bmatrix} \Bigg) \space \odot \space \begin{bmatrix} \sigma ' (z^3_1) \\ \sigma ' (z^3_2) \end{bmatrix}  \\
+&=& \begin{bmatrix} W^4_{11}\delta^4_1 + W^4_{21}\delta^4_2 \\ W^4_{12}\delta^4_1 + W^4_{22}\delta^4_2 \end{bmatrix} \space \odot \space \begin{bmatrix} \sigma (z^3_1) \Big( 1 - \sigma (z^3_1) \Big)\\ \sigma(z^3_2) \Big( 1 - \sigma(z^3_2) \Big) \end{bmatrix}  \\
+&=& \begin{bmatrix} \Big(  W^4_{11}\delta^4_1 + W^4_{21}\delta^4_2  \Big) \times \sigma (z^3_1) \Big( 1 - \sigma (z^3_1) \Big) \\ \Big( W^4_{12}\delta^4_1 + W^4_{22}\delta^4_2 \Big) \times \sigma(z^3_2) \Big( 1 - \sigma(z^3_2) \Big) \end{bmatrix} \\
+\end{array}$$
+
+For our random weights and single input $x$, we calculate $\delta^3$ as :
+
+```{r calculate_delta3}
+delta3 <- ( t(W4) %*% delta4 ) * 
+          ( 
+            sigmoid(single_x_network_output$z3)*( 1-sigmoid(single_x_network_output$z3) ) 
+          )
+  
+delta3
+```
+
+And $\delta^2$ is
+
+$$ \begin{array}{lcl} \delta^2 &=& \begin{bmatrix} \delta^2_1 \\ \delta^2_2 \end{bmatrix} \hspace{5cm} \text{(1 error for each non-bias neuron in the 2nd layer)} \\
+&=& \begin{bmatrix} \frac{\partial \space C_x}{\partial \space z^2_1 }\\
+\frac{\partial \space C_x}{\partial \space z^2_2 } \end{bmatrix} \\
+&=& \Bigg( \Big(W^3\Big)^T \delta^3 \Bigg) \odot \sigma'(z^2) \\
+&=& \Bigg( \begin{bmatrix} W^3_{11} & W^3_{21} \\ W^3_{12} & W^3_{22} \end{bmatrix}  \begin{bmatrix} \delta^3_1 \\ \delta^3_2 \end{bmatrix} \Bigg) \space \odot \space \begin{bmatrix} \sigma ' (z^2_1) \\ \sigma ' (z^2_2) \end{bmatrix}  \\
+&=& \begin{bmatrix} W^3_{11}\delta^3_1 + W^3_{21}\delta^3_2 \\ W^3_{12}\delta^3_1 + W^3_{22}\delta^3_2 \end{bmatrix} \space \odot \space \begin{bmatrix} \sigma (z^2_1) \Big( 1 - \sigma (z^2_1) \Big)\\ \sigma(z^2_2) \Big( 1 - \sigma(z^2_2) \Big) \end{bmatrix}  \\
+&=& \begin{bmatrix} \Big(  W^3_{11}\delta^3_1 + W^3_{21}\delta^3_2  \Big) \times \sigma (z^2_1) \Big( 1 - \sigma (z^2_1) \Big) \\ \Big( W^3_{12}\delta^3_1 + W^3_{22}\delta^3_2 \Big) \times \sigma(z^2_2) \Big( 1 - \sigma(z^2_2) \Big) \end{bmatrix} \\
+\end{array}$$
+
+In R, using our current network, $\delta^2$ is:
+
+```{r create_delta2}
+
+delta2 <- 
+   t(W3) %*% delta3 * 
+   ( sigmoid(single_x_network_output$z2)*(1-sigmoid(single_x_network_output$z2)) )
+
+delta2
+
+```
+
+So, for our single input $x=\begin{bmatrix} x_1 \\ x_2\end{bmatrix}$, we can now use $\delta^2$, $\delta^3$, $\delta^4$ and $\delta^5$ to find the derivative of our cost function with respect to any of the weights in our network.   
+
+As another example, the bias weights in the second layer are currently:
+
+$$b^2 \quad = \quad \begin{bmatrix} b^2_1 \\ b^2_2\end{bmatrix} \quad = \quad $$
+```{r print_b2}
+b2
+```
+
+So, $\delta^2 = \begin{bmatrix} \delta^2_1 \\ \delta^2_2 \end{bmatrix} = \begin{bmatrix} \frac{\partial \space C_x}{\space b^l_j} \\ \frac{\partial C_x}{\partial \space b^l_j} \end{bmatrix}$ gives the rate of change of the cost function at the current values of the bias weights. 
+
+For our data at the moment, $\delta^2$ is 
+
+```{r print_delta2}
+delta2
+```
+
+So, if we change the weight on the first bias in the second layer ($b^2_1$) by -0.001, we'd expect a change of around $\delta^2_1 \times (-0.001) = `r delta2[[1]]*(-0.001)`$ in the cost. To compare, the true change in the cost is:
+
+```{r true_change_motherfuckers}
+previous_cost <- 0.5 * ( single_x_network_output$a5-1 )^2
+new_cost <- 0.5 * 
+    ( 
+        feed_forward( single_x = single_x, 
+                            W2 = W2,
+                            W3 = W3, 
+                            W4 = W4,
+                            W5 = W5, 
+                            b2 = b2 + c(-0.001, 0), 
+                            b3 = b3, 
+                            b4 = b4,
+                            b5 = b5
+                    )$a5 - 1 
+    )^2
+
+new_cost - previous_cost
+
+```
+
+And similarly, decreasing the other 2nd layer bias weight ($b^2_2$) by the same amount (-0.001) would give us approximately a change of $\delta^2_2 \times (-0.001) = `r delta2[[2]]*(-0.001)`$ in the cost. 
+The observed change is:
+
+```{r true_change_motherfuckerz_again}
+previous_cost <- 0.5 * ( single_x_network_output$a5-1 )^2
+new_cost <- 0.5 * 
+    ( 
+        feed_forward( single_x = single_x, 
+                            W2 = W2,
+                            W3 = W3, 
+                            W4 = W4,
+                            W5 = W5, 
+                            b2 = b2 + c(0, -0.001), 
+                            b3 = b3, 
+                            b4 = b4,
+                            b5 = b5
+                    )$a5 - 1 
+    )^2
+
+new_cost - previous_cost
+
+```
+
+### Further examples of the effect of changing weights using the gradient of the cost function
+At the risk of boring you, and to satisfy my anxiety for correctness, I give a few more examples here of the change in the cost function for changes in the network weights and biases (still for our single input $x$)
+
+We calculated $\delta^2 = \begin{bmatrix} \delta^2_1 \\ \delta^2_2\end{bmatrix}$ as 
+
+```{r print_delta2_again}
+delta2
+```
+
+Increasing our weight $W^2_{12}$ by 0.0001 should change our cost function by approximately
+
+$$\begin{array}{lcl} \frac{\partial \space C_x}{\partial \space W^2_{12}} \times 0.0001 &=& a^1_2 \space \delta^2_1 \times 0.0001\\ 
+&=& x_2 \space \delta^2_1 \times 0.0001 \hspace{4cm} a^1 \text{ is our vector of inputs } x \text{ (the 1st layer of our network)}\\
+\end{array}$$
+
+our single input $x=\begin{bmatrix} x_1 \\ x_2\end{bmatrix}$ was 
+
+```{r print_x_pleeeease}
+single_x
+```
+
+So,
+
+$x_2 \times \delta^2_1 \times 0.0001 =$ `r single_x[2,1]` $\times$ `r delta2[1,1]` $\times 0.0001 =$ `r single_x[2,1]*delta2[1,1]*0.0001` 
+
+The observed change is:
+
+```{r last_time_I_show_code_for_an_actual_change_possibly}
+previous_cost <- 0.5 * ( single_x_network_output$a5-1 )^2
+new_cost <- 0.5 * 
+    ( 
+        feed_forward( single_x = single_x, 
+                            W2 = W2 + matrix( c(0,0,0.0001,0), nrow=2),
+                            W3 = W3, 
+                            W4 = W4,
+                            W5 = W5, 
+                            b2 = b2, 
+                            b3 = b3, 
+                            b4 = b4,
+                            b5 = b5
+                    )$a5 - 1 
+    )^2
+
+new_cost - previous_cost
+```
+
+The gradient of the cost function tells us that increasing weight $W^3_{22}$ in the 3rd layer by some small amount (say 0.0001) should change the output of our cost function by 
+
+$$\begin{array}{lcl} \frac{\partial \space C_x}{\partial \space W^3_{22}} \times 0.0001 &=& a^2_2 \space \delta^3_2 \times 0.0001\\ 
+\end{array}$$
+
+The matrix of weights in the 3rd layer ($W^3=\begin{bmatrix} W^3_{11} & W^3_{12} \\ W^3_{21} & W^3_{22}\end{bmatrix}$ is
+
+```{r example_w_3_22}
+W3
+```
+
+and $\delta^3=\begin{bmatrix} \delta^3_1 \\ \delta^3_2 \\\end{bmatrix}$ is
+
+```{r delta3_againa_again_again, echo=FALSE}
+delta3
+```
+
+and $a^2=\begin{bmatrix} a^2_1 \\ a^2_2\end{bmatrix}$ is
+
+```{r shwo_a2}
+single_x_network_output$a2
+```
+
+So, 
+
+$a^2_2 \times \delta^3_2 \times 0.0001 =$ `r single_x_network_output$a2[2,1]` $\times$ `r delta3[2,1]` $\times 0.0001 =$ `r single_x_network_output$a2[2,1]*delta3[2,1]*0.0001`
+
+For comparison, the observed change in cost is
+
+```{r not_this_time_sorry, echo=FALSE}
+previous_cost <- 0.5 * ( single_x_network_output$a5-1 )^2
+new_cost <- 0.5 * 
+    ( 
+        feed_forward( single_x = single_x, 
+                            W2 = W2,
+                            W3 = W3 + matrix( c(0,0,0,0.0001), nrow=2), 
+                            W4 = W4,
+                            W5 = W5, 
+                            b2 = b2, 
+                            b3 = b3, 
+                            b4 = b4,
+                            b5 = b5
+                    )$a5 - 1 
+    )^2
+
+new_cost - previous_cost
+```
+
+### Calculating the gradient of the cost function for multiple inputs
+Up til now, we have been dealing with a single input (input vector) $x = \begin{bmatrix} x_1 \\ x_2 \end{bmatrix}$ to our neural network. For this single input, our cost function was 
+
+$$C_x \quad = \quad \frac{1}{2}(y - a^5_1)^2 \quad = \quad \frac{1}{2}(y - \hat{y})^2$$
+
+..where $a^5_1=\hat{y}$ is the single output of our network for the single input $x$. If instead of one input we have multiple different inputs, then we can feed each one separately through our neural network. Each single input will have it's own single output.
+
+Let's consider $n$ inputs (each individual input consists of 2 input variables/features):
+
+$$X \quad = \quad \begin{bmatrix} \underline{X}_1 \\ \underline{X}_2 \\ \underline{X}_3 \\ . \\ . \\ .  \\ \underline{X}_n \end{bmatrix} \quad = \quad \begin{bmatrix} \text{1st input vector} \\ \text{2nd input vector} \\ \text{3rd input vector} \\ . \\ . \\ . \\ n^{th}\text{ input vector} \end{bmatrix} \quad = \quad \begin{bmatrix} x_{11} & x_{12} \\ x_{21} & x_{22} \\ x_{31} & x_{32} \\ . & . \\ . & . \\ . & . \\ x_{n1} & x_{n2} \end{bmatrix}$$
+
+Each row of $X$ is a different input vector (we have $n$ input vectors/observations/samples/data rows), so for our previous single input we had
+
+$$X \quad = \quad \Big[ \underline{X}_1 \Big] \quad = \quad \begin{bmatrix} x_{11} & x_{12} \end{bmatrix}$$
+
+When considering multiple input vectors $x_i$ simultaneously, we instead use the cost function 
+
+$$C \quad = \quad \frac{ \sum_{i=1}^n C_x}{n} \quad = \quad \frac{ \sum_{i=1}^n \frac{1}{2} (y_i-\hat{y}_i)^2}{n}$$
+
+This cost function is simply calculating the cost individually for each individual input vector, then averaging all of these individual costs to get an average cost across all of them (with each input contributing equally to the cost).
+
+Suppose that we now have 5 input vectors (observations/samples):
+
+```{r random_x_5_input}
+# generate some data randomly:
+X <- data.frame( runif(2,-1,1),
+                 runif(2,-1,1),
+                 runif(2,-1,1),
+                 runif(2,-1,1),
+                 runif(2,-1,1)
+                ) %>% 
+     as.matrix() %>% 
+  t()
+
+colnames(X) <- c("X1","X2")
+rownames(X) <- paste("observation", 1:5)
+X
+```
+
+So, we have 5 observations/measurements/samples ($n=5$) of 2 variables ($X_1$ and $X_2$). For instance, we could have measured the height and weight of 5 different people. 
+
+Let's suppose that the response values $y_i$ (the values that we're trying to predict using our model) for our 5 observations are 
+
+```{r predict_some_y_values, echo=FALSE}
+y <- X[,1]+X[,2]
+y
+```
+
+We define this multiple-input cost function as a function in R:
+
+```{r define_quadratic_cost_function}
+
+quadratic_cost_ftn <- function( # the cost function is a function of:
+                                y,      # our true response values 
+                                y_hat   # our predicted response values  
+){
+  
+  return( mean( 0.5*(y-y_hat)^2 ) )
+  
+                              }
+```
+
+We define a *feed-forward* function, which passes our 5 inputs through the network, giving us one output ($y$ prediction) per input:
+
+```{r define_feed_4wad}
+feed_forward <- function( X,
+                          W2,W3,W4,W5,
+                          b2,b3,b4,b5
+){
+     z2 <- W2%*%t(X) + matrix( rep(b2, nrow(X)), nrow=2 )
+     a2 <- sigmoid(z2)
+
+     z3 <- W3%*%a2 + matrix( rep(b3, ncol(a2)), nrow=2 )
+     a3 <- sigmoid(z3)
+
+     z4 <- W4%*%a3 + matrix( rep(b4, ncol(a3)), nrow=2 )
+     a4 <- sigmoid(z4) 
+     
+     z5 <- W5%*%a4 + matrix( rep(b5, ncol(a4)), nrow=1 )
+     a5 <- z5
+     output_y_hat <- a5    
+     
+     return( list( z2=z2, a2=a2,
+                   z3=z3, a3=a3,
+                   z4=z4, a4=a4,
+                   z5=z5, a5=a5, 
+                   y_hat = output_y_hat)
+     )
+}
+```
+
+So, for our 5 input vectors, 
+
+```{r print_input_vectors}
+X
+```
+
+the output of our network with our current weights (we're still using random weights) is:
+
+```{r print_network_output_init}
+network_output <- feed_forward( X=X,W2=W2,W3=W3,W4=W4,W5=W5,b2=b2,b3=b3,b4=b4,b5=b5 )
+network_output$y_hat
+```
+
+The error in the last (5th) layer $\delta^5$ for any single input $x$ is
+
+$$\delta_{x}^5 \quad = \quad \frac{\partial \space C_x}{\partial \space a^5_{1x}}\quad = \quad a^5_{1x} - y_{x}$$
+
+$\delta_{x}^5$ tells us the instantaneous rate of change of the cost function $C_x$ for a unit increase in one of the network outputs $a^5_{1x}$. 
+
+So, there will be a different $\delta^5_x$ value for each of our 5 inputs:
+
+```{r delta5_please}
+delta5 <- matrix( network_output$a5 - y )
+rownames(delta5) <- paste("observation", 1:5)
+colnames(delta5) <- "delta5"
+delta5
+```
+
+For any single observation $x$: because a change in the bias in the 4th layer ($b_{1x}^5$) simply changes the final output of the network ($a_{1x}^5$) by that change, the rate of change of the cost function $C_x$ for a 1 unit increase in a $4^{th}$ layer bias weight is simply $\delta^5_x$. Averaging over all 5 $\delta^5_x$ values gives us the instantaneous rate of change of the cost function $\delta^5 = \frac{ \sum_x \delta^5_x}{5}$ for a 1 unit change in bias $b_{1}^5$, taking into account all 5 inputs $x$.
+
+Our $\delta^5_x$ values we calculated as
+
+```{r delta5_last_time_surely}
+delta5
+```
+
+This tells us that the rate of change in the cost function $C$ for a 1 unit change in the bias weight $b^5_1$ is
+
+```{r see_it_I_see_it}
+delta5_global <- mean(delta5)
+delta5_global
+```
+
+For a change of -0.0001 in $b^5_1$, we'd expect to see a change in the cost $C$ of around 
+
+```{r windows95}
+-0.0001 * delta5_global
+```
+
+..and the actual change we see is:
+
+```{r see_if_I_am_right}
+
+output1 <- feed_forward( X=X,W2=W2,W3=W3,W4=W4,W5=W5,b2=b2,b3=b3,b4=b4,b5=b5 )$a5 
+output2 <- feed_forward( X=X,W2=W2,W3=W3,W4=W4,W5=W5,b2=b2,b3=b3,b4=b4,b5=b5-0.0001 )$a5
+  
+quadratic_cost_ftn(y=y, y_hat=output2) - quadratic_cost_ftn(y=y, y_hat=output1)
+```
+
+The change in cost resulting from a change in the weights is similarly found by aggregating the individual gradients:
+
+The weights $W^5=\begin{bmatrix} W^5_{11} & W^5_{12}\end{bmatrix}$ between the 4th and 5th layer are:
+
+```{r r_is_great}
+W5
+```
+
+The rate of change of $C$ with respect to these weights $W^5$ is:
+
+$$\frac{\partial \space C}{\partial W^5_{11}} \quad = \quad \frac{\sum_{x=1}^5 \Big[ \frac{\partial \space C_x }{\partial \space W^5_{11}} \Big]}{5} \quad = \quad \frac{\sum_{x=1}^5 \Big[ a^4_{1x} \delta^5_{1x} \Big]}{5}$$
+
+and
+
+$$\frac{\partial \space C}{\partial W^5_{12}} \quad = \quad \frac{\sum_{x=1}^5 \Big[ \frac{\partial \space C_x }{\partial \space W^5_{12}} \Big]}{5} \quad = \quad \frac{\sum_{x=1}^5 \Big[ a^4_{2x} \delta^5_{1x} \Big]}{5}$$
+
+For our network with it's current weights, $a^4$ is
+
+```{r a42_qix}
+a4 <- network_output$a4
+rownames(a4) <- c("a4_1", "a4_2")
+a4
+```
+
+and $\delta^5$ is
+
+```{r delta5_one_more_time_daft_punk}
+delta5
+```
+
+So, $a^4_{1x} \delta^5_{1x}$ is
+
+```{r testingtestingtesting}
+dCx_dW5_11 <- a4[1,] * t(delta5)
+rownames(dCx_dW5_11) <- "dCx_dW5_11"
+dCx_dW5_11
+```
+
+and $a^4_{2x} \delta^5_{1x}$ is
+
+```{r moreandmoreandmoredickheads}
+dCx_dW5_12 <- a4[2,] * t(delta5)
+rownames(dCx_dW5_12) <- "dCx_dW5_12"
+dCx_dW5_12
+```
+
+averaging over all 5 input observations $x$ gives us $\frac{\partial \space C}{\partial W^5_{11}}$:
+
+```{r justDOTI}
+dC_dW5_11 <- mean(dCx_dW5_11)
+```
+
+and $\frac{\partial \space C}{\partial W^5_{12}}$ is
+
+```{r motherucker}
+dC_dW5_12 <- mean(dCx_dW5_12)
+```
+
+Let's check that these derivatives are correct: 
+
+a 0.0001 increase to $W^5_{11}$ should change our cost by approximately
+
+```{r anothercheckjoeisridiculous}
+dC_dW5_11*0.0001
+```
+
+and it changes it by precisely:
+
+```{r changesitprecisely}
+output1 <- feed_forward( X=X,W2=W2,W3=W3,W4=W4,W5=W5,b2=b2,b3=b3,b4=b4,b5=b5 )$a5 
+output2 <- feed_forward( X=X,W2=W2,W3=W3,W4=W4,W5=W5+c(0.0001,0),b2=b2,b3=b3,b4=b4,b5=b5 )$a5
+  
+quadratic_cost_ftn(y=y, y_hat=output2) - quadratic_cost_ftn(y=y, y_hat=output1)
+```
+
+Similarly, a 0.0001 increase to $W^5_{12}$ should change our cost by
+
+```{r icancountallthewaytoshwiftyfive}
+dC_dW5_12*0.0001
+```
+
+and it in fact changes it by:
+
+```{r actual_change}
+output1 <- feed_forward( X=X,W2=W2,W3=W3,W4=W4,W5=W5,b2=b2,b3=b3,b4=b4,b5=b5 )$a5 
+output2 <- feed_forward( X=X,W2=W2,W3=W3,W4=W4,W5=W5+c(0,0.0001),b2=b2,b3=b3,b4=b4,b5=b5 )$a5
+  
+quadratic_cost_ftn(y=y, y_hat=output2) - quadratic_cost_ftn(y=y, y_hat=output1)
+```
+
+We can find the derivative of the cost function with respect to all of the other weights in the network in the same way: for each of our observations we find the derivative, and then average this derivative value over all of the input observations. 
+
+## Building the regression network
+Now, I am going to build a simple feed-forward regression network in R. I want it to be generalisable in the sense that it can be given different datasets (different numbers of observations/samples and different numbers of inputs) and that the user can specify the number of layers that they want - and the number of nodes in each layer - without rewriting any code.  
+
+The model will learn (i.e. the weights updated) using __stochastic gradient descent__. This is achieved by feeding the network random subsets of the data (_batches_) one at a time (i.e. it does not see all of the training data in each forward pass). The model is updated after each _batch_. The process is called _gradient_ descent because the weights and biases in the network are updated using the gradient (derivative) of the cost function.  
+
+The algorithm is as follows:
+
+For each batch of input data:
+
+1 For every layer $\mathcal{l}$ from the second layer to the output layer (2,3,4,...,$L$), feed each input $x$ in the batch seperately forward through the network, storing the activations along the way:
+
+i.e. for each $x$ and $l$, calculate $$z^{x,l}=w^l a^{x,l-1}+b^l \quad \text{ and } \quad a^{x,l}=\sigma(z^{x,l}) \\ [\text{note that } a^{x, l-1} \text{ is a vector}]$$
+ 
+2 Calculate the output error of the last layer $$\delta^{L}$$
+
+With a single output node with linear activation function on the last layer, this is: 
+$$\delta^L \quad = \quad \frac{1}{n}\sum_{x=1}^n \bigg( \frac{\partial \space C_x}{\partial \space a^{x,L}_1} \bigg)$$
+
+..where $n$ is the number of samples/observations in the batch
+
+3 For each previous layer in the network (aside from the first input layer), calculate the error vector $\delta^l$ 
+
+This is 
+
+$$\begin{array}{lcl} \delta^l &=& \displaystyle\frac{\sum_{x=1}^n \delta^{l,x}}{n} \\
+\delta^{l,x} &=& \Bigg( \Big( w^{l+1}\Big)^T \space \delta^{l+1,x} \Bigg) \space \odot \space  \sigma ' (z^{l,x})
+\end{array}$$
+
+4 Calculate the gradient of the cost function $C$ with respect to every bias and weight in the network using 
+
+$$\frac{\partial\space C_x}{\partial\space b^l_j} \quad = \quad \delta^l_j$$
+
+and 
+
+$$\frac{\partial\space C_x}{\partial\space W^l_{jk}} \quad = \quad a^{l-1}_{k} \times \delta^l_j$$
+
+5 Update every weight and bias in the network simultaneously using the gradient of the cost function for this batch. For example, if the derivative of the cost function $C$ for one of the weights in our network (e.g. $W^{8}_{31}$) is -0.054, then this means that the cost function is decreasing at a rate of $\frac{\partial\space C}{\partial\space W^{8}_{31}} = -0.054$ per unit increase in this weight. So, a natural way to update this weight would be to add 0.054 to it. So, we could simply update every weight $W^{l}_{jk}$ in the network by subtracting $\frac{\partial\space C}{\partial\space W^{l}_{jk}}$ from it. Unfortunately, because we are updating all of the weights simultaneously, these changes in the weights are too large - the network makes huge leaps over possible solutions. In order to combat this, we can make the network learn more slowly by simultaneously updating each weight using 
+
+$$\text{updated } W^l_{jk} \quad = \quad W^l_{jk} - \frac{\partial\space C}{\partial\space W^{l}_{jk}} \times\lambda$$
+and each bias as 
+
+$$\text{updated } b^l_{j} \quad = \quad b^l_{j} - \frac{\partial\space C}{\partial\space b^l_{j}} \times\lambda$$
+
+$\lambda$ is a constant that we choose, called the __learning rate__. We use $\lambda$ to control the speed at which the network learns.  
+
+First, we define a function which gives us random starting weights. We will specify the number of layers and nodes like this:
+
+```{r specify_network}
+
+layers.neurons <- c(
+                     layer1=2,  # this is the input layer (always num features == num neurons)
+                     layer2=2,
+                     layer3=2,
+                     layer4=2,
+                     layer5=1  # this is the output layer (always 1 neuron)
+                    )
+
+```
+
+and the function giving us initial random weights as:
+
+```{r initialize_network_ftn}
+# this function creates a list of weight matrices of the correct dimensions.
+# the weights are initialised with rnorm(0,1) values:
+initialise_weights <- function( layers.neurons ){
+  
+  n_hidden_neurons <- length(layers.neurons)-2       # number of hidden layers
+  weight_matrix_list <- vector("list",length = n_hidden_neurons*2 + 2 )   # create empty list 
+  
+  names(weight_matrix_list) <-    # name the entries in the weights matrix list
+        c( 
+              paste( names(layers.neurons)[2:(n_hidden_neurons+2)], "biases", sep="_"),
+              paste( names(layers.neurons)[2:(n_hidden_neurons+2)], "weights", sep="_")
+         )
+  
+  for( layer in 2:(n_hidden_neurons+2) ){     # for each each hidden layer
+    
+    # add random biases: 
+    weight_matrix_list[[paste0("layer",layer,"_biases")]] <- 
+        rnorm( layers.neurons[[paste0("layer",layer)]] , mean=0, sd=1 )
+    
+    # add random weights:
+    weight_matrix_list[[paste0("layer",layer,"_weights")]] <-
+        matrix( rnorm( layers.neurons[[paste0("layer",layer-1)]] * # number of neurons on LHS
+                       layers.neurons[[paste0("layer",layer)]],    # number of neurons on RHS
+                       mean=0, sd=1),
+                ncol = layers.neurons[[paste0("layer",layer-1)]],  # number of neurons on LHS
+                nrow = layers.neurons[[paste0("layer",layer)]]     # number of neurons on RHS
+              )
+
+  }
+  
+  ################################################################  
+  # make a little visual representation of the network:   
+  blank_matrix <- matrix( c( rep(" ", ( max(layers.neurons)+1 )*length(layers.neurons) ) ),
+                          ncol = length(layers.neurons) 
+                          )
+  colnames(blank_matrix) <- paste( "layer_", 1:ncol(blank_matrix), sep="")
+  
+  blank_matrix[,1] <- c( "b", 
+                               paste("x", 1:layers.neurons[1], sep=""),
+                               rep(" ", nrow(blank_matrix) - layers.neurons[1] - 1 ) 
+                       )
+  
+  for( layer in 2:(ncol(blank_matrix)-1) ){
+    
+    blank_matrix[,layer] <- c( "b", 
+                               paste("a", 1:layers.neurons[layer], sep=""),
+                               rep(" ", nrow(blank_matrix) - layers.neurons[layer] - 1 ) 
+                             )
+  }
+  blank_matrix[,ncol(blank_matrix)] <- c("a1=output",
+                                         rep(" ", nrow(blank_matrix) - 1 ) )
+  print(blank_matrix)
+  ################################################################
+  
+  return( weight_matrix_list)
+}
+```
+
+So, giving this function the network that we've been discussing gives us:
+
+```{r actualy_specify_network}
+
+layers.neurons
+
+starting_weights <- initialise_weights( layers.neurons )
+
+starting_weights
+
+```
+
+Now, we define our feed-forward function, which takes in as input a batch of input samples and the current weights of our network. This function passes our inputs through the network using the weights that we give it, giving the network output and the activations in each layer along the way. 
+
+```{r define_generic_feedforward}
+
+generic_feedforward_ftn <- function( X,                 # design matrix of input features 
+                                     Weight_matrices    # matrices of weights and biases in each layer 
+){
+  
+  n_hidden_layers <- length(Weight_matrices)/2 - 1
+  z_list <- vector("list", length = n_hidden_layers+1 )
+  names(z_list) <- paste("z", 2:(n_hidden_layers+2), sep="" )
+  activations_list <- vector("list", length = n_hidden_layers+1 )
+  names(activations_list) <- paste("a", 2:(n_hidden_layers+2), sep="" )
+  
+  activations_list$a1 <- t(X)
+  
+  for( layer in 2:(n_hidden_layers+1)){  # for each hidden layer:
+    
+    # calculate z_[this layer] and store it:
+    z <- Weight_matrices[[paste0("layer",layer,"_weights")]] %*% 
+         activations_list[[paste0("a",layer-1)]] +
+         matrix( rep( Weight_matrices[[paste0("layer",layer,"_biases")]], nrow(X) ),
+                 nrow = nrow(Weight_matrices[[paste0("layer",layer,"_weights")]])
+               )
+    
+    z_list[[paste0("z",layer)]] <- z
+    
+    # calculate a_[this layer] and store it:
+    activations_list[[paste0("a",layer)]] <- sigmoid(z)
+    
+  }
+  
+  # do the last layer manually (it has a linear activation function)
+  z <- Weight_matrices[[paste0("layer",(n_hidden_layers+2),"_weights")]] %*% 
+         activations_list[[paste0("a",(n_hidden_layers+1))]] +
+         matrix( rep( Weight_matrices[[paste0("layer",(n_hidden_layers+2),"_biases")]], nrow(X) ),
+                 nrow = nrow(Weight_matrices[[paste0("layer",(n_hidden_layers+2),"_weights")]])
+               )
+    
+    z_list[[paste0("z",(n_hidden_layers+2))]] <- z
+    activations_list[[paste0("a",(n_hidden_layers+2))]] <- z
+  
+  return( list( z = z_list,
+                a = activations_list)
+  )
+
+}
+
+```
+
+Now, we define a _back propagation_ function - a function given the output of the feedforward function and our true response values $y$ that returns the gradient of the cost function with respect to every bias and weight in the network.
+
+We find each 
+
+$$\frac{\partial \space C}{\partial \space W^l_{jk}} \quad = \quad \frac{1}{n} \sum_{i=1}^n \bigg( \frac{\partial\space C_x}{\partial\space W^l_{jk}} \bigg) \quad = \quad \frac{1}{n} \sum_{i=1}^n \bigg( a^{l-1,x}_{k} \times \delta^{l,x}_j \bigg)$$ 
+
+using the matrix multiplication
+
+$$\frac{\partial \space C}{\partial \space W^l} \quad = \quad \frac{ \delta^l(a^{l-1})^T }{n}$$
+
+For example, using the network structure we've been discussing (3 hidden layers with 2 nodes in each), and with (for example) a batch of 4 observations, the weights in layer 3 would be:
+
+$$W^3 \quad = \quad \begin{bmatrix} W^3_{11} & W^3_{12} \\ W^3_{21} & W^3_{22} \end{bmatrix}$$
+and the derivative of the cost with respect to these weights, for this batch of 4 inputs, is:
+
+$$\begin{array}{lcl} \frac{\partial \space C}{\partial \space W^3} &=& \delta^3(a^{2})^T \space \div n \\ 
+&=& \begin{bmatrix} \delta^{3,x=1}_1 & \delta^{3,x=2}_1 & \delta^{3,x=3}_1 & \delta^{3,x=4}_1 \\ \delta^{3,x=1}_2 & \delta^{3,x=2}_2 & \delta^{3,x=3}_2 & \delta^{3,x=4}_2 \end{bmatrix} \begin{bmatrix} a^{2,x=1}_1 & a^{2,x=1}_2 \\ a^{2,x=2}_1 & a^{2,x=2}_2 \\ a^{2,x=3}_1 & a^{2,x=3}_2 \\ a^{2,x=4}_1 & a^{2,x=4}_2 \end{bmatrix} \space \div n \\ 
+&=& \begin{bmatrix} \sum_{x=1}^4 \Big(\delta^{3,x}_1 a^{2,x}_1 \Big) & \sum_{x=1}^4 \Big(\delta^{3,x}_1 a^{2,x}_2 \Big) \\ \sum_{x=1}^4 \Big(\delta^{3,x}_2 a^{2,x}_1 \Big) & \sum_{x=1}^4 \Big(\delta^{3,x}_2 a^{2,x}_2 \Big) \end{bmatrix} \space \div n \\ &=& \begin{bmatrix} \frac{\partial \space C}{\partial W_{11}} & \frac{\partial \space C}{\partial W_{12}} \\ \frac{\partial \space C}{\partial W_{21}} & \frac{\partial \space C}{\partial W_{22}}  \end{bmatrix}   \end{array}$$
+
+We also require a function which returns the derivative of the sigmoid function:
+
+```{r sigmoid_derivative}
+sigmoid_derivative <- function(x){ sigmoid(x) * (1-sigmoid(x)) }
+```
+
+We create our backpropagation function:
+
+```{r get_gradient_ftn}
+
+backpropagate_ftn <- function( network_output, Weight_matrices, y ){
+  
+   store_deltas <- vector( "list", length=length(network_output$a)-1  )
+   names(store_deltas) <- paste( "delta_", 2:(length(store_deltas)+1), sep="") 
+  
+   # deltas in the last layer:
+   store_deltas[[paste0("delta_",length(store_deltas)+1)]] <- 
+      ( network_output$a[[paste0("a",length(network_output$a))]] - y ) %>% 
+         matrix(., nrow=1)
+   
+   # deltas in all previous layers down to layer 2:    
+  for( d in seq( from=length(network_output$a)-1, to=2, by=-1) )
+  {
+     store_deltas[[paste0("delta_",d)]] <- 
+       
+       apply( X = store_deltas[[paste0("delta_",d+1)]],
+              MARGIN = 2,    # apply seperately to each column
+              FUN = function(x) { t(Weight_matrices[[paste0("layer",d+1,"_weights")]]) %*% x }
+       ) *
+      sigmoid_derivative( network_output$z[[paste0("z",d)]] ) 
+  }
+
+   # store gradient of the cost function in terms of the biases in each layer:
+   dC_db <- vector( "list", length=length(network_output$a)-1 )
+   names(dC_db) <- paste( "dC_db_layer", 2:length(network_output$a), sep="" )
+   
+   for( layer in 2:length(network_output$a) )
+   {
+     
+     dC_db[[paste0("dC_db_layer",layer)]] <- 
+        apply( store_deltas[[paste0("delta_",layer)]],
+               MARGIN = 1,   # apply to each row
+               FUN = mean
+             )
+   }
+   
+   # store gradient of the cost function in terms of the weights in each layer:
+   dC_dW <- vector( "list", length=length(network_output$a)-1 )
+   names(dC_dW) <- paste( "dC_dW_layer", 2:length(network_output$a), sep="" )
+   
+   for( l in 2:length(network_output$a) ){
+     
+     # this commented code was part of my error-checking when I built this:  
+     # dC_dW[[paste0("dC_dW_layer",l)]] <- Weight_matrices[[paste0("layer",l,"_weights")]]
+      
+      # for( k in 1:nrow(network_output$a[[paste0("a",l-1)]]) ){
+      #   
+      #    for( j in 1:nrow(store_deltas[[paste0("delta_",l)]]) ){
+      #      
+      #      dC_dW[[paste0("dC_dW_layer",l)]][j,k] <- 
+      #          mean( 
+      #                 network_output$a[[paste0("a",l-1)]][k,] *  
+      #                 store_deltas[[paste0("delta_",l)]][j,]     
+      #              )
+      #    }
+      # }
+     
+     # shorter way: 
+     dC_dW[[paste0("dC_dW_layer",l)]] <- 
+        store_deltas[[paste0("delta_",l)]] %*% t( network_output$a[[paste0("a",l-1)]] ) /
+              length(y)
+     
+   }
+   
+   return( list( dC_db=dC_db,
+                 dC_dW=dC_dW
+                )
+   )
+}
+
+```
+
+
+Now, we make a function which uses the gradient of the cost function with respect to the weights and biases (the output of the backpropagation function above) to update the weights of our network. We choose a default learning rate of 0.001 (i.e. if the user doesn't specify a learning rate, then this is the learning rate that the function will use). 
+
+```{r weight_update_ftn}
+
+update_weights <- function( current_weights, 
+                            dC_db,
+                            dC_dW,
+                            learning_rate = 0.001 ){
+  
+  updated_weights <- current_weights
+  
+  # update the biases:
+  for( b in 2:( length(names(dC_db))+1 ) ){
+    
+    updated_weights[[paste0("layer",b,"_biases")]] <- 
+            current_weights[[paste0("layer",b,"_biases")]] - 
+            ( learning_rate * dC_db[[paste0("dC_db_layer",b)]] )
+      
+  }
+  
+  # update the weights:
+  for( w in 2:( length(names(dC_dW))+1 ) ){
+    
+    updated_weights[[paste0("layer",w,"_weights")]] <- 
+            current_weights[[paste0("layer",w,"_weights")]] - 
+            ( learning_rate * dC_dW[[paste0("dC_dW_layer",w)]] )
+      
+  }
+    
+  return( updated_weights )    
+  
+}
+
+```
+
+Now, let's have a look at using these functions to fit a network to some data.
+
+## Using our regression network
+
+The dataset I've chosen is called the __Boston Housing__ dataset, found in the _mlbench_ package.
+
+We are trying to predict median value of houses (_medv_) using a whole lot of attributes of the houses and the suburbs which the houses are in. 
+
+Let's load the dataset and have a look at it:
+
+```{r data_exploration}
+
+# load the data and store it in a tibble():
+library(mlbench)
+data(BostonHousing)
+boston_data <- as_tibble( BostonHousing )
+
+# number of rows in the data:
+nrow(boston_data)
+
+# first 10 rows of the data:
+head(boston_data, 10)
+
+summary(boston_data)
+
+# store the response values:
+y <- boston_data$medv
+
+# store the features in a design matrix: 
+X <- boston_data %>% 
+        mutate( chas = as.numeric(chas) ) %>%   # make chas() column numeric
+        select(-medv) %>% 
+        as.matrix() %>% 
+        scale()                             # standardize the data
+        
+head(X)
+```
+
+Notice that I also standardized the features data - when writing these notes and experimenting with the network, I found that weights tended to explode (*saturate*) or become zero when I did not standardize the data. Also, R was losing information because it couldn't store all of the decimal places in my near-zero weights.   
+
+Standardizing means giving each column (feature) a mean of 0 and standard deviation of 1:
+
+```{r check_standards}
+# check that the data has been correctly standardized:
+colMeans(X)        
+apply( X, 2, sd)
+```
+
+In addition, notice that all features must be numeric (continuous) variables. Categorical variables (of which there is only one - _chas_- in this dataset) must be _one-hot encoded_ for the network.  
+
+Let's see if our functions are working correctly:
+
+First, we define our network structure, and create initial random weights:
+```{r initial_network_test}
+
+layers.neurons <- c(
+                     layer1=ncol(X),  # this is the input layer (always num features == num neurons)
+                     layer2=2,
+                     layer3=2,
+                     layer4=2,
+                     layer5=1  # this is the output layer (always 1 neuron)
+                    )
+
+layers.neurons
+
+starting_weights <- initialise_weights( layers.neurons )
+
+```
+
+Let's choose a batch of 20 random observations from our data to feed through the network:
+
+```{r choose_random_batch50}
+batch_indices <- sample( 1:nrow(X), size=20, replace=FALSE )
+
+batch_indices
+
+y_test <- y[batch_indices] 
+X_test <- X[batch_indices,]
+
+# responses for our batch: (we want to predict this)
+y_test
+
+# features for our batch: (we want to use this to predict y)
+X_test
+```
+
+We feed these through the network using our forward-propagation function:
+
+```{r network_test_forward}
+
+feedforward_test <- 
+  generic_feedforward_ftn( X = X_test,                 # design matrix of input features 
+                           Weight_matrices = starting_weights
+                         )
+```
+
+The output of our feedforward function (all of the activations) is:
+
+```{r test_feedforward_output}
+feedforward_test
+```
+
+Now, we back propagate to get the gradient of the cost function with respect to each weight and bias in the network:
+
+```{r test_backprop}
+test_backprop <- backpropagate_ftn( network_output = feedforward_test,  # output of feedforward function
+                                    Weight_matrices = starting_weights,  # current weights
+                                    y = y_test                  # responses for this batch 
+                                  )
+```
+
+The output of the back propagation function (all of the gradients) is:
+```{r backprop_output}
+test_backprop
+```
+
+Let's see that this is not a lie:
+
+For this batch of 20 observations, the derivative of the cost function with respect to the third layer weight $W^{3}_{12}$ should be (according to our backpropagation function output):
+```{r testing_backprop}
+test_backprop$dC_dW$dC_dW_layer3[1,2]
+```
+
+This means that a change of $+0.0001$ to this weight should change the cost by approximately $0.0001\times$ `r test_backprop$dC_dW$dC_dW_layer3[1,2]` = `r test_backprop$dC_dW$dC_dW_layer3[1,2] * 0.0001`
+
+The observed change in cost is:
+```{r test_observed_change_in_cost}
+
+quadratic_cost_ftn <- function( # the cost function is a function of:
+                                y,      # our true response values 
+                                y_hat   # our predicted response values  
+){
+  
+  return( mean( 0.5*(y-y_hat)^2 ) )
+  
+                              }
+
+cost_before_change <- quadratic_cost_ftn(     y = y_test,      # true response values 
+                                          y_hat = feedforward_test$a$a5   # predicted response values  
+                                        )
+
+# increase weight W3_12 by +0.0001
+updated_starting_weights <- starting_weights
+updated_starting_weights$layer3_weights <- 
+    updated_starting_weights$layer3_weights + matrix( c(0,0.0001,0,0), byrow=TRUE, ncol=2 )
+
+feedforward_with_new_weight_W3_12 <-
+      generic_feedforward_ftn( X = X_test, 
+                               Weight_matrices = updated_starting_weights
+                             )
+ 
+cost_with_new_weight <-
+  quadratic_cost_ftn( y = y_test, y_hat = feedforward_with_new_weight_W3_12$a$a5 )
+
+cost_with_new_weight - cost_before_change
+```
+
+Now, let us see if the weight-updating function works correctly by using our back-propagation output to update the weights:
+
+```{r update_weights_test}
+new_weights <- update_weights(  current_weights = starting_weights, 
+                                dC_db = test_backprop$dC_db,
+                                dC_dW = test_backprop$dC_dW,
+                                learning_rate = 0.001 
+                              )
+```
+
+Let's test a random weight to see if this has worked correctly:
+
+The biases on the second layer were initially
+
+```{r initial_biases_yes_yes_yes}
+starting_weights$layer2_biases
+```
+
+and the derivative of the cost function with respect to these biases was then:
+
+```{r deriv_biases}
+test_backprop$dC_db$dC_db_layer2
+```
+
+So, $b^2_1$ = `r starting_weights$layer2_biases[1]` should have been updated to `r starting_weights$layer2_biases[1]` - `r test_backprop$dC_db$dC_db_layer2[1]` $\times 0.001$ = `r starting_weights$layer2_biases[1] - 0.001*test_backprop$dC_db$dC_db_layer2[1]` and
+$b^2_2$ = `r starting_weights$layer2_biases[2]` should have been updated to `r starting_weights$layer2_biases[2]` - `r test_backprop$dC_db$dC_db_layer2[2]` $\times 0.001$ = `r starting_weights$layer2_biases[2] - 0.001*test_backprop$dC_db$dC_db_layer2[2]`
+
+The function updated these biases to:
+
+```{r test_update_weights_quickz0r}
+new_weights$layer2_biases
+```
+
+Now, let's see how our network performs on the full dataset. 
+
+I split the data into 90% training data (to train the model on) and 10% testing data (to test the performance of the model on):
+
+```{r traintest_split}
+# store the response variable in a vector y:
+y <- boston_data$medv
+
+training_set_indices <- sample( 1:nrow(X), size=round(0.9*nrow(X)), replace=FALSE )
+
+training_y <- y[training_set_indices] 
+test_y <- y[-training_set_indices] 
+
+X_unstandard <- 
+    boston_data %>% 
+        mutate( chas = as.numeric(chas) ) %>%   # make chas() column numeric
+        select(-medv) %>% 
+        as.matrix() 
+
+training_X_unstandard <- X_unstandard[training_set_indices,] 
+test_X_unstandard <- X_unstandard[-training_set_indices,] 
+
+mean_training_X <- mean(training_X_unstandard)
+sd_training_X <- sd(training_X_unstandard)
+
+training_X_standard <- (training_X_unstandard - mean_training_X) / sd_training_X     
+test_X_standard <- (test_X_unstandard - mean_training_X) / sd_training_X     
+
+length(training_y); length(test_y)
+nrow(training_X_standard); nrow(test_X_standard)
+  
+```
+
+Notice that the standardisation of the test data uses the mean and variance of the training data.
+
+Let's also fit a bigger network: 6 layers with 70 nodes in each hidden layer:
+
+```{r define_network_size_and_shape}
+
+# specify number of layers, and number of neurons in each layer:
+joes_network <- 
+          c( 
+             layer1=ncol(training_X_standard),  # input layer (always num features == num neurons)
+             layer2=70,
+             layer3=70,
+             layer4=70,
+             layer5=70,
+             layer6=1    # this is the output layer (always 1 neuron)
+            )
+
+# initialise the weights with random values
+nn_weights <- initialise_weights( layers.neurons = joes_network )
+
+# store how many layers are in the network:
+n_layers <- length(joes_network)
+
+```
+
+We tell the network to learn/train for 10,000 epochs. Each epoch is made up of multiple batches of our training data. Once the neural network has seen every training observation/sample once, this concludes one epoch. 
+
+We will divide our training data in half (2 batches) because the training set is quite small. 
+
+Then, in each epoch we will divide our data randomly in half (the data will be split differently in each epoch). The network will update it's weights after seeing batch 1. After concluding batch 1, the network will evaluate batch 2 and update it's weights according to batch 2. 
+
+```{r define_num_epochs}
+n_epochs <- 1e5L #10000
+n_batches <- 2
+```
+
+We are keep a record of how the cost changes with each epoch:
+
+```{r store_historic_cost_vector}
+# create empty vector to store the cost for each epoch:
+store_historic_cost <- rep( as.numeric(NA), n_epochs )
+```
+
+Store the initial cost of the network on the training set with the initial random weights:
+
+```{r initial_cost}
+
+network_output <- generic_feedforward_ftn( X = training_X_standard, 
+                                           Weight_matrices = nn_weights )
+store_historic_cost[1] <- quadratic_cost_ftn( y = training_y, 
+                                              y_hat = network_output$a[[paste0("a",n_layers)]] 
+                                            )
+
+store_historic_cost[1]
+
+```
+
+Now, we train the model on the training data for the number of epochs that we specified:
+
+```{r fit_to_data}
+
+for( e in 1:n_epochs ){
+  
+  # split the data into n_batches:
+  batch_indices <- sample( 1:n_batches, replace=TRUE, size = nrow(training_X_standard) ) 
+  
+  for( b in 1:n_batches ){      # for each batch
+    
+    X_b <- training_X_standard[ batch_indices==b, ]
+    y_b <- training_y[ batch_indices==b ]
+    
+    network_out_this_batch <- generic_feedforward_ftn( X = X_b, Weight_matrices = nn_weights )
+    
+    get_gradients <- backpropagate_ftn( network_output = network_out_this_batch,
+                                        Weight_matrices = nn_weights,
+                                        y = y_b
+                                      )
+    
+    nn_weights <- update_weights( current_weights = nn_weights, 
+                                  dC_db = get_gradients$dC_db,
+                                  dC_dW = get_gradients$dC_dW,
+                                  learning_rate = 0.0001
+                                )
+  }
+  
+  network_output_this_epoch <- generic_feedforward_ftn( X = training_X_standard,
+                                                        Weight_matrices = nn_weights )
+  
+  
+  # store the cost at this point:
+  store_historic_cost[e+1] <- quadratic_cost_ftn( 
+    y = training_y, 
+    y_hat = network_output_this_epoch$a[[paste0("a",n_layers)]]  
+                                                 )
+  if( e%%100 == 0)
+  {
+    print( paste0("epoch ", e, " done") )
+    print( paste0( "cost: ", store_historic_cost[e+1] ) )
+  }
+  
+}
+
+
+
+```
+
+Let's see a plot of the change in cost on the training set as the network learned:
+
+```{r plot_historic_cost}
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white") # plot styling
+
+plot( x = 0:( length(store_historic_cost)-1 ),
+      y = store_historic_cost,
+      xlab = "epoch",
+      ylab = "cost",
+      type = "l"
+    )
+```
+
+Let's see how close the response $y$ observations in the training set are to their fitted values $\hat{y}$ using the network: 
+
+```{r plot_fitted, fig.width=8}
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white") # plot styling
+
+final_network_output <- generic_feedforward_ftn( X = training_X_standard, 
+                                                 Weight_matrices = nn_weights )
+
+final_y_hat_training <- final_network_output$a[[paste0("a",n_layers)]]
+
+plot( x = 1:length(training_y),
+      y = training_y,
+      pch=16,
+      cex=0.5,
+      xlab = "sample id",
+      ylab = "y",
+      main = "neural network fit to training data",
+      ylim = c( 0, max(training_y) )
+    )
+points( x = 1:length(training_y),
+        y = final_y_hat_training,
+        pch = 16,
+        col = 3,
+        cex = 0.5
+      )
+segments( x0 = 1:length(training_y),
+          y0 = training_y,
+          x1 = 1:length(training_y),
+          y1 = final_y_hat_training,
+          col = 2,
+          lwd  =0.5,
+          lty = 3
+        )
+legend( "topright",
+        legend = c( "true value", "predicted value" ),
+        pch = c(16,16),
+        cex = 0.8,
+        col = c(8,3),
+        y.intersp	= 0.5,
+        box.col = 8,
+        title = NULL
+      )
+```
+
+To compare, here is how well a linear model fits to the same training data:
+
+```{r lienar_model}
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white") # plot styling
+
+fit.lm <- lm( medv ~ .,
+              data = cbind(medv=training_y, training_X_standard) %>% as.data.frame()
+            )
+
+plot( x = 1:length(training_y),
+      y = training_y,
+      cex = 0.5,
+      pch=16,
+      xlab = "sample id",
+      ylab = "y",
+      main = "simple linear model fit to training data",
+      ylim = c( 0, max(training_y) )
+    )
+points( x = 1:length(training_y),
+        y = fitted.values(fit.lm),
+        pch = 16,
+        col = 3,
+        cex = 0.5
+      )
+segments( x0 = 1:length(training_y),
+          y0 = training_y,
+          x1 = 1:length(training_y),
+          y1 = fitted.values(fit.lm),
+          col = 2,
+          lwd=0.5,
+          lty=3
+        )
+legend( "topright",
+        legend = c( "true value", "predicted value" ),
+        pch = c(16,16),
+        cex = 0.8,
+        col = c(8,3),
+        y.intersp	= 0.5,
+        box.col = 8,
+        title = NULL
+      )
+
+```
+
+The network achieves a final cost on the training set of:
+```{r network_cost}
+quadratic_cost_ftn( y = training_y, y_hat = final_y_hat_training )
+```
+
+while the linear model achieves cost on the training set of:
+```{r linear_model_cost}
+quadratic_cost_ftn( y = training_y, y_hat = fitted.values(fit.lm) )
+```
+
+Let's see how both perform on the test set:
+
+```{r test_set_performance}
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white") # plot styling
+####### NEURAL NETWORK #####
+
+network_out_testset <- generic_feedforward_ftn( X = test_X_standard, 
+                                                 Weight_matrices = nn_weights )
+
+network_test_y_predict <- network_out_testset$a[[paste0("a",n_layers)]]
+
+network_cost <- quadratic_cost_ftn( y = test_y, y_hat = network_test_y_predict )
+
+plot( x = 1:length(test_y),
+      y = test_y,
+      pch=16,
+      cex=0.5,
+      main = paste0( "Nueral Network: test set predictions \n COST: ", round(network_cost,2) ),
+      xlab = "sample index",
+      ylab = "y",
+      ylim = c(0, max(test_y)+10 )
+    )
+points( x = 1:length(test_y),
+        y = network_test_y_predict,
+        pch = 16,
+        col = 3,
+        cex = 0.5
+      )
+segments( x0 = 1:length(test_y),
+          y0 = test_y,
+          x1 = 1:length(test_y),
+          y1 = network_test_y_predict,
+          col = 2,
+          lwd = 0.5,
+          lty = 3
+        )
+legend( "topright",
+        legend = c( "true value", "predicted value" ),
+        pch = c(16,16),
+        cex = 0.8,
+        col = c(8,3),
+        y.intersp	= 0.5,
+        box.col = 8,
+        title = NULL
+      )
+
+####### LINEAR MODEL ######
+lm_test_y_predict <- predict(  object = fit.lm, 
+                              newdata = cbind(medv=test_y, test_X_standard) %>% as.data.frame()
+                            )
+
+lm_cost <- quadratic_cost_ftn( y = test_y, y_hat = lm_test_y_predict )
+
+plot( x = 1:length(test_y),
+      y = test_y,
+      pch=16,
+      cex=0.5,
+      main = paste0( "Linear Model: test set predictions \n COST: ", round(lm_cost,2) ),
+      xlab = "sample index",
+      ylab = "y",
+      ylim = c(0, max(test_y)+10 )
+    )
+points( x = 1:length(test_y),
+        y = lm_test_y_predict,
+        pch = 16,
+        col = 3,
+        cex = 0.5
+      )
+segments( x0 = 1:length(test_y),
+          y0 = test_y,
+          x1 = 1:length(test_y),
+          y1 = lm_test_y_predict,
+          col = 2,
+          lwd = 0.5,
+          lty = 3
+        )
+legend( "topright",
+        legend = c( "true value", "predicted value" ),
+        pch = c(16,16),
+        cex = 0.8,
+        col = c(8,3),
+        y.intersp	= 0.5,
+        box.col = 8,
+        title = NULL
+      )
+```
+
+Here are the sizes of the weights in the final trained network:
+
+```{r fig.width=8}
+store_weights <- tibble(name="namenull", value=0) %>% slice(0)
+
+for( i in 1:length(nn_weights) ){
+  store_weights <- 
+    bind_rows( store_weights 
+               ,
+               tibble(  name = names(nn_weights)[[i]],
+                       value = c( nn_weights[[i]] ) 
+                     )
+             )
+}
+
+ggplot( data = store_weights,
+          aes( x = name,
+               y = value
+             )
+      ) +
+  geom_jitter( colour="white", size=0.1, height=0, width=0.3 ) +
+  theme( axis.text.x = element_text(angle=90) ) +
+  labs( title = "Weights in the Final Trained Network")
+```

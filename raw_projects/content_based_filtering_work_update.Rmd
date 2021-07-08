@@ -1,0 +1,575 @@
+---
+title: "Content-based filtering"
+author: "Joe"
+output: 
+  html_notebook:
+    code: hide
+---
+
+still to do:
+
+* does normalising the item vectors (rows) make any difference to cosine distance?
+
+```{r}
+library(tidyverse)
+library(plotly)
+library(knitr)
+library(reshape2)
+```
+
+thoughts:
+
+* need to down-weight product attributes that are very common 
+
+* Do I need to deal with products that have more attributes?
+
+* note that this method will very likely want to give customers products that they've just bought before.
+
+```{r}
+product_data <- 
+  tibble( product_id = paste("product", 1:4, sep="_"), 
+          product_desc = c( "red, green, green, green",
+                           " red, blue, green",
+                           " blue, blue, blue",
+                           "red, red, blue"
+                           )
+        ) %>% 
+  mutate(   tf_red = c( 1, 1, 0, 2),
+           tf_blue = c( 0, 1, 2, 1 ),
+          tf_green = c( 3, 1, 0, 0 ),
+        ) %>% 
+  mutate( red_idf = log( 4 / 3 ),
+          blue_idf = log( 4 / 3 ),
+          green_idf = log( 4 / 2 )
+        ) %>% 
+  mutate( red_tf_idf = tf_red * red_idf,
+          blue_tf_idf = tf_blue * blue_idf,
+          green_tf_idf = tf_green * green_idf
+        )
+
+product_data %>% kable()
+
+```
+
+plot the products in product space:
+```{r fig.width=10, fig.height=10}
+
+product1_vector <- product_data[1,] %>% 
+                      select(red_tf_idf, blue_tf_idf, green_tf_idf) %>% 
+                      unlist()
+
+product2_vector <- product_data[2,] %>% 
+                      select(red_tf_idf, blue_tf_idf, green_tf_idf) %>% 
+                      unlist()
+
+product3_vector <- product_data[3,] %>% 
+                      select(red_tf_idf, blue_tf_idf, green_tf_idf) %>% 
+                      unlist()
+
+product4_vector <- product_data[4,] %>% 
+                      select(red_tf_idf, blue_tf_idf, green_tf_idf) %>% 
+                      unlist()
+
+plot_ly( data = product_data,
+            x = ~red_tf_idf,
+            y = ~blue_tf_idf,
+            z = ~green_tf_idf
+       ) %>% 
+  add_markers() %>% 
+  add_trace( type = "scatter3d",
+             x = c( 0, product1_vector[1] ), 
+             y = c( 0, product1_vector[2] ),
+             z = c( 0, product1_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="blue")
+            ) %>% 
+    add_trace( type = "scatter3d",
+             x = c( 0, product2_vector[1] ), 
+             y = c( 0, product2_vector[2] ),
+             z = c( 0, product2_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="blue")
+            ) %>% 
+    add_trace( type = "scatter3d",
+             x = c( 0, product3_vector[1] ), 
+             y = c( 0, product3_vector[2] ),
+             z = c( 0, product3_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="blue")
+            )  %>% 
+    add_trace( type = "scatter3d",
+               x = c( 0, product4_vector[1] ), 
+               y = c( 0, product4_vector[2] ),
+               z = c( 0, product4_vector[3] ),
+               mode = "lines",
+               line = list(width = 4, color="blue")
+          )  %>% 
+  layout(scene = list( xaxis = list(title = 'red'),
+                       yaxis = list(title = 'blue'),
+                       zaxis = list(title = 'green')
+                    )
+       )
+```
+
+Here is the product table for reference:
+```{r}
+product_data %>% 
+  select( product_id, red_tf_idf, blue_tf_idf, green_tf_idf )
+```
+
+Suppose that customer $A$ buys four of product_3 and two of product_4. We average the 5 product vectors that customer $A$ has bought, giving customer $A$ an item profile of: 
+
+```{r}
+customerA_profile <- 
+( 4*product3_vector + 2*product4_vector ) / 6 
+
+names( customerA_profile ) <- c( "red", "blue", "green" )
+
+customerA_profile
+```
+
+We can now plot this customer in the product space:
+```{r fig.width=10, fig.height=10}
+plot_ly( data = product_data,
+            x = ~red_tf_idf,
+            y = ~blue_tf_idf,
+            z = ~green_tf_idf
+       ) %>% 
+  add_markers() %>% 
+  add_trace( type = "scatter3d",
+             x = c( 0, product1_vector[1] ), 
+             y = c( 0, product1_vector[2] ),
+             z = c( 0, product1_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="blue")
+            ) %>% 
+    add_trace( type = "scatter3d",
+             x = c( 0, product2_vector[1] ), 
+             y = c( 0, product2_vector[2] ),
+             z = c( 0, product2_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="blue")
+            ) %>% 
+    add_trace( type = "scatter3d",
+             x = c( 0, product3_vector[1] ), 
+             y = c( 0, product3_vector[2] ),
+             z = c( 0, product3_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="blue")
+            )  %>% 
+    add_trace( type = "scatter3d",
+             x = c( 0, product4_vector[1] ), 
+             y = c( 0, product4_vector[2] ),
+             z = c( 0, product4_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="blue")
+            )  %>% 
+  layout(scene = list( xaxis = list(title = 'red'),
+                       yaxis = list(title = 'blue'),
+                       zaxis = list(title = 'green')
+                    )
+       ) %>% 
+  add_trace( type = "scatter3d",
+             x = c( 0, customerA_profile[1] ), 
+             y = c( 0, customerA_profile[2] ),
+             z = c( 0, customerA_profile[3] ),
+             mode = "lines",
+             line = list(width = 4, color="red")
+            ) %>% 
+    add_trace( type = "scatter3d",
+             x = c( 0, customerA_profile[1] ), 
+             y = c( 0, customerA_profile[2] ),
+             z = c( 0, customerA_profile[3] ),
+             mode = "points"
+            )
+```
+
+Here is a reminder of what customer $A$ bought:
+```{r}
+product_data %>% 
+  select( product_id, product_desc, red_tf_idf, blue_tf_idf, green_tf_idf ) %>% 
+  bind_cols( ., tibble(n_bought=c(0, 0, 4, 2) ) ) %>% 
+  select( product_id, product_desc, n_bought, everything() )
+```
+
+The angle $\theta$ between any 2 product vectors indicates their similarity. $cos(\theta)$ will therefore range as follows:
+
+$\theta$   |   $cos(\theta)$
+-----------|------------------
+$0^\circ$  | 1
+$30^\circ$ | 0.866
+$45^\circ$ | 0.707
+$60^\circ$ | 0.5
+$90^\circ$ | 0
+
+The cosine of the angle between 2 vectors $\overset{\rightarrow{}}{u}$ and $\overset{\rightarrow{}}{u}$ can be calculated using
+
+$$cos\Big(\theta_{uv}\Big) \quad=\quad \displaystyle\frac{u \cdot v}{|u| \space |v|}$$
+
+Here are the angles between the product vectors in our example:
+
+```{r}
+cosine_distmat <- matrix( nrow = 4, ncol = 4 )
+
+for( i in 1:4 ){
+  for( j in 1:4 ){
+    
+    product_i <- product_data[i,] %>% 
+                      select(red_tf_idf, blue_tf_idf, green_tf_idf) %>% 
+                      unlist() 
+    product_j <- product_data[j,] %>% 
+                      select(red_tf_idf, blue_tf_idf, green_tf_idf) %>% 
+                      unlist() 
+    
+    cos_theta <- ( product_i %*% product_j ) / 
+                 ( sqrt( sum(product_i^2) ) * sqrt( sum(product_j^2) ) )
+    
+    cosine_distmat[i,j] <- cos_theta
+  }
+}
+
+rownames(cosine_distmat) <- colnames(cosine_distmat) <- paste("product", 1:4, sep="")
+
+cosine_distmat %>% round(2)
+```
+
+Here are the cosine distances between the customer and each product:
+```{r}
+cbind( product = 1:4,
+       cos_dist_to_customerA = 
+       c( 
+          ( product1_vector %*% customerA_profile ) / 
+            ( sqrt( sum(product1_vector^2) ) * sqrt( sum(customerA_profile^2) ) )
+          ,
+          ( product2_vector %*% customerA_profile ) / 
+            ( sqrt( sum(product2_vector^2) ) * sqrt( sum(customerA_profile^2) ) )
+          ,
+          ( product3_vector %*% customerA_profile ) / 
+            ( sqrt( sum(product3_vector^2) ) * sqrt( sum(customerA_profile^2) ) )
+          ,
+          ( product4_vector %*% customerA_profile ) / 
+            ( sqrt( sum(product4_vector^2) ) * sqrt( sum(customerA_profile^2) ) )
+       )
+     )
+```
+
+So, if we needed to offer this customer a new product (choosing from either product_1 or product_2 which they haven't bought yet), we'd offer them product_2.
+
+# Higher-dimensional example
+```{r}
+
+generate_random_prod_ftn <- function(){
+  
+  product_vector <- 
+        tibble( formal=0, casual=0, sports=0,
+                shoes=0, pants=0, shirt=0, tie=0, bag=0, socks=0,
+                black=0, red=0, green=0, blue=0, white=0,
+                stripes=0, bold=0, leopard_print=0, spots=0, shiny=0
+              )
+  
+  choose_use <- sample( 1:3, size=1 )
+  if( choose_use == 1 ){ product_vector$formal <- 1 } else 
+  if( choose_use == 2 ){ product_vector$casual <- 1 } else
+                       { product_vector$sports <- 1 }
+  
+  choose_garment <- sample( 1:6, size=1 )
+  if( choose_garment == 1 ){ product_vector$shoes <- 1 } else 
+  if( choose_garment == 2 ){ product_vector$pants <- 1 } else
+  if( choose_garment == 3 ){ product_vector$shirt <- 1 } else
+  if( choose_garment == 4 ){ product_vector$tie <- 1 } else
+  if( choose_garment == 5 ){ product_vector$bag <- 1 } else
+                           { product_vector$socks <- 1 }
+  
+  choose_colour <- sample( 1:5, size=1 )
+  if( choose_colour == 1 ){ product_vector$black <- 1 } else 
+  if( choose_colour == 2 ){ product_vector$red <- 1 } else
+  if( choose_colour == 3 ){ product_vector$green <- 1 } else
+  if( choose_colour == 4 ){ product_vector$blue <- 1 } else
+  { product_vector$white <- 1 }
+  
+  choose_style <- sample( 1:5, size=1 )
+  if( choose_style == 1 ){ product_vector$stripes <- 1 } else 
+  if( choose_style == 2 ){ product_vector$bold <- 1 } else
+  if( choose_style == 3 ){ product_vector$leopard_print <- 1 } else
+  if( choose_style == 4 ){ product_vector$spots <- 1 } else
+  { product_vector$shiny <- 1 }
+
+  return( product_vector )
+}
+
+set.seed(1925)
+full_product_list <- 
+  bind_rows(
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn()
+  ) %>% 
+  mutate( product_ID = row_number() 
+) %>% 
+  select( product_ID, everything() )
+ 
+kable( full_product_list )
+```
+
+get item/product profiles (tf-idf) for full product list:
+```{r}
+product_colsums <- full_product_list %>% select(-product_ID) %>% colSums()
+product_IDFs <- log( nrow(full_product_list) / product_colsums ) 
+
+cbind( count = t( t(product_colsums) ), 
+       IDF = t( t(product_IDFs) ) 
+     )
+
+product_IDFs_mat <- matrix( rep(product_IDFs, nrow(full_product_list)),
+                            byrow = TRUE,
+                            nrow = nrow(full_product_list)  
+                          )
+  
+product_profiles <- full_product_list * cbind( 1, product_IDFs_mat )
+```
+
+Customer A buys the following:
+```{r}
+# customer A likes formal and sports stuff
+# and he like shoes and socks a lot
+# and he like black and white a lot
+# and he likes shiny leopard print things
+
+customerA_product_probs <- 
+  full_product_list %>% 
+    mutate( prob_this_product = 
+              formal*10 + casual*1 + sports*10 +
+              shoes*10 + pants*1 + shirt*1 + tie*1 + bag*4 + socks*10 +
+              black*10 + red*2 + green*2 + blue*2 + white*10 +
+              stripes*1 + bold*3 + leopard_print*10 + spots*2 + shiny*10
+          ) %>% 
+  pull( prob_this_product )
+
+set.seed(6969420)
+customerA_products_chosen <- 
+  full_product_list[sample(1:nrow(full_product_list),prob=customerA_product_probs,size=5, replace=TRUE),]
+
+customerA_products_chosen
+
+customer_profile_vector <- 
+  customerA_products_chosen %>% 
+    select( product_ID ) %>% 
+    left_join( product_profiles ) %>% 
+    select( -product_ID ) %>% 
+    summarise_all( mean ) %>% 
+    unlist()
+
+cosine_distances <- rep( NA, nrow(full_product_list) )
+names(cosine_distances) <- paste("product", 1:nrow(full_product_list), sep="")
+
+for( prod_i in 1:nrow(full_product_list) ){
+  
+  product_vector <- product_profiles[prod_i,-1] %>% unlist()
+  
+  cosine_distances[prod_i] <- 
+                 ( product_vector %*% customer_profile_vector ) / 
+                 ( sqrt( sum(product_vector^2) ) * sqrt( sum(customer_profile_vector^2) ) )
+}
+  
+```
+
+So, to recap, the customer bought:
+
+```{r}
+customerA_products_chosen
+```
+
+and his top matched products are:
+( the ones he's already bought are obviously on top )
+
+```{r}
+bind_cols( full_product_list,
+           tibble( cosine_dist = cosine_distances )
+) %>% 
+  arrange( desc(cosine_dist) ) %>% 
+  kable()
+```
+
+# TF-IDF
+```{r}
+bind_rows( tibble( n = 10, df = 0:10 ) %>% mutate(idf = log( (1+n)/(1+df) ) +1 )
+           ,
+           tibble( n = 100, df = 0:100 ) %>% mutate(idf = log( (1+n)/(1+df) ) +1 )
+           ,
+           tibble( n = 1000, df = 0:1000 ) %>% mutate(idf = log( (1+n)/(1+df) ) +1 )
+           ,
+           tibble( n = 1e4L, df = 0:1e4L ) %>% mutate(idf = log( (1+n)/(1+df) ) +1 )
+           ,
+           tibble( n = 1e5L, df = 0:1e5L ) %>% mutate(idf = log( (1+n)/(1+df) ) +1 )
+         ) %>% 
+  ggplot( data = .,
+          aes( x = df,
+               y = idf
+              )  
+        ) +
+  geom_line() +
+  facet_wrap( ~n, scales = "free" ) +
+  labs( title = "IDF values for different document sizes")
+```
+
+# other useful text tools
+```{r}
+library(tidyverse)
+library(tidytext)
+library(janeaustenr)
+library(stringr)
+library(SnowballC) # for the function wordStem() for  stemming words
+
+text <- c("Because I could not stop for Death -",
+          "He kindly stopped for me -",
+          "The Carriage held but just Ourselves -",
+          "and Immortality"
+        )
+
+text_df <- tibble(line = 1:4, text = text)
+
+text_df
+
+# tokenize our text dataframe:
+# a 'token' is a meaningful unit of text (e.g. a word)
+text_df %>% 
+  unnest_tokens( output = "word",     # name of output column
+                 input = "text",      # name of column containing the text to be tokenized 
+                 to_lower = TRUE,     # convert text to lowercase
+                 strip_punct = TRUE  # remove punctuation (.,-/ etc.)
+               )
+
+  
+raw_books <- austen_books()
+
+raw_books %>% slice(500:510)
+
+original_books <- 
+  raw_books %>% 
+    group_by(book) %>%   
+      # within each book:
+      mutate( # add a unique line number to each line:
+              linenumber = row_number(),    
+              
+              # add a chapter column by getting the chapter number out of the raw text
+              chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]",
+                                                     ignore_case = TRUE
+                                                     )
+                                          )
+                               )
+              ) %>%
+      ungroup()
+
+# look at a random few lines from different books:
+original_books %>% sample_n(10)  
+
+# put into tidy text format:
+tidy_books <- 
+  original_books %>%
+    unnest_tokens(input="text", output="word")
+
+tidy_books %>%  head(20)
+
+# get a list of stop-words (words not useful in analysis, like 'the', 'of', 'to' etc.)
+data(stop_words)
+
+nrow(stop_words)
+head(stop_words, 20)
+
+tidy_books_no_stopwords <-
+  tidy_books %>% 
+    anti_join(stop_words)
+  
+tidy_books %>% head(20)
+tidy_books_no_stopwords %>% head(20)
+
+# count most common words across all books:
+tidy_books_no_stopwords %>% 
+  count( word, sort=TRUE ) %>% 
+  head(20)
+
+?str_extract
+# We use str_extract() here because the UTF-8 encoded texts from Project 
+# Gutenberg have some examples of words with underscores around them to indicate 
+# emphasis (like italics). The tokenizer treated these as words, but we don't want 
+# to count "_any_" separately from "any" as we saw in our initial data 
+# exploration before choosing to use str_extract()
+# go search for this text in https://www.tidytextmining.com/tidytext.html
+
+tibble( word = c("word", "_word_", "%w%o%r%d%") ) %>% 
+  mutate( word_clean1 = str_extract(word, "[a-z']+"),
+          word_clean2 = str_remove_all( word, "\\W+" )
+        )
+
+
+
+# checking out tf-idf:
+example_dat <- tibble( document = paste("document", 1:5, sep="_"),
+                       document_text = c( "black and big black boots and black",
+                                          "black pants formal and with buttons",
+                                          "BIG black and red pants with big buttons",
+                                          "black hat with red and green stripes",
+                                          "blue formal waistcoat"
+                                        ) 
+                       )
+
+get_tf.idf <- 
+example_dat %>% 
+  unnest_tokens( input="document_text", output="word" ) %>% 
+  group_by( document, word ) %>% 
+  summarise( n_times_in_doc = n() ) %>% 
+  ungroup() %>% 
+  group_by( word ) %>% 
+  mutate( n_docs_containing_word = n_distinct(document) ) %>% 
+  group_by( document ) %>% 
+  mutate( n_words_in_doc = sum(n_times_in_doc) ) %>% 
+  ungroup() %>% 
+  mutate( joe_tf = n_times_in_doc / n_words_in_doc ) %>% 
+  ungroup() %>% 
+  mutate( `n_docs/n_docs_containing_word` = 5 / n_docs_containing_word ) %>% 
+  mutate( joe_idf = log(`n_docs/n_docs_containing_word`) ) %>% 
+  mutate( joe_tf_idf = joe_tf * joe_idf ) %>% 
+  bind_tf_idf( tbl =.,
+               term = word,
+               document = document,
+               n = n_times_in_doc
+  ) %>% 
+  arrange( document, desc(tf_idf) ) 
+# 
+# # turn our tidy dataframe into a document-term matrix:
+# example_dat %>% 
+#   unnest_tokens( input="document_text", output="word" ) %>% 
+#   group_by( document, word ) %>% 
+#   summarise( n_times_in_doc = n() ) %>% 
+#   ungroup() %>% 
+#   cast_dtm( term = word,
+#             document = document
+#           )
+
+# checking out stemming:
+tibble( unstemmed_word = c("running", "run", "runs", "runned", "runner", "runners", "ran") ) %>% 
+  mutate( stemmed_word = map_chr( .x = unstemmed_word,
+                                .f = function(word){ wordStem( word, language="en" ) } 
+                                )
+  )
+
+
+# check out document term matrix:
+```

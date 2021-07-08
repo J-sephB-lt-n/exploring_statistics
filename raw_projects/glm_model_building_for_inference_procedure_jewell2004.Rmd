@@ -1,0 +1,254 @@
+---
+title: 'GLM: procedures for inferential model-building'
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup}
+library(tidyverse)
+```
+
+```{r}
+framingham_heart_study <-
+  foreign::read.dta("C:/Users/Joe Bolton/Desktop/sync_to_google_drive/UCT honours work/2020/Biostats/data/framingham-heart-study-dataset/handouts_fhs.dta")
+
+framingham_heart_study %>% head
+```
+
+```{r}
+clean_framingham_heart_study <- 
+  framingham_heart_study %>% 
+    select( randid, stroke, hyperten, sex1, totchol1, age1, cursmoke1, bmi1, diabetes1, bpmeds1, glucose1 ) %>% 
+    tidyr::drop_na() %>% 
+    mutate( male = if_else(sex1 == "Male", 1, 0) ) %>% select(-sex1) %>% 
+    mutate( hyperten = if_else(hyperten=="Yes", 1, 0)  )
+
+anyNA(clean_framingham_heart_study)
+colSums( is.na(clean_framingham_heart_study) )
+
+clean_framingham_heart_study
+```
+
+# fit each univariate model
+
+```{r}
+covariate_names <- 
+  names(clean_framingham_heart_study)[-which(names(clean_framingham_heart_study)%in%c("randid","stroke"))]
+
+for( covariate_x in covariate_names ){
+  
+  cat(covariate_x, ":\n")
+  
+  fit_logistic_reg <- 
+    glm( as.formula( paste0("stroke ~ ", covariate_x) ),
+         data = clean_framingham_heart_study,
+         family = binomial(link="logit")    
+      )
+  glm_coefs <- 
+    summary(fit_logistic_reg)["coefficients"]$coefficients %>% 
+      as.data.frame() %>% 
+      rownames_to_column() %>% 
+      as_tibble()
+  
+  glm_coefs %>% 
+    mutate( OR = exp(Estimate) ) %>% 
+    rename( variable = rowname ) %>% 
+    select( variable, Estimate, OR, `Std. Error`, `z value`, `Pr(>|z|)` ) %>% 
+    mutate( `Pr(>|z|)` = round(`Pr(>|z|)`, digits=6) ) %>% 
+    print()
+  
+  cat("\n")
+}
+
+```
+
+=> using p > 0.3 as a cutoff, we drop the cursmoke1 variable. 
+
+Fit the full model (without *cursmoke1*):
+```{r}
+fit_full_glm <- 
+  glm( stroke ~ hyperten + totchol1 + age1 + bmi1 + diabetes1 + bpmeds1 + glucose1 + male + 1,
+       data = clean_framingham_heart_study,
+       family = binomial(link="logit")    
+    )
+
+beta_profile_confint <- confint(fit_full_glm) 
+
+summary(fit_full_glm)[["coefficients"]] %>% 
+  as.data.frame() %>% 
+  rownames_to_column("variable") %>% 
+  mutate( OR = exp(Estimate),
+          CI_0.025 = beta_profile_confint[,1],
+          CI_0.975 = beta_profile_confint[,2]
+        ) %>% 
+  mutate_if( is.numeric, function(x){round(x, digits=6) } ) %>% 
+  select( variable, Estimate, OR, everything() )
+```
+
+models to try: 
+
+```{r}
+lr_test_ftn <- function( full_model, restricted_model ){
+  
+    1 - pchisq( -2* ( logLik(restricted_model) - 
+                      logLik(full_model) 
+                  ),
+              df = ( length(coef(full_model)) - 
+                     length(coef(restricted_model))
+                   )
+             )
+}
+
+percent_change_print_ftn <-
+  function( num1, num2 ){
+    
+    if( is.na(num1) | is.na(num2) ){ return(" ") }
+    
+    change <- (num1 - num2) / num1  
+    
+    if( change < 0 ){ return( paste0( round(change*100, digits=2), "%" ) ) 
+    } else if( change > 0 ){ return( paste0( "+", round(change*100, digits=1), "%" ) ) 
+    } else{ return( " " )}
+  }
+
+models_to_try <- list() 
+
+models_to_try[[1]] <- 
+  glm( stroke ~ hyperten + 1,
+       data = clean_framingham_heart_study,
+       family = binomial(link="logit")    
+    )
+names(models_to_try)[1] <- "unadjusted"  
+
+models_to_try[[2]] <- 
+  glm( stroke ~ hyperten + totchol1 + age1 + bmi1 + diabetes1 + bpmeds1 + glucose1 + male + 1,
+       data = clean_framingham_heart_study,
+       family = binomial(link="logit")    
+    )
+
+names(models_to_try)[2] <- "full -cursmoke1"  
+
+models_to_try[[3]] <- 
+  glm( stroke ~ hyperten + totchol1 + age1 + bmi1 + diabetes1 + bpmeds1 + male + 1,
+       data = clean_framingham_heart_study,
+       family = binomial(link="logit")    
+    )
+
+names(models_to_try)[3] <- "full -cursmoke1 -glucose"  
+
+models_to_try[[4]] <- 
+  glm( stroke ~ hyperten + age1 + bmi1 + diabetes1 + bpmeds1 + male + 1,
+       data = clean_framingham_heart_study,
+       family = binomial(link="logit")    
+    )
+
+names(models_to_try)[4] <- "full -cursmoke1 -glucose -totchol1"  
+
+models_to_try[[5]] <- 
+  glm( stroke ~ hyperten + age1 + bmi1 + diabetes1 + bpmeds1 + 1,
+       data = clean_framingham_heart_study,
+       family = binomial(link="logit")    
+    )
+
+names(models_to_try)[5] <- "full -cursmoke1 -glucose -totchol1 -male"
+
+models_to_try[[6]] <- 
+  glm( stroke ~ hyperten + age1 + bmi1 + diabetes1 + bpmeds1 + cursmoke1 + 1,
+       data = clean_framingham_heart_study,
+       family = binomial(link="logit")    
+    )
+
+names(models_to_try)[6] <- "full -glucose -totchol1 -male" 
+
+models_to_try[[7]] <- 
+  glm( stroke ~ hyperten + age1 + bmi1 + diabetes1 + bpmeds1 + male + 1,
+       data = clean_framingham_heart_study,
+       family = binomial(link="logit")    
+    )
+
+names(models_to_try)[7] <- "full -cursmoke1 -glucose -totchol1"
+
+tibble( model_num = 1:length(models_to_try),
+        model = names(models_to_try),
+         desc = c(" ",
+          "all vars except cursmoke1",
+          "try removing glucose",
+          "try removing totchol1",
+          "try removing male",
+          "try adding cursmoke1",
+          "try adding male"
+         ),
+        hyperten_OR = sapply( models_to_try,
+                              function(x){ exp( coef(x)["hyperten"] ) }
+                            ),
+        LR_test = c( NA,
+                     NA,
+                     "3 vs 2",
+                     "4 vs 3",
+                     "5 vs 4",
+                     "6 vs 5",
+                     "7 vs 6"
+                   ),
+           LR_p = c( NA,
+                     NA,
+                     # 3 vs 2
+                     lr_test_ftn( full_model = models_to_try$`full -cursmoke1`,
+                                  restricted_model = models_to_try$`full -cursmoke1 -glucose`
+                                ),
+                     # 4 vs 3
+                     lr_test_ftn( full_model = models_to_try$`full -cursmoke1 -glucose`,
+                                  restricted_model = models_to_try$`full -cursmoke1 -glucose -totchol1`
+                                ),
+                     # 5 vs 4
+                     lr_test_ftn( full_model = models_to_try$`full -cursmoke1 -glucose -totchol1`,
+                                  restricted_model = models_to_try$`full -cursmoke1 -glucose -totchol1 -male`
+                                ),
+                     # 6 vs 5
+                     lr_test_ftn( full_model = models_to_try$`full -glucose -totchol1 -male`,
+                                  restricted_model = models_to_try$`full -cursmoke1 -glucose -totchol1 -male`
+                                ),
+                     # 7 vs 5
+                     lr_test_ftn( full_model = models_to_try$`full -cursmoke1 -glucose -totchol1`,
+                                  restricted_model = models_to_try$`full -cursmoke1 -glucose -totchol1 -male`
+                                )
+                  ),
+           aic = c( models_to_try$unadjusted$aic,
+                    models_to_try$`full -cursmoke1`$aic,
+                    models_to_try$`full -cursmoke1 -glucose`$aic,
+                    models_to_try$`full -cursmoke1 -glucose -totchol1`$aic,
+                    models_to_try$`full -cursmoke1 -glucose -totchol1 -male`$aic,
+                    models_to_try$`full -glucose -totchol1 -male`$aic,
+                    models_to_try$`full -cursmoke1 -glucose -totchol1`$aic
+                   ), 
+           aic_change = c(NA,
+                             percent_change_print_ftn( num1=models_to_try$unadjusted$aic,
+                                                       num2=models_to_try$`full -cursmoke1`$aic
+                                                     ),
+                             percent_change_print_ftn( num1=models_to_try$`full -cursmoke1`$aic,
+                                                       num2=models_to_try$`full -cursmoke1 -glucose`$aic
+                                                     ),
+                             percent_change_print_ftn( num1=models_to_try$`full -cursmoke1 -glucose`$aic,
+                                                       num2=models_to_try$`full -cursmoke1 -glucose -totchol1`$aic
+                                                     ),
+                             percent_change_print_ftn( num1=models_to_try$`full -cursmoke1 -glucose -totchol1`$aic,
+                                                       num2=models_to_try$`full -cursmoke1 -glucose -totchol1 -male`$aic
+                                                     ),
+                             percent_change_print_ftn( num1=models_to_try$`full -cursmoke1 -glucose -totchol1 -male`$aic,
+                                                       num2=models_to_try$`full -glucose -totchol1 -male`$aic
+                                                     ),
+                             NA
+                            ),
+           decision = c( NA, NA, "drop glucose", "drop totchol1", "discard male", "don't add cursmoke1", "add male" )
+      ) %>% 
+  mutate( OR_change = map2_chr( .x = hyperten_OR,
+                                   .y = lag(hyperten_OR, n=1),
+                                   .f = function(or, lag_or){
+                                     percent_change_print_ftn( num2=lag_or, num1=or)
+                                   }
+                                 )
+        ) %>% 
+  select( model_num, model, desc, hyperten_OR, OR_change, LR_test, LR_p, aic, aic_change, decision ) %>% 
+  knitr::kable()
+
+```

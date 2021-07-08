@@ -1,0 +1,1426 @@
+---
+title: "Rawtext product recommendation engine"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup}
+library(tidyverse)
+library(reticulate)
+reticulate::use_python('c:/users/joe/miniconda3')
+
+library(plotly)
+library(knitr)
+library(reshape2)
+```
+
+```{python}
+import pandas as pd
+# nltk.download('stopwords')
+from nltk.corpus import stopwords
+from sklearn.metrics.pairwise import cosine_similarity, linear_kernel
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn import preprocessing
+import numpy as np
+from scipy import sparse
+from scipy.sparse import csr_matrix
+import random
+```
+
+# Content-based filtering recommender in R (theory)
+
+still to do:
+
+* does normalising the item vectors (rows) make any difference to cosine distance?
+
+thoughts:
+
+* need to down-weight product attributes that are very common 
+
+* Do I need to deal with products that have more attributes?
+
+* note that this method will very likely want to give customers products that they've just bought before.
+
+```{r}
+product_data <- 
+  tibble( product_id = paste("product", 1:4, sep="_"), 
+          product_desc = c( "red, green, green, green",
+                           " red, blue, green",
+                           " blue, blue, blue",
+                           "red, red, blue"
+                           )
+        ) %>% 
+  mutate(   tf_red = c( 1, 1, 0, 2),
+           tf_blue = c( 0, 1, 2, 1 ),
+          tf_green = c( 3, 1, 0, 0 ),
+        ) %>% 
+  mutate( red_idf = log( 4 / 3 ),
+          blue_idf = log( 4 / 3 ),
+          green_idf = log( 4 / 2 )
+        ) %>% 
+  mutate( red_tf_idf = tf_red * red_idf,
+          blue_tf_idf = tf_blue * blue_idf,
+          green_tf_idf = tf_green * green_idf
+        )
+
+product_data %>% kable()
+
+```
+
+plot the products in product space:
+```{r fig.width=10, fig.height=10}
+
+product1_vector <- product_data[1,] %>% 
+                      select(red_tf_idf, blue_tf_idf, green_tf_idf) %>% 
+                      unlist()
+
+product2_vector <- product_data[2,] %>% 
+                      select(red_tf_idf, blue_tf_idf, green_tf_idf) %>% 
+                      unlist()
+
+product3_vector <- product_data[3,] %>% 
+                      select(red_tf_idf, blue_tf_idf, green_tf_idf) %>% 
+                      unlist()
+
+product4_vector <- product_data[4,] %>% 
+                      select(red_tf_idf, blue_tf_idf, green_tf_idf) %>% 
+                      unlist()
+
+plot_ly( data = product_data,
+            x = ~red_tf_idf,
+            y = ~blue_tf_idf,
+            z = ~green_tf_idf
+       ) %>% 
+  add_markers() %>% 
+  add_trace( type = "scatter3d",
+             x = c( 0, product1_vector[1] ), 
+             y = c( 0, product1_vector[2] ),
+             z = c( 0, product1_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="blue")
+            ) %>% 
+    add_trace( type = "scatter3d",
+             x = c( 0, product2_vector[1] ), 
+             y = c( 0, product2_vector[2] ),
+             z = c( 0, product2_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="blue")
+            ) %>% 
+    add_trace( type = "scatter3d",
+             x = c( 0, product3_vector[1] ), 
+             y = c( 0, product3_vector[2] ),
+             z = c( 0, product3_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="blue")
+            )  %>% 
+    add_trace( type = "scatter3d",
+               x = c( 0, product4_vector[1] ), 
+               y = c( 0, product4_vector[2] ),
+               z = c( 0, product4_vector[3] ),
+               mode = "lines",
+               line = list(width = 4, color="blue")
+          )  %>% 
+  layout(scene = list( xaxis = list(title = 'red'),
+                       yaxis = list(title = 'blue'),
+                       zaxis = list(title = 'green')
+                    )
+       )
+```
+
+Here is the product table for reference:
+```{r}
+product_data %>% 
+  select( product_id, red_tf_idf, blue_tf_idf, green_tf_idf )
+```
+
+Suppose that customer $A$ buys four of product_3 and two of product_4. We average the 5 product vectors that customer $A$ has bought, giving customer $A$ an item profile of: 
+
+```{r}
+customerA_profile <- 
+( 4*product3_vector + 2*product4_vector ) / 6 
+
+names( customerA_profile ) <- c( "red", "blue", "green" )
+
+customerA_profile
+```
+
+We can now plot this customer in the product space:
+```{r fig.width=10, fig.height=10}
+plot_ly( data = product_data,
+            x = ~red_tf_idf,
+            y = ~blue_tf_idf,
+            z = ~green_tf_idf
+       ) %>% 
+  add_markers() %>% 
+  add_trace( type = "scatter3d",
+             x = c( 0, product1_vector[1] ), 
+             y = c( 0, product1_vector[2] ),
+             z = c( 0, product1_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="blue")
+            ) %>% 
+    add_trace( type = "scatter3d",
+             x = c( 0, product2_vector[1] ), 
+             y = c( 0, product2_vector[2] ),
+             z = c( 0, product2_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="blue")
+            ) %>% 
+    add_trace( type = "scatter3d",
+             x = c( 0, product3_vector[1] ), 
+             y = c( 0, product3_vector[2] ),
+             z = c( 0, product3_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="blue")
+            )  %>% 
+    add_trace( type = "scatter3d",
+             x = c( 0, product4_vector[1] ), 
+             y = c( 0, product4_vector[2] ),
+             z = c( 0, product4_vector[3] ),
+             mode = "lines",
+             line = list(width = 4, color="blue")
+            )  %>% 
+  layout(scene = list( xaxis = list(title = 'red'),
+                       yaxis = list(title = 'blue'),
+                       zaxis = list(title = 'green')
+                    )
+       ) %>% 
+  add_trace( type = "scatter3d",
+             x = c( 0, customerA_profile[1] ), 
+             y = c( 0, customerA_profile[2] ),
+             z = c( 0, customerA_profile[3] ),
+             mode = "lines",
+             line = list(width = 4, color="red")
+            ) %>% 
+    add_trace( type = "scatter3d",
+             x = c( 0, customerA_profile[1] ), 
+             y = c( 0, customerA_profile[2] ),
+             z = c( 0, customerA_profile[3] ),
+             mode = "points"
+            )
+```
+
+Here is a reminder of what customer $A$ bought:
+```{r}
+product_data %>% 
+  select( product_id, product_desc, red_tf_idf, blue_tf_idf, green_tf_idf ) %>% 
+  bind_cols( ., tibble(n_bought=c(0, 0, 4, 2) ) ) %>% 
+  select( product_id, product_desc, n_bought, everything() )
+```
+
+The angle $\theta$ between any 2 product vectors indicates their similarity. $cos(\theta)$ will therefore range as follows:
+
+$\theta$   |   $cos(\theta)$
+-----------|------------------
+$0^\circ$  | 1
+$30^\circ$ | 0.866
+$45^\circ$ | 0.707
+$60^\circ$ | 0.5
+$90^\circ$ | 0
+
+The cosine of the angle between 2 vectors $\overset{\rightarrow{}}{u}$ and $\overset{\rightarrow{}}{u}$ can be calculated using
+
+$$cos\Big(\theta_{uv}\Big) \quad=\quad \displaystyle\frac{u \cdot v}{|u| \space |v|}$$
+
+Here are the angles between the product vectors in our example:
+
+```{r}
+cosine_distmat <- matrix( nrow = 4, ncol = 4 )
+
+for( i in 1:4 ){
+  for( j in 1:4 ){
+    
+    product_i <- product_data[i,] %>% 
+                      select(red_tf_idf, blue_tf_idf, green_tf_idf) %>% 
+                      unlist() 
+    product_j <- product_data[j,] %>% 
+                      select(red_tf_idf, blue_tf_idf, green_tf_idf) %>% 
+                      unlist() 
+    
+    cos_theta <- ( product_i %*% product_j ) / 
+                 ( sqrt( sum(product_i^2) ) * sqrt( sum(product_j^2) ) )
+    
+    cosine_distmat[i,j] <- cos_theta
+  }
+}
+
+rownames(cosine_distmat) <- colnames(cosine_distmat) <- paste("product", 1:4, sep="")
+
+cosine_distmat %>% round(2)
+```
+
+Here are the cosine distances between the customer and each product:
+```{r}
+cbind( product = 1:4,
+       cos_dist_to_customerA = 
+       c( 
+          ( product1_vector %*% customerA_profile ) / 
+            ( sqrt( sum(product1_vector^2) ) * sqrt( sum(customerA_profile^2) ) )
+          ,
+          ( product2_vector %*% customerA_profile ) / 
+            ( sqrt( sum(product2_vector^2) ) * sqrt( sum(customerA_profile^2) ) )
+          ,
+          ( product3_vector %*% customerA_profile ) / 
+            ( sqrt( sum(product3_vector^2) ) * sqrt( sum(customerA_profile^2) ) )
+          ,
+          ( product4_vector %*% customerA_profile ) / 
+            ( sqrt( sum(product4_vector^2) ) * sqrt( sum(customerA_profile^2) ) )
+       )
+     )
+```
+
+So, if we needed to offer this customer a new product (choosing from either product_1 or product_2 which they haven't bought yet), we'd offer them product_2.
+
+# Higher-dimensional example
+```{r}
+
+generate_random_prod_ftn <- function(){
+  
+  product_vector <- 
+        tibble( formal=0, casual=0, sports=0,
+                shoes=0, pants=0, shirt=0, tie=0, bag=0, socks=0,
+                black=0, red=0, green=0, blue=0, white=0,
+                stripes=0, bold=0, leopard_print=0, spots=0, shiny=0
+              )
+  
+  choose_use <- sample( 1:3, size=1 )
+  if( choose_use == 1 ){ product_vector$formal <- 1 } else 
+  if( choose_use == 2 ){ product_vector$casual <- 1 } else
+                       { product_vector$sports <- 1 }
+  
+  choose_garment <- sample( 1:6, size=1 )
+  if( choose_garment == 1 ){ product_vector$shoes <- 1 } else 
+  if( choose_garment == 2 ){ product_vector$pants <- 1 } else
+  if( choose_garment == 3 ){ product_vector$shirt <- 1 } else
+  if( choose_garment == 4 ){ product_vector$tie <- 1 } else
+  if( choose_garment == 5 ){ product_vector$bag <- 1 } else
+                           { product_vector$socks <- 1 }
+  
+  choose_colour <- sample( 1:5, size=1 )
+  if( choose_colour == 1 ){ product_vector$black <- 1 } else 
+  if( choose_colour == 2 ){ product_vector$red <- 1 } else
+  if( choose_colour == 3 ){ product_vector$green <- 1 } else
+  if( choose_colour == 4 ){ product_vector$blue <- 1 } else
+  { product_vector$white <- 1 }
+  
+  choose_style <- sample( 1:5, size=1 )
+  if( choose_style == 1 ){ product_vector$stripes <- 1 } else 
+  if( choose_style == 2 ){ product_vector$bold <- 1 } else
+  if( choose_style == 3 ){ product_vector$leopard_print <- 1 } else
+  if( choose_style == 4 ){ product_vector$spots <- 1 } else
+  { product_vector$shiny <- 1 }
+
+  return( product_vector )
+}
+
+set.seed(1925)
+full_product_list <- 
+  bind_rows(
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn(),
+    generate_random_prod_ftn()
+  ) %>% 
+  mutate( product_ID = row_number() 
+) %>% 
+  select( product_ID, everything() )
+ 
+kable( full_product_list )
+```
+
+get item/product profiles (tf-idf) for full product list:
+```{r}
+product_colsums <- full_product_list %>% select(-product_ID) %>% colSums()
+product_IDFs <- log( nrow(full_product_list) / product_colsums ) 
+
+cbind( count = t( t(product_colsums) ), 
+       IDF = t( t(product_IDFs) ) 
+     )
+
+product_IDFs_mat <- matrix( rep(product_IDFs, nrow(full_product_list)),
+                            byrow = TRUE,
+                            nrow = nrow(full_product_list)  
+                          )
+  
+product_profiles <- full_product_list * cbind( 1, product_IDFs_mat )
+```
+
+Customer A buys the following:
+```{r}
+# customer A likes formal and sports stuff
+# and he like shoes and socks a lot
+# and he like black and white a lot
+# and he likes shiny leopard print things
+
+customerA_product_probs <- 
+  full_product_list %>% 
+    mutate( prob_this_product = 
+              formal*10 + casual*1 + sports*10 +
+              shoes*10 + pants*1 + shirt*1 + tie*1 + bag*4 + socks*10 +
+              black*10 + red*2 + green*2 + blue*2 + white*10 +
+              stripes*1 + bold*3 + leopard_print*10 + spots*2 + shiny*10
+          ) %>% 
+  pull( prob_this_product )
+
+set.seed(6969420)
+customerA_products_chosen <- 
+  full_product_list[sample(1:nrow(full_product_list),prob=customerA_product_probs,size=5, replace=TRUE),]
+
+customerA_products_chosen
+
+customer_profile_vector <- 
+  customerA_products_chosen %>% 
+    select( product_ID ) %>% 
+    left_join( product_profiles ) %>% 
+    select( -product_ID ) %>% 
+    summarise_all( mean ) %>% 
+    unlist()
+
+cosine_distances <- rep( NA, nrow(full_product_list) )
+names(cosine_distances) <- paste("product", 1:nrow(full_product_list), sep="")
+
+for( prod_i in 1:nrow(full_product_list) ){
+  
+  product_vector <- product_profiles[prod_i,-1] %>% unlist()
+  
+  cosine_distances[prod_i] <- 
+                 c(t(product_vector) %*% customer_profile_vector) / 
+                 ( sqrt( sum(product_vector^2) ) * sqrt( sum(customer_profile_vector^2) ) )
+}
+  
+```
+
+So, to recap, the customer bought:
+
+```{r}
+customerA_products_chosen
+```
+
+and his top matched products are:
+( the ones he's already bought are obviously on top )
+
+```{r}
+bind_cols( full_product_list,
+           tibble( cosine_dist = cosine_distances )
+) %>% 
+  arrange( desc(cosine_dist) ) %>% 
+  kable()
+```
+
+If we give each product vector unit length (i.e. standardise the vectors to give them length 1), this does not affect the recommendations (since the angle between vectors does not change):
+
+```{r}
+standardised_customer_profile_vector <- 
+  customer_profile_vector /
+  sqrt( sum(customer_profile_vector^2) )
+
+# give each row (product) euclidean length 1:
+standardised_product_profiles <- 
+  cbind( product_ID = product_profiles$product_ID
+         ,
+         product_profiles[,-1] /
+         matrix( sqrt(rep(rowSums(product_profiles[,-1]^2), ncol(product_profiles[,-1]))),
+                 byrow = FALSE,
+                 ncol = ncol(product_profiles[,-1])
+               )
+       )
+
+cosine_distances <- rep( NA, nrow(full_product_list) )
+names(cosine_distances) <- paste("product", 1:nrow(full_product_list), sep="")
+
+for( prod_i in 1:nrow(full_product_list) ){
+  
+  product_vector <- standardised_product_profiles[prod_i,-1] %>% unlist()
+  
+  cosine_distances[prod_i] <- 
+                 c( t(product_vector) %*% standardised_customer_profile_vector ) / 
+                 ( sqrt( sum(product_vector^2) ) * sqrt( sum(standardised_customer_profile_vector^2) ) )
+}
+
+bind_cols( full_product_list,
+           tibble( cosine_dist = cosine_distances )
+) %>% 
+  arrange( desc(cosine_dist) ) %>% 
+  kable()
+```
+
+# TF-IDF
+```{r}
+bind_rows( tibble( n = 10, df = 0:10 ) %>% mutate(idf = log( (1+n)/(1+df) ) +1 )
+           ,
+           tibble( n = 100, df = 0:100 ) %>% mutate(idf = log( (1+n)/(1+df) ) +1 )
+           ,
+           tibble( n = 1000, df = 0:1000 ) %>% mutate(idf = log( (1+n)/(1+df) ) +1 )
+           ,
+           tibble( n = 1e4L, df = 0:1e4L ) %>% mutate(idf = log( (1+n)/(1+df) ) +1 )
+           ,
+           tibble( n = 1e5L, df = 0:1e5L ) %>% mutate(idf = log( (1+n)/(1+df) ) +1 )
+         ) %>% 
+  ggplot( data = .,
+          aes( x = df,
+               y = idf
+              )  
+        ) +
+  geom_line() +
+  facet_wrap( ~n, scales = "free" ) +
+  labs( title = "IDF values for different document sizes")
+```
+
+# Calculating TF-IDF in python:
+
+TF-IDF calc for a given word is:
+
+$$\begin{array}{lcl}
+\underset{\text{Term Frequency - Inverse Document Frequency}}{\underbrace{\text{TF - IDF}}} 
+&=& 
+\text{TF} \quad \times \quad \underset{\text{IDF}}{\underbrace{\Bigg( log\Big\{ \displaystyle\frac{1+n}{1+DF} \Big\} +1 \Bigg)}} \\
+n &=& \text{total number of documents (products)} \\
+DF &=& \text{number of documents (products) containing this word} \\
+\end{array}$$
+
+the resulting TF-IDF vector (row) $\overset{\rightarrow{}}{v}$ is then normalised:
+
+$$\begin{array}{lcl}
+\text{L1 norm}: \quad \quad \overset{\rightarrow{}}{v}_{norm} &=& x \\
+\text{L2 norm}: \quad \quad x &=& x \\
+\end{array}$$
+
+this information comes directly from the documentation https://scikit-learn.org/stable/modules/feature_extraction.html#text-feature-extraction
+
+create dummy dataset:
+```{python}
+dummy_data = [ [1,'big big black boots'], [2,'womens running pants stripey'], [3,'black mens pants'], [4,'stripey mens socks blue and red'], [5,'red socks']  ]
+dummy_data = pd.DataFrame( dummy_data, columns=['product_id','product_words'] )
+dummy_data
+```
+
+```{python}
+init_CountVectorizer = CountVectorizer( analyzer='word',
+                                        strip_accents = 'unicode',
+                                        lowercase = True,
+                                        binary = True       # counts above 1 are counted as 1
+                                      )
+count_matrix = init_CountVectorizer.fit_transform( dummy_data['product_words'] )
+
+# print( count_matrix )
+# print('')
+
+tf = pd.DataFrame( count_matrix.toarray() ) 
+tf.columns = [init_CountVectorizer.get_feature_names()]
+
+joined_df = pd.concat([dummy_data, tf], axis=1)
+
+joined_df
+
+```
+
+Let's have a look at the matrix of word counts (in R) that we've created in python:
+
+```{r}
+py$joined_df
+```
+
+TF-IDF calc (for the scikit learn python package) for a given word is:
+
+$$\begin{array}{lcl}
+\underset{\text{Term Frequency - Inverse Document Frequency}}{\underbrace{\text{TF - IDF}}} 
+&=& 
+\text{TF} \quad \times \quad \underset{\text{IDF}}{\underbrace{\Bigg( log\Big\{ \displaystyle\frac{1+n}{1+DF} \Big\} +1 \Bigg)}} \\
+n &=& \text{total number of documents (products)} \\
+DF &=& \text{number of documents (products) containing this word} \\
+\end{array}$$
+
+the resulting TF-IDF vector (row) $\overset{\rightarrow{}}{v}$ is then normalised:
+
+$$\begin{array}{lcl}
+\text{L1 norm}: \quad \quad \overset{\rightarrow{}}{v}_{norm} &=& x \\
+\text{L2 norm}: \quad \quad x &=& x \\
+\end{array}$$
+
+this information comes directly from the documentation https://scikit-learn.org/stable/modules/feature_extraction.html#text-feature-extraction
+
+```{python}
+word_document_counts = joined_df.drop(['product_id', 'product_words'], axis=1)
+row_of_counts = word_document_counts.sum(axis=0)
+row_of_counts = pd.DataFrame( row_of_counts ).transpose()
+single_row_of_counts = row_of_counts
+
+for i in range(joined_df.shape[0]-1):
+    row_of_counts = row_of_counts.append(single_row_of_counts) 
+
+n = joined_df.shape[0]     # 'n' is the number of documents/products
+    
+row_of_counts 
+
+idf = np.log( (1+n) / (1+row_of_counts) ) +1
+```
+
+```{r}
+py$row_of_counts
+py$tf
+py$idf
+```
+
+my manual tf-idf calc:
+
+```{python}
+tf_idf_not_normalised = pd.DataFrame( tf.values*idf.values, columns = tf.columns, index=tf.index )
+#tf_idf_not_normalised
+tf_idf_normalised = pd.DataFrame( preprocessing.normalize(tf_idf_not_normalised, norm='l2') )
+tf_idf_normalised.columns = [init_CountVectorizer.get_feature_names()]
+#tf_idf_normalised
+```
+
+```{r}
+py$tf_idf_not_normalised
+py$tf_idf_normalised
+```
+
+and here is how we do the tf-idf automatically in python:
+```{python}
+init_tf_idf_vectorizer = TfidfVectorizer( strip_accents='ascii',   # do punctuation cleaning before doing tf-idf
+                                          lowercase=True,        # convert all to lowercase before doing tf-idf 
+                                          analyzer='word',
+                                          binary=True,           # forces tf to be either 0 or 1                   
+                                          decode_error='strict',    
+                                          input='content',
+                                          max_df=1.0,
+                                          max_features=None,      
+                                          min_df=1,
+                                          norm='l2',         # each row (vector) scaled to have (l2) length 1 
+                                                             # Vectors are normalized to unit length before they are 
+                                                             #   used for similarity calculation, making cosine similarity
+                                                             #   and dot-product equivalent (Levy et al. 2015)
+                                          preprocessor=None,
+                                          smooth_idf=True,   # add 1 to every df number (prevents div. by 0)
+                                          stop_words=None, 
+                                          sublinear_tf=False,   # i.e. don't replace [tf] with [1 + log(tf)]
+                                          token_pattern='(?u)\\b\\w\\w+\\b',  # what constitutes a token (word)
+                                          tokenizer=None,
+                                          use_idf=True,
+                                          vocabulary=None
+                                        )
+
+
+tf_idf_matrix = init_tf_idf_vectorizer.fit_transform( dummy_data['product_words'] )
+tf_idf_matrix = pd.DataFrame( tf_idf_matrix.toarray() ) 
+#tf_idf_matrix
+
+tf_idf_matrix.columns = [init_tf_idf_vectorizer.get_feature_names()]
+#tf_idf_matrix
+
+joined_df = pd.concat([dummy_data, tf_idf_matrix], axis=1)
+```
+
+```{r}
+py$joined_df
+```
+
+```{python}
+init_vectorizer = TfidfVectorizer()
+
+count_matrix = init_vectorizer.fit_transform( r.tf_idf_test['some_text'] )
+
+
+#pd.DataFrame( count_matrix.toarray() ) 
+```
+
+
+# The full rawtext personalisation process in Python
+
+first, I create more dummy datasets in different messy formats:
+
+```{r}
+
+# EXAMPLE PRODUCTS:
+# 
+# black formal pants
+# red and blue swimwear (synthetic)
+# brown formal shoes (leather)
+# black formal shoes (synthetic)
+# black running shorts
+# casual blue shoes stripes
+# red sport pants running
+# casual white running shoes 
+# formal white shirt
+# running shirt
+# black and white casual shirt
+
+dirty_attribute_data1 <- 
+  bind_rows( tibble(product_id = 1,
+                    attribute = "colour",
+                    attribute_desc = "black"
+                    ),
+             tibble(product_id = 1,
+                    attribute = "use",
+                    attribute_desc = "formal"
+                    ),
+             
+             tibble(product_id = 2,
+                    attribute = "colour",
+                    attribute_desc = "red"
+                    ),
+             tibble(product_id = 2,
+                    attribute = "color",
+                    attribute_desc = "red"
+                    ),
+             tibble(product_id = 2,
+                    attribute = "color",
+                    attribute_desc = "blue"
+                    ),
+             tibble(product_id = 2,
+                    attribute = "material",
+                    attribute_desc = "synthetic"
+                    ),
+             
+             tibble(product_id = 3,
+                    attribute = "colour",
+                    attribute_desc = "brown"
+                    ),
+             tibble(product_id = 3,
+                    attribute = "material",
+                    attribute_desc = "leather"
+                    ),
+             
+             tibble(product_id = 4,
+                    attribute = "colour",
+                    attribute_desc = "black"
+                  ),
+             tibble(product_id = 4,
+                    attribute = "use",
+                    attribute_desc = "running"
+                  ),
+             
+             tibble(product_id = 5,
+                    attribute = "use",
+                    attribute_desc = "fashion"
+                  ),
+             tibble(product_id = 5,
+                    attribute = "colour",
+                    attribute_desc = "blue"
+                  ),
+             
+            tibble( product_id = 6,
+                    attribute = "colour",
+                    attribute_desc = "red"
+                  ),
+            tibble( product_id = 6,
+                    attribute = "use",
+                    attribute_desc = "running marathon"
+                  ),
+            tibble( product_id = 6,
+                    attribute = "material",
+                    attribute_desc = "cotton"
+                  ),
+            
+             tibble(product_id = 7,
+                    attribute = "colour",
+                    attribute_desc = "brown"
+                    ),
+             tibble(product_id = 7,
+                    attribute = "use",
+                    attribute_desc = "formal"
+                    ),
+             tibble( product_id = 7,
+                    attribute = "material",
+                    attribute_desc = "cotton"
+                  ),
+            
+             tibble( product_id = 9,
+                     attribute = "use",
+                     attribute_desc = "sleep"
+                    ),
+          
+             tibble( product_id = 9,
+                    attribute = "material",
+                    attribute_desc = "cotton"
+                  ),
+            
+             tibble( product_id = 10,
+                     attribute = "use",
+                     attribute_desc = "sleep"
+                    ),
+            
+             tibble( product_id = 10,
+                     attribute = "material",
+                     attribute_desc = "cotton"
+                  )
+            )
+
+dirty_attribute_data2 <- 
+  bind_rows( 
+              tibble( product_id = 1, product_desc="smart suit pants", category="pants", department="formal", style="retro" ),
+              tibble( product_id = 2, product_desc="colourful MENS swim shorts", category="swimming", department="sport", style="casual" ),
+              tibble( product_id = 3, product_desc="light brown dinner shoes", category="footwear", department="formal", style="young" ),
+              tibble( product_id = 4, product_desc="black house-brand running shorts", category="shorts", department="sport", style="sport" ),
+              tibble( product_id = 5, product_desc="trendy blue sneakers", category="footwear", department="casual", style="young" ),
+              tibble( product_id = 6, product_desc="athletic red sports pants", category="pants", department="sport", style="retro" ),
+              tibble( product_id = 7, product_desc="brown suit trousers", category="pants", department="formal", style="slimfit" ),
+              tibble( product_id = 8, product_desc="very small red swimsuit", category="swimming", department="sport", style="slimfit" ),
+              tibble( product_id = 9, product_desc="blue pajama top", category="sleepwear", department="home", style="comfort" ),
+              tibble( product_id = 10, product_desc="red pajama pants", category="sleepwear", department="home", style="comfort" ),
+              tibble( product_id = 11, product_desc="furry slippers", category="shoes", department="home", style="comfort" )
+              
+  )
+  
+dirty_attribute_data1
+dirty_attribute_data2
+
+```
+
+clean the first (long) dataset using python:
+
+```{python}
+dirty_attribute_data1_py = r.dirty_attribute_data1.drop(["attribute"], axis=1)
+
+# remove duplicate rows from dirty_attribute_data1:
+dirty_attribute_data1_py = dirty_attribute_data1_py.drop_duplicates()
+
+# for the long data, paste all of the words into a single column, separated by space:
+bagofwords_attribute_data1 = dirty_attribute_data1_py.groupby("product_id")["attribute_desc"].apply(" ".join)
+
+# convert back to a pandas dataframe:
+bagofwords_attribute_data1 = bagofwords_attribute_data1.to_frame()
+
+# rename the attribute_desc column
+bagofwords_attribute_data1.rename( columns={'attribute_desc':'data1_words'}, inplace=True)
+
+```
+
+```{r}
+py$bagofwords_attribute_data1
+```
+
+clean the second (wide) dataset using python:
+
+```{python}
+# read in the product data from the R tibble:
+dirty_attribute_data2 = r.dirty_attribute_data2
+
+# paste all of the columns into 
+dirty_attribute_data2['data2_words'] = dirty_attribute_data2[['product_desc',
+                                                              'category',
+                                                              'department',
+                                                              'style'
+                                                              ]].apply(lambda x: ' '.join(x), axis=1)
+
+# only keep the product ID and the bag of product words:
+bagofwords_attribute_data2 = dirty_attribute_data2[['product_id', 'data2_words']]
+```
+
+```{r}
+py$bagofwords_attribute_data2
+```
+
+Join the 2 datasets in python to get one bag of words for each product:
+
+```{python}
+all_product_WordBags_raw = pd.merge(bagofwords_attribute_data1, bagofwords_attribute_data2, on='product_id', how='outer')
+
+all_product_WordBags_raw
+
+# turn the NaN (i.e. no match) values into empty string:
+all_product_WordBags_raw = all_product_WordBags_raw.replace(np.nan, '', regex=True)
+
+# merge the 2 word columns:
+all_product_WordBags_raw['bag_of_words'] = all_product_WordBags_raw[['data1_words', 'data2_words',]].apply(lambda x: ' '.join(x), axis=1)
+all_product_WordBags_raw = all_product_WordBags_raw[['product_id', 'bag_of_words']]
+```
+
+Look at the product wordclouds/bags of words that we have created:
+
+```{r}
+py$all_product_WordBags_raw
+```
+
+Now, turn each product_id into a word vector, using tf-idf (in python):
+
+specify the parameters of the word-vectorizer function TfidfVectorizer():
+```{python}
+init_tf_idf_vectorizer = TfidfVectorizer( strip_accents='ascii',   # do punctuation cleaning before doing tf-idf
+                                          lowercase=True,        # convert all to lowercase before doing tf-idf 
+                                          analyzer='word',
+                                          binary=True,           # forces tf to be either 0 or 1                   
+                                          decode_error='strict',    
+                                          input='content',
+                                          max_df=1.0,
+                                          max_features=None,      
+                                          min_df=1,
+                                          norm='l2',         # each row (vector) scaled to have (l2) length 1 
+                                                             # Vectors are normalized to unit length before they are 
+                                                             #   used for similarity calculation, making cosine similarity
+                                                             #   and dot-product equivalent (Levy et al. 2015)
+                                          preprocessor=None,
+                                          smooth_idf=True,   # add 1 to every df number (prevents div. by 0)
+                                          stop_words=None, 
+                                          sublinear_tf=False,   # i.e. don't replace [tf] with [1 + log(tf)]
+                                          token_pattern='(?u)\\b\\w\\w+\\b',  # what constitutes a token (word)
+                                          tokenizer=None,
+                                          use_idf=True,
+                                          vocabulary=None
+                                        )
+
+```
+
+```{python}
+raw_tf_idf_matrix = init_tf_idf_vectorizer.fit_transform( all_product_WordBags_raw['bag_of_words'] )
+tf_idf_matrix = pd.DataFrame( raw_tf_idf_matrix.toarray() ) 
+#tf_idf_matrix
+
+tf_idf_matrix.columns = [init_tf_idf_vectorizer.get_feature_names()]
+#tf_idf_matrix
+
+joined_df = pd.concat([all_product_WordBags_raw, tf_idf_matrix], axis=1)
+```
+
+```{r}
+py$raw_tf_idf_matrix        # this is stored as a sparse matrix
+py$tf_idf_matrix
+py$joined_df
+```
+
+
+```{python}
+product_cosine_similarities = cosine_similarity(raw_tf_idf_matrix, raw_tf_idf_matrix) 
+product_cosine_similarities_alt = linear_kernel(raw_tf_idf_matrix, raw_tf_idf_matrix)      # same as cosine similarity because we used L2 norm 
+```
+
+```{r}
+py$product_cosine_similarities
+
+py$product_cosine_similarities_alt
+```
+
+make a little recommender function, returning closest 10 products to each product:
+
+```{python}
+# #checking out iterrows():
+# print( product_wordbags.head(n=5) )
+# print("\n")
+# for index, row in product_wordbags.head(n=5).iterrows():
+#     print(index, "\n\n",  row)
+#     print("\n")        
+
+# this code mostly stolen from https://heartbeat.fritz.ai/recommender-systems-with-python-part-i-content-based-filtering-5df4940bd831
+
+results = {}
+for rownum_i, row_i in all_product_WordBags_raw.iterrows():     # iterate through the rows of the dataframe product_wordbags
+    # 'rownum_i' is the row number, 'row_i' is the row itself 
+    # i.e. we are iterating through each product
+    
+    # store indices of 5 or so products with smallest cosine distance to this product:
+    # (this includes the product itself with distance 0)
+    similar_indices = product_cosine_similarities[rownum_i].argsort()[:-7:-1]  
+    # print(similar_indices)
+    
+    # store distance to each of the 100 or so closest products:
+    similar_items = [ (product_cosine_similarities[rownum_i][i],
+                       all_product_WordBags_raw['product_id'][i]
+                      ) for i in similar_indices 
+                    ] 
+    # print(similar_items)
+    
+    # store this information in the dictionary 'results':
+    results[row_i['product_id']] = similar_items[1:]  
+```
+
+So **results** is now a dictionary, storing for each product the 5 closest products, with their cosine similarity score:
+```{python}
+results
+```
+
+Define a python function which fetches the bag of words (text) for a given product_ key_id:
+```{python}
+def get_item_words(product_id):  
+    return all_product_WordBags_raw.loc[all_product_WordBags_raw['product_id'] == product_id]['bag_of_words'].tolist()[0].split(' - ')[0]
+```
+
+test out the function:
+```{python}
+get_item_words(product_id=4)
+```
+
+```{r}
+py$all_product_WordBags_raw %>% filter(product_id==4)
+```
+
+define a little recommender function, returning closest matching X products given a certain product key:
+```{python}
+def get_recommendations(product_id, num_recommendations):
+    print("Recommending " + 
+          str(num_recommendations) + 
+          " products similar to   " +
+          get_item_words(product_id)
+         )
+    print( "------" )
+    
+    # extract [num_recommendations] closest products to product [product_id], with their cosine similarity:  
+    recs = results[product_id][:num_recommendations]  
+    
+    for rec in recs:
+        print("Recommended: " + get_item_words(rec[1]) + " (score:" +      str(rec[0]) + ")")
+```
+
+test out this product closeness recommender function:
+```{python}
+get_recommendations(product_id=6, num_recommendations=3)
+```
+
+```{r}
+round( py$product_cosine_similarities, 2)
+py$all_product_WordBags_raw
+```
+
+Now, suppose that we have observed some customer purchases:
+```{python}
+data_for_df = [ [101, -1], [101, -1], [102, -1], [103, -1], [103, -1] ]   # create array of data for dataframe
+customer_purchases = pd.DataFrame( data_for_df, columns=['customer_id','product_id'] )           # turn array of data into dataframe
+customer_purchases['product_id'] = all_product_WordBags_raw['product_id'][ np.random.choice( all_product_WordBags_raw.shape[0],
+                                                                                             customer_purchases.shape[0],    # number of samples (i.e. number of rows of customer purchases table)
+                                                                                             replace = True
+                                                                                           ) ].values
+                                                     
+customer_purchases
+```
+
+```{r}
+head( py$raw_tf_idf_matrix )
+```
+
+We turn these customers into word/product vectors by averaging the TF-IDF vectors(rows) of all of the products that they have bought:
+```{python}
+# link all product_IDs to tf-idf vector:
+product_ID_and_tfidf = pd.concat( [all_product_WordBags_raw['product_id'], pd.DataFrame(raw_tf_idf_matrix.todense()) ],
+                                  axis=1
+                                )
+                                
+product_ID_and_tfidf
+```
+
+For each customer, we average (take the element-wise mean) of the TFIDF-vectors of the products which they bought:
+
+```{python}
+# get tf-idf info for each customer purchase:
+customer_product_profiles = customer_purchases.merge( product_ID_and_tfidf, 
+                                                      on = 'product_id', 
+                                                      how = 'left' ).groupby('customer_id').mean().drop('product_id',axis=1)
+customer_product_profiles
+```
+
+```{r}
+py$customer_product_profiles
+```
+
+For each customer vector, store product_IDs of closest 7 products and return this information:
+```{python}
+customer_product_distances = cosine_similarity(customer_product_profiles, raw_tf_idf_matrix.todense() )
+```
+
+```{r}
+py$customer_product_distances
+```
+
+```{python}
+customer_closest_products = {}  # create an empty dictionary
+
+for customer_i in range(customer_product_profiles.shape[0]):        # for each customer
+  
+  close_product_indices = customer_product_distances[customer_i].argsort()[::-1][:7]     # return indices of 5 top matches, in descending order of cosine similarity
+
+  customer_closest_products[customer_product_profiles.index.values[customer_i]] = all_product_WordBags_raw['bag_of_words'][close_product_indices]      
+
+customer_closest_products
+```
+
+```{r}
+py$customer_closest_products
+```
+
+So, customer 101 bought:
+```{python}
+extract_customer_101_purchases = customer_purchases[customer_purchases['customer_id']==101]
+#extract_customer_101_purchases
+
+customer_101_purchases_words = extract_customer_101_purchases.merge( all_product_WordBags_raw,
+                                                                     on = 'product_id', 
+                                                                     how = 'left'
+                                                                   )
+```
+
+```{r}
+py$customer_101_purchases_words
+```
+
+and top recommendations for customer 101 are:
+```{python}
+customer_closest_products[101]
+```
+
+this is how to format the customer product recommendations as a single table, for example for export:
+(taken top 5 products per customer)
+
+```{python}
+customer_close_products = []  # create an empty data frame
+
+for customer_i in range(customer_product_profiles.shape[0]):        # for each customer
+  close_product_indices = customer_product_distances[customer_i].argsort()[::-1]     # return indices of matches in descending order of cosine distance
+  
+  close_product_IDs = all_product_WordBags_raw['product_id'][close_product_indices]      
+  close_product_cosine_similarity_values = customer_product_distances[customer_i][close_product_indices]
+  
+  product_IDs_actually_bought = customer_purchases['product_id'][customer_purchases['customer_id']==customer_product_profiles.index.values[customer_i]]
+  
+  for prod_ID in (close_product_IDs):
+    if sum(prod_ID==product_IDs_actually_bought) == 0:     # if customer has not bought this product:
+      prods_this_customer_dict = {}
+      prods_this_customer_dict['customer_id'] = customer_product_profiles.index.values[customer_i]
+      prods_this_customer_dict['product_id'] = prod_ID
+      prods_this_customer_dict['cosine_similarity'] = 'NA'
+      customer_close_products.append( prods_this_customer_dict )
+    
+print( customer_close_products )  
+
+customer_close_products_df = pd.DataFrame( customer_close_products )  
+
+print( customer_close_products_df )
+
+
+```
+
+```{python}
+1 == product_IDs_actually_bought
+```
+
+```{r}
+py$customer_close_products_df
+```
+
+
+
+# older code
+
+
+alternative method of getting cosine distances between products:
+```{python}
+tf_idf_matrix_sparse_format = sparse.csr_matrix(tf_idf_matrix)
+
+product_similarities_sparse = cosine_similarity(tf_idf_matrix_sparse_format, dense_output=False)
+
+# pd.DataFrame(product_similarities_sparse.toarray())
+# 
+# print('pairwise sparse output:\n {}\n'.format(product_similarities_sparse))
+
+mc = product_similarities_sparse.tocoo()
+
+nice_similarity_matrix = pd.concat( [pd.DataFrame(mc.row), pd.DataFrame(mc.col), pd.DataFrame(mc.data)], axis=1, ignore_index=True )
+
+nice_similarity_matrix['product1_id'] = np.asarray( joined_df['product_id'][np.asarray(nice_similarity_matrix[0])] )
+nice_similarity_matrix['product2_id'] = np.asarray( joined_df['product_id'][np.asarray(nice_similarity_matrix[1])] )
+
+#nice_similarity_matrix
+nice_similarity_matrix = nice_similarity_matrix.drop([0,1], axis=1)
+nice_similarity_matrix.rename( columns = {2:'cosine_similarity'}, inplace=True )
+
+nice_similarity_matrix.sort_values('cosine_similarity', ascending=False)
+```
+
+```{r}
+py$nice_similarity_matrix %>% 
+  
+  filter( product1_id != product2_id) %>% 
+  
+  # add product 1 bag of words: 
+  left_join( py$joined_df %>% 
+                select(product_id, bag_of_words) %>% 
+                rename( product1_id = product_id,
+                        product1_words = bag_of_words
+                      )
+            ) %>% 
+  
+  # add product 2 bag of words: 
+  left_join( py$joined_df %>% 
+                select(product_id, bag_of_words) %>% 
+                rename( product2_id = product_id,
+                        product2_words = bag_of_words
+                      )
+            ) %>% 
+  select( -product1_id, -product2_id ) %>% 
+  arrange( desc(cosine_similarity) ) %>% 
+  kable()
+  
+```
+
+simulate some random purchases for 3 customers:
+
+```{python}
+customer1 = tf_idf_matrix.sample(n=random.randint(1,5), replace=True)
+customer1_products = joined_df.loc[customer1.index.values,:] 
+customer1_products = customer1_products[['product_id', 'bag_of_words']]
+customer1_vector = customer1.mean(axis=0)
+customer1_vector_normalised = preprocessing.normalize( [customer1_vector], norm='l2')
+
+customer2 = tf_idf_matrix.sample(n=random.randint(1,5), replace=True)
+customer2_products = joined_df.loc[customer2.index.values,:] 
+customer2_products = customer2_products[['product_id', 'bag_of_words']]
+customer2_vector = customer2.mean(axis=0)
+customer2_vector_normalised = preprocessing.normalize( [customer2_vector], norm='l2')
+
+customer3 = tf_idf_matrix.sample(n=random.randint(1,5), replace=True)
+customer3_products = joined_df.loc[customer3.index.values,:] 
+customer3_products = customer3_products[['product_id', 'bag_of_words']]
+customer3_vector = customer3.mean(axis=0)
+customer3_vector_normalised = preprocessing.normalize( [customer3_vector], norm='l2')
+
+```
+
+So, customer 1 bought:
+```{r}
+py$customer1_products
+```
+
+and here are their product matches:
+```{python}
+customer1_product_matches_table = joined_df[['product_id','bag_of_words']]
+
+customer_cosine_similar_vector = []
+
+for row_i in range(tf_idf_matrix.shape[0]):      # iterate over rows of the product matrix
+  # can use dot prod since normalised vectors:
+  customer_cosine_similar_vector.append( np.dot(customer1_vector_normalised, tf_idf_matrix.loc[row_i,:])[0] )    
+
+customer1_product_matches_table['cosine_similarity'] = customer_cosine_similar_vector
+```
+
+```{r}
+py$customer1_product_matches_table %>% 
+  arrange( desc(cosine_similarity) ) %>% 
+  kable()
+```
+
+customer 2 purchases:
+```{r}
+py$customer2_products
+```
+
+customer 2 product matches:
+```{python}
+customer2_product_matches_table = joined_df[['product_id','bag_of_words']]
+
+customer_cosine_similar_vector = []
+
+for row_i in range(tf_idf_matrix.shape[0]):      # iterate over rows of the product matrix
+  # can use dot prod since normalised vectors:
+  customer_cosine_similar_vector.append( np.dot(customer2_vector_normalised, tf_idf_matrix.loc[row_i,:])[0] )    
+
+customer2_product_matches_table['cosine_similarity'] = customer_cosine_similar_vector
+```
+
+```{r}
+py$customer2_product_matches_table %>% 
+  arrange( desc(cosine_similarity) ) %>% 
+  kable()
+```
+
+customer 3 purchases:
+```{r}
+py$customer3_products
+```
+
+customer 2 product matches:
+```{python}
+customer3_product_matches_table = joined_df[['product_id','bag_of_words']]
+
+customer_cosine_similar_vector = []
+
+for row_i in range(tf_idf_matrix.shape[0]):      # iterate over rows of the product matrix
+  # can use dot prod since normalised vectors:
+  customer_cosine_similar_vector.append( np.dot(customer3_vector_normalised, tf_idf_matrix.loc[row_i,:])[0] )    
+
+customer3_product_matches_table['cosine_similarity'] = customer_cosine_similar_vector
+```
+
+```{r}
+py$customer3_product_matches_table %>% 
+  arrange( desc(cosine_similarity) ) %>% 
+  kable()
+```
+
+
+
+
+
+
+## still to do:
+
+* remove stopwords
+
+* lemmatize
+
+
+
+
+# other useful text tools in R
+
+```{r}
+library(tidyverse)
+library(tidytext)
+library(janeaustenr)
+library(stringr)
+library(SnowballC) # for the function wordStem() for  stemming words
+
+text <- c("Because I could not stop for Death -",
+          "He kindly stopped for me -",
+          "The Carriage held but just Ourselves -",
+          "and Immortality"
+        )
+
+text_df <- tibble(line = 1:4, text = text)
+
+text_df
+
+# tokenize our text dataframe:
+# a 'token' is a meaningful unit of text (e.g. a word)
+text_df %>% 
+  unnest_tokens( output = "word",     # name of output column
+                 input = "text",      # name of column containing the text to be tokenized 
+                 to_lower = TRUE,     # convert text to lowercase
+                 strip_punct = TRUE  # remove punctuation (.,-/ etc.)
+               )
+
+  
+raw_books <- austen_books()
+
+raw_books %>% slice(500:510)
+
+original_books <- 
+  raw_books %>% 
+    group_by(book) %>%   
+      # within each book:
+      mutate( # add a unique line number to each line:
+              linenumber = row_number(),    
+              
+              # add a chapter column by getting the chapter number out of the raw text
+              chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]",
+                                                     ignore_case = TRUE
+                                                     )
+                                          )
+                               )
+              ) %>%
+      ungroup()
+
+# look at a random few lines from different books:
+original_books %>% sample_n(10)  
+
+# put into tidy text format:
+tidy_books <- 
+  original_books %>%
+    unnest_tokens(input="text", output="word")
+
+tidy_books %>%  head(20)
+
+# get a list of stop-words (words not useful in analysis, like 'the', 'of', 'to' etc.)
+data(stop_words)
+
+nrow(stop_words)
+head(stop_words, 20)
+
+tidy_books_no_stopwords <-
+  tidy_books %>% 
+    anti_join(stop_words)
+  
+tidy_books %>% head(20)
+tidy_books_no_stopwords %>% head(20)
+
+# count most common words across all books:
+tidy_books_no_stopwords %>% 
+  count( word, sort=TRUE ) %>% 
+  head(20)
+
+
+# We use str_extract() here because the UTF-8 encoded texts from Project 
+# Gutenberg have some examples of words with underscores around them to indicate 
+# emphasis (like italics). The tokenizer treated these as words, but we don't want 
+# to count "_any_" separately from "any" as we saw in our initial data 
+# exploration before choosing to use str_extract()
+# go search for this text in https://www.tidytextmining.com/tidytext.html
+
+tibble( word = c("word", "_word_", "%w%o%r%d%") ) %>% 
+  mutate( word_clean1 = str_extract(word, "[a-z']+"),
+          word_clean2 = str_remove_all( word, "\\W+" )
+        )
+
+
+
+# checking out tf-idf:
+example_dat <- tibble( document = paste("document", 1:5, sep="_"),
+                       document_text = c( "black and big black boots and black",
+                                          "black pants formal and with buttons",
+                                          "BIG black and red pants with big buttons",
+                                          "black hat with red and green stripes",
+                                          "blue formal waistcoat"
+                                        ) 
+                       )
+
+get_tf.idf <- 
+example_dat %>% 
+  unnest_tokens( input="document_text", output="word" ) %>% 
+  group_by( document, word ) %>% 
+  summarise( n_times_in_doc = n() ) %>% 
+  ungroup() %>% 
+  group_by( word ) %>% 
+  mutate( n_docs_containing_word = n_distinct(document) ) %>% 
+  group_by( document ) %>% 
+  mutate( n_words_in_doc = sum(n_times_in_doc) ) %>% 
+  ungroup() %>% 
+  mutate( joe_tf = n_times_in_doc / n_words_in_doc ) %>% 
+  ungroup() %>% 
+  mutate( `n_docs/n_docs_containing_word` = 5 / n_docs_containing_word ) %>% 
+  mutate( joe_idf = log(`n_docs/n_docs_containing_word`) ) %>% 
+  mutate( joe_tf_idf = joe_tf * joe_idf ) %>% 
+  bind_tf_idf( tbl =.,
+               term = word,
+               document = document,
+               n = n_times_in_doc
+  ) %>% 
+  arrange( document, desc(tf_idf) ) 
+# 
+# # turn our tidy dataframe into a document-term matrix:
+# example_dat %>% 
+#   unnest_tokens( input="document_text", output="word" ) %>% 
+#   group_by( document, word ) %>% 
+#   summarise( n_times_in_doc = n() ) %>% 
+#   ungroup() %>% 
+#   cast_dtm( term = word,
+#             document = document
+#           )
+
+# checking out stemming:
+tibble( unstemmed_word = c("running", "run", "runs", "runned", "runner", "runners", "ran") ) %>% 
+  mutate( stemmed_word = map_chr( .x = unstemmed_word,
+                                .f = function(word){ wordStem( word, language="en" ) } 
+                                )
+  )
+
+
+# check out document term matrix:
+```
+
+
+

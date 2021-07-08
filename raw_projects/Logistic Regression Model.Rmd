@@ -1,0 +1,193 @@
+---
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(dplyr)
+require(knitr)
+require(tidyr)
+options(scipen=999)
+```
+
+# Binary Response Model
+
+For predicting a binary response variable $\pi_i \in [0,1]$
+
+The model is 
+
+$$ \begin{array} {lcl}
+g\Big(\pi_i\Big) & = & x_i^T\beta \
+\end{array}$$
+
+where $\pi_i = n_iY_i \hspace{10mm} \text{and} \space Y_i \sim binom(n_i, \pi_i)$
+
+for example, 
+
+$$ \begin{array}
+\text{g} \bigg( \space \big[\text{proportion of senile people in group i}\big] \space \bigg) & = & \beta_0 + \beta_1 x^{(age)}_i + \beta_2 x^{(I.Q. \text{ level})}_i \hspace{20mm} \text{IQ level} \in \{low,med,high\} \\
+\big[ \text{proportion of senile people in group i} \big] & = & g^{-1}\bigg( \beta_0 + \beta_1 x^{(age)}_i + \beta_2 x^{(I.Q. \text{ level})}_i \bigg) \\
+\end{array}$$
+
+i.e. the model assumes that the proportion of senile people in group $i$ is some function g() of a linear combination of age and IQ level (or that this hypothesized relationship can make at least a useful prediction).  
+
+People with the same age and IQ level are put into the same group, and this is how the groups are defined. There need not be the same number of individuals in each group, as we are modelling proportions.  
+
+For a single individual (with age and IQ level placing them in group i), $\pi_i$ could be considered their probability of senility. 
+
+We need to choose a function $g^{-1}()$ such that $g^{-1}() \in [0,1]$  
+
+We can use any CDF $g^{-1}(\eta_i) = \int_{-\infty} ^{\eta_i} f(s) \space ds$
+
+```{r CDF example, echo=FALSE}
+x <- seq(-5,5, 0.1)
+cdf <- pnorm(x, mean=0, sd=1)
+plot(cdf~x, type="l")
+```
+
+Common choices for this CDF $g^{-1}()$ are the PROBIT MODEL (normal CDF), LOGISTIC/LOGIT MODEL ($\pi = \frac{e^{\eta}}{1+e^{\eta}}$), and COMPLEMENTARY LOG-LOG (CLOGLOG) MODEL ($\pi=1-e^{-e^{\eta}}$) 
+
+### General Logistic Regression Model
+
+The General Logistic Regression Model is the binary response GLM described above, with the "logistic"/"logit" link:
+
+$$ log\Big(\frac{\pi_i}{1-\pi_i}\Big) = \small{X}_i^T \beta$$
+to see $g^{-1}()$:
+
+$$\begin{array} {lcl}
+\therefore log\Big(\frac{\pi}{1-\pi}\Big) & = & \eta \\
+\therefore \frac{\pi}{1-\pi} & = & e^\eta \\
+\therefore \pi & = & e^\eta - \pi e^\eta  \\
+\therefore \pi( 1 + e^\eta ) & = & e^\eta \\
+\therefore \pi & = & \frac{e^\eta}{1+e^\eta} \hspace{10mm} \text{(logit link)}\\
+\end{array}$$
+
+Using Logistic Regression Models, ODDS RATIOS are useful for comparing the different groups in the model. For example the ratio of odds of success compared to failure in group $i$ is $O_i = \frac{\pi_i}{1-\pi_i} = \frac{\text{proportion "success"}}{\text{proportion "failure"}}$.
+
+We can compare the proportion of "successes" in group $i$ compared to group $k$ using the ratio of their odds ratios: 
+
+$$ \phi = \frac{O_i}{O_k} $$  
+
+For example, using the senility example above:
+
+Say, 10% in group 1 are senile => $O_1 = \frac{0.1}{0.9} = \frac{1}{9} = 0.11111111$ i.e. 1 senile to every 9 non-senile in group 1
+
+Say, 60% in group 2 are senile => $O_2 = \frac{0.6}{0.4} = \frac{3}{2} = 1.5$ i.e. 3 senile to every 2 not senile in group 2
+
+Say, 70% in group 3 are senile => $O_3 = \frac{0.7}{0.3} = \frac{7}{3} = 2.33333333$ i.e. 7 senile to every 3 non-senile in group 3
+
+Therefore, $\frac{O_1}{O_2} = \frac{\Big(\frac{1}{9}\Big)}{\Big(\frac{3}{2}\Big)} = 0.074$...note: if 2 groups have the same odds, then their odds ratio will be 1. 
+
+$\frac{O_1}{O_3} = 0.048 \hspace{15mm}$          group 1 has a lot less senility that group 3
+ 
+$\frac{O_3}{O_2} = 1.556 \hspace{15mm}$          group 3 has a slightly higher senile proportion than group 2 
+ 
+$\frac{O_3}{O_1} = 21 \hspace{15mm}$             group 3 has far higher proportion senile than group 1
+
+The structure of the logistic model gives us this useful relationship for comparing odds ratios: 
+
+$$ $$
+
+$$\begin{array} {lcl}
+log\Big(\frac{\pi_i}{1-\pi_i}\Big) & = & \eta_i \\
+\frac{\pi_i}{1-\pi_i} & = & e^{\eta_i} \\
+\end{array}$$
+
+So, for example, if our model is
+
+$$ \begin{array} {lcl}
+\pi_i & = & \text{proportion of senile individuals in group i } \\ 
+log\big( \pi_i \big) & = & \beta_0 + \beta_1 x^{(age)}_i + \beta_2 x^{(I.Q. \text{ level})}_i + \beta_3\Big[x^{(age)}_i\times x^{(I.Q. \text{ level})}_i\Big] \hspace{20mm} \text{IQ level} \in \{low,med,high\} \\
+\pi_i & = & e^{\bigg( \beta_0 + \beta_1 x^{(age)}_i + \beta_2 x^{(I.Q. \text{ level})}_i + \beta_3\Big[x^{(age)}_i\times x^{(I.Q. \text{ level})}_i\Big] \bigg)} \\
+\end{array}$$
+
+...then we can compare groups:
+
+We can examine the effect of a 1-unit (year) increase in age by constructing an odds ratio of 2 groups with everything else identical:
+
+$$\begin{array} {lcl}
+\frac{\pi_1}{\pi_2} & = & \frac{e^{\bigg( \beta_0 + \beta_1 x^{(age)}_1 + \beta_2 x^{(I.Q. \text{ level})}_1 + \beta_3\Big[x^{(age)}_1\times x^{(I.Q. \text{ level})}_1\Big] \bigg)}}{e^{\bigg( \beta_0 + \beta_1 \Big[x^{(age)}_1+1\Big] + \beta_2 x^{(I.Q. \text{ level})}_1 + \beta_3\Big[x^{(age)}_i\times x^{(I.Q. \text{ level})}_i\Big] \bigg)}} \\
+& = & \frac{e^{\beta_0} e^{\beta_1 x_1^{(age)}} e^{\beta_2 x_2^{(I.Q. level)}}e^{\beta_3\Big[x^{(age)}_1\times x^{(I.Q. \text{ level})}_1\Big]}}{e^{\beta_0} e^{\beta_1 \big(x_1^{(age)}+1\big)} e^{\beta_2 x_2^{(I.Q. level)}}e^{\beta_3\Big[\big(x_1^{(age)}+1\big)\times x^{(I.Q. \text{ level})}_1\Big]}}\\
+\end{array}$$
+
+# Logistic Regression Example: Titanic Dataset
+```{r Titanic data}
+data(Titanic)
+tit_data <- data.frame(Titanic)
+tits_data <- 
+tit_data %>%  
+  arrange( Class, Sex, Age, Survived) %>% 
+  spread( ., key = Survived, value = Freq) %>% 
+  rename( Died = No, Survived = Yes) %>% 
+  mutate( pct.died = Died/(Died+Survived))
+
+kable(tits_data)
+
+response <- cbind( tits_data$Died, tits_data$Survived)
+
+Class <- glm( response ~ Class, family = binomial(link = "logit"), data = tits_data )
+summary(Class)
+Sex <- glm( response ~ Sex, family = binomial(link = "logit"), data = tits_data )
+summary(Sex)
+Class_and_Sex <- glm( response ~ Sex + Class, family = binomial(link = "logit"), data = tits_data )
+summary(Class_and_Sex) 
+Class_Sex_and_interaction <- glm( response ~ Sex + Class + Sex*Class, family = binomial(link = "logit"), data = tits_data )
+summary(Class_Sex_and_interaction) 
+Age <- glm( response ~ Age, family = binomial(link = "logit"), data = tits_data )
+summary(Age)
+Age_Sex_Class <- glm( response ~ Age + Sex + Class, family = binomial(link = "logit"), data = tits_data )
+summary(Age_Sex_Class)
+
+```
+
+
+
+```{r titanic logistic regression model}
+
+```
+
+
+# Logistic Regression Example 1: predicting senility from WAIS score
+WAIS is a measure of I.Q.
+
+```{r WAIS senility example logistic regression model}
+senile_data <- 
+  data_frame(
+x = c( 9, 13, 6, 8, 10, 4, 14, 8, 11, 7, 9,
+    7, 5, 14, 13, 16, 10, 12, 11, 14, 15, 18,
+    7, 16, 9, 9, 11, 13, 15, 13, 10, 11, 6,
+    17, 14, 19, 9, 11, 14, 10, 16, 10, 16, 14,
+    13, 13, 9, 15, 10, 11, 12, 4, 14, 20 ),
+s = c( rep(1, 14), rep(0, 40) )
+  )
+senile_data %>% head()
+
+freq_data <- senile_data %>% 
+  group_by(x) %>% 
+  summarise( num_senile = sum(s),
+             num_in_grp = n() ) %>% 
+  mutate( pct.senile = num_senile/num_in_grp)
+
+freq_data %>% kable()  # there are 17 distinct groups ("covariate patterns")
+
+y <- cbind(freq_data$num_senile, freq_data$num_in_grp - freq_data$num_senile)
+
+logit_model <- glm( y ~ freq_data$x, family = binomial(link = "logit"))
+
+summary(logit_model)
+
+plot( y = freq_data$pct.senile,
+      x = freq_data$x,
+      ylab = "% senile",
+      xlab = "WAIS score",
+      pch = 16,
+      main = "observed and fitted values")
+
+lines( y = fitted.values(logit_model),
+       x = freq_data$x,
+       lty=3, col=2, lwd=2 )
+```
+
+
+
+

@@ -1,0 +1,146 @@
+---
+title: "ROC Curve from Scratch"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup}
+library(tidyverse)
+
+# packages for making ROC curves:
+library(ROCR)
+```
+
+generate data:
+```{r}
+gen_data <- function(n_obs){
+  
+  true_coefs <- c( 10, -5, 4, -3 ) * 0.005
+  
+  tibble( x1 = runif( n=n_obs, min=0, max=100 ),
+          x2 = runif( n=n_obs, min=0, max=100 ),
+          x3 = runif( n=n_obs, min=0, max=100 )
+  ) %>% 
+    mutate( p = 1 / ( 1 + exp( -(true_coefs[1] + 
+                                   true_coefs[2]*x1 + 
+                                   true_coefs[3]*x2 + 
+                                   true_coefs[4]*x3
+    )
+    )
+    )
+    ) %>% 
+    mutate( y = map_dbl( .x = p,
+                         .f = function(p){ as.numeric(rbernoulli(n=1, p=p)) }
+    )
+    )
+}
+
+mydata <- gen_data(99)
+hist(mydata$p)
+mydata
+
+```
+
+fit logistic regression model to the data:
+```{r}
+fit_logreg <- glm( y ~ x1+x2+x3,
+                   data = mydata,
+                   family = binomial()
+)
+
+y <- mydata$y
+yhat <- fitted.values(fit_logreg, type="response")
+```
+
+```{r fig.width=12, fig.height=10}
+
+get_tpr_ftn <- function(threshold){
+  predictionz <- if_else( yhat>=threshold, 1, 0 )
+  return(  sum(predictionz==1&y==1)/sum(y==1) )
+}
+
+get_fpr_ftn <- function(threshold){
+  predictionz <- if_else( yhat>=threshold, 1, 0 )
+  return(  sum(predictionz==1&y==0)/sum(y==0) )
+}
+
+# ROCR PACKAGE
+rocr_prediction_obj <- ROCR::prediction( fitted(fit_logreg), labels = mydata$y)
+rocr_calc <- ROCR::performance( rocr_prediction_obj,"tpr","fpr") 
+
+rocr_cutoffs <- tibble(
+                  threshold = rocr_calc@alpha.values[[1]], 
+                  rocr_tpr = rocr_calc@y.values[[1]], 
+                  rocr_spec = 1 - rocr_calc@x.values[[1]],
+                  rocr_fpr = rocr_calc@x.values[[1]]
+                )
+
+# JOIN EVERYTHING TOGETHER
+
+
+roc_data <- 
+  tibble( threshold = c(0, sort(unique(yhat)), 1),
+            joe_tpr = map_dbl( .x = threshold,
+                               .f = function(t){ get_tpr_ftn(t) }  
+                             ),
+            joe_fpr = map_dbl( .x = threshold,
+                               .f = function(t){ get_fpr_ftn(t) }  
+                             ),
+            joe_spec = 1 - joe_fpr
+        ) %>% 
+  full_join( rocr_cutoffs )
+
+roc_data
+
+par(mfrow=c(2,2))
+
+# ROCR:
+plot(rocr_calc, main="package ROCR", lwd=2)
+abline(a = 0, b = 1) 
+lines(    x = roc_data$joe_fpr,
+           y = roc_data$joe_tpr,
+      col = 2
+    )
+# Joe:
+plot(    x = roc_data$joe_fpr,
+         y = roc_data$joe_tpr,
+      type = "s",
+      main = "JOE",
+       col = 2,
+      ylab = "tpr",
+      xlab = "fpr"
+    )
+abline(a=0, b=1)
+
+plot( x = roc_data$threshold,
+      y = roc_data$joe_tpr,
+      type = "l",
+      main = "Joe",
+      ylab = "",
+      xlab = "threshold",
+      col = 4
+    )
+lines(   x = roc_data$threshold,
+         y = roc_data$joe_spec,
+       col = 2
+     )
+legend("right", legend=c("Sensitivity","Specificity"), col=c(4,2), lty=c(1,1))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

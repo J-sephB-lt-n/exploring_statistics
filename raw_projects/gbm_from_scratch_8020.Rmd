@@ -1,0 +1,615 @@
+---
+title: "Gradient Boosted Machines (GBMs) from Scratch in R"
+#coverImage: /img/USED_user_1stlevel.jpg
+author: "Joseph Bolton"
+date: '2019-06-30'
+output:
+  html_document:
+    df_print: paged
+    theme: darkly
+    highlight: espresso
+---
+
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 7px;
+text-align: center;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+<pre style="font-size: 12px; font-family: &quot;Ubuntu Mono&quot;; background-color: rgb(0,0,0); color: rgb(255,255,255); line-height: 10px;">..............................................................................................................
+...........72508806321777...........77777.....................................................................
+..........588863436888888888888888888888885...................................................................
+.........5885.........777112222221177770880...................................................................
+.........8887.........................58897...................................................................
+.........48897.......................1852.....................................................................
+..........28881.......77.....2547...397.......................................................................
+...........733947...708861.7688880277.........................................................................
+...............743758888672888888888927.......................................................................
+.................70888827688888888888886......................................................................
+................388880728511111488888897......................................................................
+...............70888476817088882788884........................................................................
+.................7271888.5888888.08971037.....................................................................
+...................5888837308857184758888047..................................................................
+.................708888880311140071088888888027...............................................................
+................5888888888888885758888888888888027............................................................
+..............7088888888888880770888888888888888892...........................................................
+.............3888888888888885...1688888888888882715088880527..................................................
+...........70888888888888807.......168888888857388617117138867................................................
+..........4888888888888885............1688885798077688880275887.77777777777777777777777777....................
+........76888888888888881...............7208728871888888885.086.8888888888888888888888888883..................
+.......28888888888888867...................7.48874888888880.980.088888888888888888888888888882................
+.....76888888888888882.......................78857488888867288178888888888888888888888888888889...............
+....18041115888888897.........................7980277117776881708888888888888888888888888888884...............
+...4847388017088884.............................7588880888617488888888888888888888888888888807................
+...887488888748897...............................71111111126888888888888888888888888888888867.................
+...5837490677084.................................38888888888888888888888888888888888888888377.................
+....2085212685712................................76000000000000000000000088888888888888881.7165117............
+......71221771088577447.................................2222222222222222..588888888888807.....7988837.........
+..............25776888857...............................0888888888888888..4888888888886.........7408867.......
+...............798867..7667.............................0888888888888888..488888888884.............28883......
+...............1885......77.............................0888888888888888..75666666547................6885.....
+.................204....................................0888888888888888.............................78887....
+...................261..................................1111111111111111..............................8881....
+........................................................0888888888888888.............................78887....
+........................................................0888888888888888.............................6883.....
+........................................................0888888888888888............................4880......
+........................................................0888888888888888...........................18887......
+........................................................0888888888888888..........................78887.......
+.......................................................711111111111111117.........................6884........
+........................................777245590888888888888888888888888888888096542177.........1880.........
+.....................................408888888888888888888888888888888888888888888888888804......0881.........
+....................................78008888888888888888888888888888888888888888888888888887....78887.........
+.....................................777777777777777777777777777777777777777777777777777777......777..........
+..............................................................................................................</pre>
+
+<!-- set code style back to normal -->
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 14px;
+text-align: left;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+
+This post illustrates the basic concepts underlying Gradient Boosted Machine (GBM) models. There are many different variants of the basic GBM model (XG-Boost, ADABoost, Deep-Boost, Cat-Boost, Light-GBM etc.).
+
+I illustrate in this post the basic GBM algorithm for 2 applications: first a regression problem, then a classification problem.  
+
+I got the idea for this post from this article: $\quad$ https://medium.com/mlreview/gradient-boosting-from-scratch-1e317ae4587d
+
+I also used this vignette extensively: $\quad$
+https://cran.r-project.org/web/packages/gbm/vignettes/gbm.pdf
+
+A quick note on terminology: throughout this post, I use the term *predicted values* to refer to the *fitted values* of the model to the training data. 
+
+First, we load the libraries that we need:
+```{r setup, warning=FALSE, message=FALSE, results='hide'}
+library(tidyverse)   # for data manipulation and plotting
+library(rpart)       # for fitting regression trees
+library(rpart.plot)  # for plotting regression trees  
+library(knitr)       # for nice display of tables using knitr::kable()
+
+# change formatting of the code output:
+knitr::opts_chunk$set(
+  class.output  = "bg-primary",
+  class.message = "bg-info text-info",
+  class.warning = "bg-warning text-warning",
+  class.error   = "bg-danger text-danger"
+)
+```
+
+We set global plot styling settings for the ggplot() function:
+
+```{r}
+theme_set( theme_bw() + 
+            theme( plot.background	= element_rect(fill="black"),
+                   panel.background = element_rect(fill="black"),
+                   axis.text = element_text(colour="white"),
+                   axis.title = element_text(colour="white"),
+                   plot.title = element_text(colour="white"),
+                   legend.text = element_text(colour="white"),
+                   legend.title = element_text(colour="white"),
+                   legend.background = element_rect(fill="black"),
+                   legend.key = element_rect(fill="black"),
+                   panel.grid.major = element_line(colour="grey20"),
+                   panel.grid.minor = element_line(colour="grey20")
+                 )
+          ) 
+```
+# GBM for regression
+The GBM model takes in a vector of explanatory variable values (features) $x_1,x_2,x_3...$ as input, and produces a prediction $\hat{y}=f(x_1,x_2,x_3,...)$ for the true observed response $y$ corresponding to these $x_1,x_2,x_3...$. 
+
+For example, suppose that the 5th individual in our dataset has the following height, weight and running speed:
+
+$$\begin{array}{lcl}
+x^{(5)}_{height} &=& 1.6 \\
+x^{(5)}_{weight} &=& 63 \\
+x^{(5)}_{speed} &=& 14 \\
+\end{array}$$
+
+The model will take in these values $X_5=[1.6,63,14]$ (corresponding to individual/observation $i=5$ in our dataset), and produce a prediction $f(x^{(5)}_{height},x^{(5)}_{weight},x^{(5)}_{speed})$ for this individual's age $y_5$. 
+
+Suppose, for purposes of example, that the model predicts that this individual's age is
+
+$$\begin{array}{lcl} \hat{y}_5 &=& f(1.6,63,14) \\
+                               &=& 29 \\
+\end{array}$$
+
+and that their true age is $y_5=35$. The model is fairly close in it's prediction, but not perfect.
+
+We can use a **loss function** to measure how close this prediction $\hat{y}_5$ is to the true response value $y_5$.
+
+For example, the **squared-error loss function** is
+
+$$L\Big(y_i \space, \space \hat{y}_i \Big) \quad = \quad \Big(y_i- \hat{y}_i\Big)^2$$
+
+So, our prediction of $\hat{y}_5=29$ for a true response of $y_5=35$ gives a (squared error) loss of:
+
+$$L\Big(35 \space, \space 29 \Big) \quad = \quad \Big(35- 29\Big)^2 \quad=\quad 36$$
+Here are the squared error loss values that we'd see for some other predicted values:
+
+```{r loss_plots, echo=FALSE, fig.height=5, fig.width=6}
+par(bg="black", col="white", col.axis="white", col.lab="white", col.main="white")
+x_seq <- seq(1,100,0.01)
+y_lossval <- (35-x_seq)^2
+plot( x = x_seq,
+      y = y_lossval,
+      type = "l",
+      xlab = "predicted age",
+      ylab = "squared error loss",
+      main = "Squared error loss under different predicted ages \n (true age 35)",
+      sub = "test"
+    )
+abline( v=35, h=0, lty=2 )
+```
+
+We can see that the **squared error loss** function gives (relatively) very small loss values to predictions that are close to the true $y_i$ value, with penalties increasing at an accelerating rate as predictions begin to stray further away from the truth. 
+
+The gradient (slope) of the **squared error loss function** (with respect to the prediction $\hat y_i$) is
+
+$$\displaystyle\frac{\partial \space L(y_i,\hat{y_i})}{\partial \space \hat{y_i}} \quad=\quad -2(y_i-\hat{y_i})$$
+
+```{r gradient_plot, echo=FALSE, fig.width=8, fig.height=8}
+par( mfrow=c(2,1),
+     bg="black", col="white", col.axis="white", col.lab="white", col.main="white"
+   )
+
+y_grad <- -2*(35-x_seq)
+
+plot( x = x_seq,
+      y = y_lossval,
+      type = "l",
+      xlab = "predicted age",
+      ylab = "squared error loss",
+      main = "Squared error loss under different predicted ages \n (true age 35)"
+    )
+abline( v=35, h=0, lty=2 )
+plot( x = x_seq,
+      y = y_grad,
+      type = "l",
+      xlab = "predicted age",
+      ylab = "gradient",
+      main = "Gradient of squared error loss function under different predicted ages \n (true age 35)"
+    )
+abline( v=35, h=0, lty=2 )
+```
+
+The loss value for an individual observation can be used to measure the accuracy of the model prediction for that single observation. We can use this information to train a predictive model.
+
+Suppose that we have the following model fit (3 individuals/observations):
+
+i    | predicted age | true age | squared error loss for this prediction | gradient of loss function for this prediction
+-----|---------------|----------|----------------------------------------|---------------------------
+1    |      8        |    5     |        9                               | 6
+2    |      12       |    21    |       81                               | -18
+3    |      50       |    49    |        1                               | 2
+
+The large squared error loss, and large gradient, tell us that by far the largest error (worst prediction) is the one the model is making on observation 2. 
+
+The gradient of -18 means that at the current prediction, the squared error loss for this prediction is decreasing at a rate of 18 per unit increase in the prediction. For example, changing our prediction from $12$ to $12.001$ for observation 2 results in an reduction in squared error loss of $(12-21)^2-(12.001-21)^2=0.018$. 
+
+We can use this gradient to inform the improvement of our predictions. 
+
+Suppose that we choose a *learning rate* ($\lambda$) of 0.2. If we subtract $\lambda \times [\text{gradient } i]$ from each of our predictions then each prediction improves:
+
+i    | predicted age | true age | update             |updated prediction
+-----|---------------|----------|--------------------|--------------------
+1    |      8        |    5     |   -(6*0.2) = -1.2  |  6.8          
+2    |      12       |    21    |  -(-18*0.2) = +3.6 |  15.6      
+3    |      50       |    49    |   -(2*0.2) = -0.4  |  49.6 
+
+Using the gradient of the loss function to inform the updates ensures that the biggest changes/corrections/updates are made to the predictions which are furthest from the true values (biggest errors). The learning rate $\lambda$ ensures that the learning is gradual (it helps to prevent us overshooting the correct prediction and creating an error in the opposite direction). 
+
+We could take the new updated predictions, calculate loss values and gradients for these new predictions, and update them again in the same way to get even better predictions:
+
+i    | predicted age | true age | squared error loss | gradient |update                |updated prediction
+-----|---------------|----------|--------------------|----------|----------------------|-------------------
+1    |      6.8      |    5     | 3.24               | 3.6      | -(3.6*0.2) = -0.72   | 6.08            
+2    |      15.6     |    21    | 29.16              | -10.8    | -(-10.8*0.2) = +2.16 | 17.76  
+3    |      49.6     |    49    | 0.36               | 1.2      | -(1.2*0.2) = -0.24   | 49.36   
+
+The GBM model builds on this concept of using the gradient of the loss function to iteratively modify the model predictions.
+
+The basic GBM algorithm (used to train the model) is as follows:
+
+1. Choose a loss function appropriate to the problem and the data
+
+2. Fit an initial model to the data: get a prediction $\hat{y_i}$ for every observation $y_i$
+
+3. For each observation, calculate the gradient $g_i$ of the loss function.
+
+4. Optional: Take a random sample of the data (sample of rows and/or columns).
+
+5. Build a model on the data (subsample). This model aims to produce a prediction $\hat g_i$ for each $g_i$. The desired update to the model prediction is $\rho_i=\lambda \times (-g_i)$ (the learning rate times the negative gradient).  
+
+6. Update each prediction as $\hat{y_i}+\hat{\rho_i}=\hat y_i - \lambda\hat g_i$ (i.e. the previous prediction for observation $i$ minus the predicted *update* required, which means subtracting the predicted gradient times the learning rate).
+
+7. We now have an updated model prediction $\hat{y_i}$ for every row/observation $i$ in our data. We can now go back to step 3 with these updated predictions, calculating new gradients and updating the predictions again. 
+
+So, the final prediction (after repeating this step many times) for each observation $i$ will be:
+
+$$\underset{\text{model 3 prediction}}{\underbrace{\underset{\text{model 2 prediction}}{\underbrace{\underset{\text{model 1 prediction}}{\underbrace{\hat{y_i}}} + \overset{\text{predicted update to model 1 prediction}}{\hat{\rho_i}^{(1)}}}} + \overset{\text{predicted update to model 2 prediction}}{\hat{\rho_i}^{(2)}}}} \quad + \quad ...........$$
+
+Each subsequent model fit tries to predict what the errors of the previous model were (errors measured by the gradients of the loss function). These are then used to to adjust the predictions of the previous model fit, with the speed at which the model learns being controlled by the *learning rate* $\lambda$. This is the concept of **Gradient Boosting**.
+
+The subsampling of rows and columns of the data in each iteration (step 4 above) helps to reduce overfitting (improves performance on non-training data) by not allowing the model to fixate on the same part of the data in each iteration.  
+
+...
+
+Let's try this on some data!  
+
+The regression problem is to predict a continuous variable $y$ using one or more explanatory variables $x_1,x_2,x_3,...$.
+
+For example, suppose that we have the following data, consisting of a continuous response variable $y$ and a single explanatory variable $x$:
+
+```{r create_data}
+# create random data
+dataset <- 
+  tibble( x = runif(100, 0,100) ) %>% 
+    rowwise() %>% 
+    mutate( y = case_when( x < 20 ~ rnorm(1, 60, 5),
+                           x < 40 ~ rnorm(1, 20, 5),
+                           x < 60 ~ rnorm(1, 80, 5),
+                           x < 80 ~ rnorm(1, 10, 5),
+                           TRUE ~ rnorm(1, 70, 5) 
+                         )
+          ) %>% 
+    ungroup()
+
+# print the first 6 rows of the data:
+dataset %>% head(6)
+
+# set plot styling:
+par( bg="black", col="white", col.axis="white", col.lab="white", col.main="white" )
+
+plot( dataset$y ~ dataset$x, 
+      pch = 16, 
+      cex = 0.5, 
+      col = sample(2:20,replace=TRUE,size=nrow(dataset)),
+      xlab = "x", ylab="y"  
+    )
+```
+
+Given any particular value $x_i$ of $x$ (e.g. $x_5$ = `r round(dataset$x[5],3)`), we would like our model to provide an estimate $\hat{y_i}$ of $y_i$. 
+
+This simple dataset problem could be handled using a much simpler model than a GBM (such as a regression tree of depth greater than 3), but solving it using a GBM is a nice illustratation of the GBM concept. 
+
+We initialise our model with a prediction of $y_i = 40$ for every observation $x_i$:
+
+```{r fig.width=8, fig.height=5}
+latest_predictions <- rep(40, nrow(dataset))
+latest_gradients <- -2*(dataset$y-latest_predictions)
+
+# (code for plots omitted)
+```
+
+```{r echo=FALSE, fig.width=6}
+par( mfrow=c(1,2),
+     bg="black", col="white", col.axis="white", col.lab="white", col.main="white"
+   )
+
+# initial model
+plot( dataset$y ~ dataset$x, 
+      pch = 16, 
+      cex = 0.5, 
+      xlab = "x", ylab="y",
+      main = "initial model (model 1) predictions"
+    )
+points( x = dataset$x,
+        y = latest_predictions,
+        col = 2, 
+        cex = 0.3
+      )
+
+# loss function gradient for each model 1 prediction:
+plot( x = dataset$x,
+      y = latest_gradients,
+      col = "blue",
+      cex = 0.5, 
+      xlab = "x", 
+      ylab="gradient",
+      main = "loss function gradient \n for each model 1 prediction"
+    )
+
+```
+
+The mean squared error (average value of $(y_i-\hat{y_i})^2$) for this initial model is MSE=`r round(mean( (dataset$y-latest_predictions)^2 ), digits=2)`. This is a measure of the overall model accuracy/quality. 
+
+Now, we iteratively fit regression tree models of depth 1 (stumps) to predict the loss function gradients $g_i$ of each previous model prediction $\hat y_i$, in each iteration using these predicted gradients to update our overall model prediction:
+(notice how the **M**ean **S**quared **E**rror decreases with each update)
+```{r fig.width=8}
+par( mfrow = c(1,3), # expand plot window to accomodate 3 plots per line 
+     bg="black", col="white", col.axis="white", col.lab="white", col.main="white" # plot styling
+   )         
+
+learnrate <- 0.5             # set the learning rate at lambda=0.5
+
+for( i in 2:15 ){      # for 14 iterations
+  
+  # fit new model to gradient of previous model:
+  model_m <- rpart( grad ~ x, data=tibble(grad=latest_gradients, x=dataset$x), maxdepth=1, model=TRUE )
+  
+  # plot the model fit:
+  prp( model_m , 
+       main = paste0("model ",i), 
+       branch.col="red",
+       border.col="red",
+       under.col = "white",
+       split.border.col = "red",
+       split.col="white",
+       nn.col="white",
+       box.col="black"
+      )
+  
+  # plot the model predictions of the previous model's gradients:
+  plot( x = dataset$x,
+        y = latest_gradients,
+        main = paste0("model ", i, " predictions on loss function \n gradients of model ", i-1, " predictions"),
+       col = "blue"
+      )
+  points( x = dataset$x, y = predict(model_m), col=2, pch=16 )
+  abline( h=0 )
+  
+  # update our predictions by adding the predicted gradients of the previous model:  
+  latest_predictions <- latest_predictions - (learnrate * predict(model_m))
+  
+  # calculate gradients of new updated predictions:
+  latest_gradients <- -2*(dataset$y-latest_predictions)
+  
+  # plot our new predictions over our data:
+  plot( x = dataset$x, 
+        y = dataset$y, 
+        main = paste0("latest prediction \n (model", i, ")"), 
+        pch = 16
+      )
+  points( x = dataset$x, y = latest_predictions, pch=16, col=3 )
+   
+  # print the MSE for our latest predictions:
+  print(paste0( "model ", i, " MSE:     ", round(mean( (dataset$y-latest_predictions)^2 ), digits=2) ) )
+}
+```
+
+We can see that after only 15 consecutive fits of a one-split regression tree stump model (arguably the simplest possible predictive model), the fit to the training data looks very good.  
+
+Further iterations would likely lead to overfitting to the training data.
+
+# GBM for binary classification
+In a binary classification problem, we are again trying to predict a response value $y$ using explanatory variables $x_1, x_2, x_3,...$, except that the variable $y$ is known to take on a value of $y=0$ or $y=1$. 
+
+I use the same GBM algorithm as above to solve this problem, except with a different loss function. 
+
+For this classification problem, I choose the **Bernoulli** loss function:
+
+$$\begin{array}{lcl} 
+\mathcal{L}\Big(y_i \space, \space \hat y_i \Big) &=& y_i \space \hat y_i + log\Big(1+e^{\hat y _i}\Big)\\
+\end{array}$$ 
+
+The gradient of the **Bernoulli** loss function (rate of change per unit change in prediction $\hat y_i$) is
+
+$$\displaystyle\frac{\partial \space \mathcal{L}}{\partial \space \hat y_i} \quad=\quad -y_i + \displaystyle\frac{e^{\hat y_i}}{1+e^{\hat y_i}}$$
+
+```{r echo=FALSE}
+par( mfrow=c(2,1), # expand plot window to accommodate 2 plots
+     bg="black", col="white", col.axis="white", col.lab="white", col.main="white" # plot styling
+   ) 
+
+yhat_seq <- seq(-1,2,0.01)
+loss_truelabel0 <-  -(0)*yhat_seq + log( 1+exp(yhat_seq) )
+loss_truelabel1 <-  -(1)*yhat_seq + log( 1+exp(yhat_seq) )
+
+grad_truelabel0 <- -(0) + exp(yhat_seq) / ( 1 + exp(yhat_seq) )
+grad_truelabel1 <- -(1) + exp(yhat_seq) / ( 1 + exp(yhat_seq) )
+
+plot( x = yhat_seq,
+      y = loss_truelabel0,
+      type = "l",
+      main = "loss values given true label y=0",
+      xlab = bquote( "prediction ("*hat(y)*")" ),
+      ylab = "loss"
+    )
+plot( x = yhat_seq,
+      y = grad_truelabel0,
+      type = "l",
+      xlab = bquote( "prediction ("*hat(y)*")" ),
+      ylab = "gradient of loss function"
+    )
+
+plot( x = yhat_seq,
+      y = loss_truelabel1,
+      type = "l",
+      main = "loss values given true label y=1",
+      xlab = bquote( "prediction ("*hat(y)*")" ),
+      ylab = "loss"
+    )
+plot( x = yhat_seq,
+      y = grad_truelabel1,
+      type = "l",
+      xlab = bquote( "prediction ("*hat(y)*")" ),
+      ylab = "gradient of loss function"
+
+    )
+```
+
+For this problem, we have the following data:
+
+```{r echo=FALSE}
+set.seed(12345)
+classifydat <-
+  tibble( x1 = runif(100, 0,100),
+          x2 = runif(100, 0,100)
+        ) %>%
+    rowwise() %>%
+    mutate( y = case_when( x1 < 25 & x2 < 25 ~ 1,
+                           x1 > 75 & x2 > 75 ~ 1,
+                           x1 > 75 & x2 < 25 ~ 1,
+                           x1 < 25 & x2 > 75 ~ 1,
+                           x1 > 35 & x1 < 75 & x2 > 35 & x2 < 75 ~ 1,
+                           TRUE ~ 0
+                         )
+    ) %>%
+    arrange( y, x1, x2 )
+
+ggplot( data = classifydat,
+        aes( x = x1,
+             y = x2,
+             colour = factor(y) )
+        ) +
+  geom_point() +
+  labs( title = "True labels",
+        colour = "y"
+      ) 
+
+```
+
+We make a custom plotting function:
+```{r fig.width=6, fig.height=6}
+make_plot_ftn <-
+  function( prediction_vector, plot_title="" ){
+
+    plot( x = 1:nrow(classifydat), 
+          y = classifydat$y*100, 
+          pch = 1,
+          axes=FALSE, 
+          xlab="", ylab="",
+          xlim=c(0,nrow(classifydat)),
+          main = plot_title
+        )
+    points( x = 1:nrow(classifydat), y = classifydat$x1, ylim=c(0,100), pch=2, col="red", cex=0.8 )
+    points( x = 1:nrow(classifydat), y = classifydat$x2, ylim=c(0,100), pch=4, col="blue", cex=0.8 )
+    abline( v=1:nrow(classifydat), lwd=0.1 )
+    points( x = 1:nrow(classifydat), y = prediction_vector*100, pch=16)
+            legend("topleft", pch=c(1,16,2,4), legend=c("true label","predicted label","x1 value","x2 value"),
+                   col=c("black","black","red","blue") )
+
+
+  }
+
+# # test the plot function: (not run)
+# make_plot_ftn( prediction_vector = runif( n = nrow(classifydat), min=0, max=1) )
+
+```
+
+First, we initialise all predictions at $\hat y=0.5$. Then, we iteratively fit the GBM model, much the same as in the previous example: 
+
+```{r fig.width=8, fig.height=7}
+# initialise all predictions at y=0.5
+current_estimates <- rep(0.5, nrow(classifydat) )
+
+# specify the learning rate:
+learnrate <- 0.5
+
+# get the gradient of the loss function for each of the initial predictions
+get_gradients <- -(classifydat$y) + exp(current_estimates) / ( 1 + exp(current_estimates) )
+
+# model iterations:
+for( i in 2:150 ){      # for 149 iterations
+    
+    # print iteration count 
+    print( paste0("iteration ", i) )
+           
+    # fit regression tree to the gradients:
+    modeldata <- tibble( y = get_gradients,
+                         x1 = classifydat$x1,
+                         x2 = classifydat$x2
+                       ) 
+    fit_rpart <- rpart( y ~ x1+x2, data=modeldata, maxdepth=3 )
+    
+    # make plots of the model fit:
+    par( mfrow = c(1,2) )
+    prp( fit_rpart,
+        main = paste0( "model ", i) 
+      )
+    
+    plot( x = 1:length(get_gradients), 
+         y = get_gradients,
+         xlab = "observation ID",
+         ylab = "negative gradient",
+         main = paste0("model ",i, " fit to model ", i-1, "\n negative gradients")
+    )
+    points( x = 1:length(get_gradients),
+           y = predict(fit_rpart),
+           pch = 16,
+           col = "red"
+           )
+    
+    # update the global prediction using this iteration's model fit:
+    current_estimates <- current_estimates - learnrate*predict(fit_rpart)
+    
+    # force estimates outside of the allowed range [0,1] of y into range [0,1]:
+    estimates_to_plot <- current_estimates
+    estimates_to_plot[estimates_to_plot>1] <- 1
+    estimates_to_plot[estimates_to_plot<0] <- 0
+    
+    # print out loss and accuracy for the current model fit:
+    paste0( 
+             "Model ", i,
+             ":    ",
+             "Bernoulli loss:   ",
+            -2 * sum( classifydat$y*estimates_to_plot - log( 1 + exp(estimates_to_plot) )      ),
+            "    ",
+            "accuracy (num correct/num predictions):     ",
+            sum(round(estimates_to_plot) == classifydat$y) / nrow(classifydat)
+    ) %>% 
+      print()
+
+    # print model plots:
+    par( mfrow = c(1,1) )
+    make_plot_ftn( prediction_vector = estimates_to_plot,
+                   plot_title = paste0("model ", i, " predictions") 
+                 )
+
+    print( 
+    tibble( x1 = classifydat$x1,
+            x2 = classifydat$x2,
+            true_label = factor(classifydat$y),
+            prediction = estimates_to_plot
+           ) %>% 
+    ggplot( data = .,
+            aes( x = x1,
+                 y = x2,
+                 shape = true_label,
+                 colour = prediction
+               )
+           ) +
+    geom_point() +
+    ggtitle( paste0("model ", i, " predictions") )
+    )
+    
+  # get gradients for each updated prediction:
+  get_gradients <- -(classifydat$y) + exp(current_estimates) / ( 1 + exp(current_estimates) )  
+    
+  # stop doing iterations if the model accuracy gets greater than 0.95: 
+  accuracy <- sum(round(estimates_to_plot) == classifydat$y) / nrow(classifydat)
+  if( accuracy >= 0.99 ){ break }
+    
+}
+
+```
+

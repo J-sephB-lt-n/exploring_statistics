@@ -1,0 +1,59 @@
+---
+title: "Books and other References"
+output: 
+  html_document:
+    toc: true
+---
+
+```{r}
+library(tidyverse)
+```
+
+# Books
+
+```{r}
+bind_rows(
+  tibble(
+    date_added = "2022-03-30", 
+    behind_paywall = "partial",
+    title = "Refactoring Guru",
+    description = "many elegant and beautiful descriptions of programming concepts",
+    link = "https://refactoring.guru/",
+    type = "website & book",
+    author = "Alexander Shvets"
+  )
+) %>% 
+  knitr::kable()
+```
+
+# Websites 
+```{r}
+bind_rows(
+  tibble(
+    date_added = "2022-03-30", 
+    behind_paywall = "partial",
+    title = "Refactoring Guru",
+    description = "many elegant and beautiful descriptions of programming concepts",
+    link = "https://refactoring.guru/",
+    type = "website & book",
+    author = "Alexander Shvets"
+  )
+) %>% 
+  knitr::kable()
+```
+
+# Papers
+```{r}
+bind_rows(
+  tibble(
+    date_added = "2022-04-04", 
+    behind_paywall = "no",
+    title = "Review of Automated Time Series Forecasting Pipelines",
+    description = "a literature review of methods addressing the full process of automated time-series forecasting",
+    link = "https://arxiv.org/abs/2202.01712v1",
+    type = "paper",
+    author = "Stefan Meisenbacher, Marian Turowski, Kaleb Phipps, Martin Rätz, Dirk Müller, Veit Hagenmeyer, Ralf Mikut"
+  )
+) %>% 
+  knitr::kable()
+```

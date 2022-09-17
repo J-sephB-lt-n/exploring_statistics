@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+
+
+<title>About Me</title>
+
+<script src="site_libs/jquery-1.11.3/jquery.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/darkly.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<script src="site_libs/accessible-code-block-0.0.1/empty-anchor.js"></script>
+<link href="site_libs/pagedtable-1.1/css/pagedtable.css" rel="stylesheet" />
+<script src="site_libs/pagedtable-1.1/js/pagedtable.js"></script>
+<link href="site_libs/anchor-sections-1.0/anchor-sections.css" rel="stylesheet" />
+<script src="site_libs/anchor-sections-1.0/anchor-sections.js"></script>
+<link href="site_libs/font-awesome-5.1.0/css/all.css" rel="stylesheet" />
+<link href="site_libs/font-awesome-5.1.0/css/v4-shims.css" rel="stylesheet" />
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+
+
+
+<style type="text/css">
+h1 {
+  font-size: 34px;
+}
+h1.title {
+  font-size: 38px;
+}
+h2 {
+  font-size: 30px;
+}
+h3 {
+  font-size: 24px;
+}
+h4 {
+  font-size: 18px;
+}
+h5 {
+  font-size: 16px;
+}
+h6 {
+  font-size: 12px;
+}
+.table th:not([align]) {
+  text-align: left;
+}
+</style>
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+code {
+  color: inherit;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+</style>
+
+
+<style type="text/css">
+/* padding for bootstrap navbar */
+body {
+  padding-top: 60px;
+  padding-bottom: 40px;
+}
+/* offset scroll position for anchor links (for fixed navbar)  */
+.section h1 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.section h2 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.section h3 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.section h4 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.section h5 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.section h6 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #ffffff;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script>
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark it active
+  menuAnchor.parent().addClass('active');
+
+  // if it's got a parent navbar menu mark it active as well
+  menuAnchor.closest('li.dropdown').addClass('active');
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "&#xe258;";
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+
+
+<div class="navbar navbar-inverse  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">Joseph Bolton</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html"> Home</a>
+</li>
+<li>
+  <a href="about.html"> About Me</a>
+</li>
+<li>
+  <a href="future_content.html"> Future Content</a>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false">
+     Posts
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li class="dropdown-header">Posts</li>
+    <li>
+      <a href="document_similarity_recommenders.html">A Selective Survey of Word &amp; Document Embedding Methods</a>
+    </li>
+    <li>
+      <a href="dcn_v2_cross_layer_investigation.html">Dissecting the DCN-V2 Cross Layer</a>
+    </li>
+    <li>
+      <a href="cuped_cupac_and_other_variance_reduction_techniques.html">CUPED, CUPAC, and Other Ways to Reduce Variance in an Experiment</a>
+    </li>
+    <li>
+      <a href="recommenders_part1_vectors.html">Recommenders Part I: Representing Customers &amp; Items as Vectors</a>
+    </li>
+    <li>
+      <a href="nice_R_visualisations.html">Beautiful Lesser-Known Visualisations in R</a>
+    </li>
+    <li>
+      <a href="gbm_from_scratch_8020.html">Building a GBM from Scratch</a>
+    </li>
+    <li>
+      <a href="good_books_and_papers.html">My Favourite Books, Papers and other Resources</a>
+    </li>
+    <li>
+      <a href="neural_net_from_scratch.html">Deep-Learning from Scratch</a>
+    </li>
+    <li>
+      <a href="visual_intro_to_splines.html">Regression Splines</a>
+    </li>
+    <li>
+      <a href="PAMS_and_SILHOUETTE_by_hand.html">Clustering: PAM k-Medoids, CLARA &amp; Silhouette Values</a>
+    </li>
+    <li>
+      <a href="intuition_for_CRVTW_uplift_model.html">CRVTW Revenue Uplift Model</a>
+    </li>
+    <li>
+      <a href="data_tree_checkout.html">Data.trees</a>
+    </li>
+    <li>
+      <a href="constrOptim.html">Constrained Optimisation in R</a>
+    </li>
+    <li>
+      <a href="OLS_theory.html">Least Squares Linear Model Theory</a>
+    </li>
+  </ul>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        <li>
+  <a href="mailto:joseph.jazz.bolton@gmail.com">
+    <span class="fa fa-envelope"></span>
+     
+  </a>
+</li>
+<li>
+  <a href="https://www.linkedin.com/in/joseph-bolton-a02653171/">
+    <span class="fa fa-linkedin"></span>
+     
+  </a>
+</li>
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div class="fluid-row" id="header">
+
+
+
+<h1 class="title toc-ignore">About Me</h1>
+
+</div>
+
+
+<p>I am a Machine Learning Engineer working for HomeChoice International.</p>
+<p><img src="pixel_face_cropped.png" width="348" /></p>
+<div id="skillset-summary" class="section level1">
+<h1>Skillset Summary</h1>
+<p>Here is a summary of my skillset, and tools that I am proficient with:</p>
+<p>(last update 2022-01-21)</p>
+<table>
+<colgroup>
+<col width="88%" />
+<col width="11%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="left">Tool</th>
+<th align="right">Approximate Hours of Usage/Experience</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">SQL (Vertica, MySQL, AWS Athena, Google BigQuery, PostgreSQL)</td>
+<td align="right">3300</td>
+</tr>
+<tr class="even">
+<td align="left">R (incl. tidyverse)</td>
+<td align="right">2842</td>
+</tr>
+<tr class="odd">
+<td align="left">Python (incl. pandas, numpy, scipy, sklearn, datetime)</td>
+<td align="right">1360</td>
+</tr>
+<tr class="even">
+<td align="left">Microsoft Excel</td>
+<td align="right">1100</td>
+</tr>
+<tr class="odd">
+<td align="left">Supervised Learning &amp; general Machine-Learning theory (transfer learning, classication/regression: neural nets, GBM family, random forest, tree-based models, linear models, elastic-net/penalised linear models, regression splines, local linear models, KNN, bias/variance tradeoff, cross-validation etc.)</td>
+<td align="right">621</td>
+</tr>
+<tr class="even">
+<td align="left">ML-Ops (models in production)</td>
+<td align="right">532</td>
+</tr>
+<tr class="odd">
+<td align="left">Theory of Experimental Design (null hypothesis testing, bayesian inference, orthogonal designs, power calculation, unbiased variance reduction techniques …)</td>
+<td align="right">501</td>
+</tr>
+<tr class="even">
+<td align="left">Recommender Engines (DCN, Wide&amp;Deep, Factorisation Machines, Collaborative Filtering incl. Matrix Factorisation, Content-Based, cold-start recommenders)</td>
+<td align="right">376</td>
+</tr>
+<tr class="odd">
+<td align="left">TensorFlow + Keras</td>
+<td align="right">169</td>
+</tr>
+<tr class="even">
+<td align="left">RMarkdown &amp; LaTeX</td>
+<td align="right">161</td>
+</tr>
+<tr class="odd">
+<td align="left">Uplift Modelling (model-based estimation of heterogeneous treatment effects)</td>
+<td align="right">152</td>
+</tr>
+<tr class="even">
+<td align="left">Image-based Models (segmentation &amp; masking, classification, multi-class classification (auto tagging), tensorflow/keras, transfer learning</td>
+<td align="right">150</td>
+</tr>
+<tr class="odd">
+<td align="left">Association Rule Mining</td>
+<td align="right">100</td>
+</tr>
+<tr class="even">
+<td align="left">Exponential Smoothing Models (time series prediction)</td>
+<td align="right">70</td>
+</tr>
+<tr class="odd">
+<td align="left">Natural Language Processing (NLP): Word &amp; Document Embedding Methods</td>
+<td align="right">70</td>
+</tr>
+<tr class="even">
+<td align="left">Multi-Armed Contextual Bandit Algorithms</td>
+<td align="right">65</td>
+</tr>
+<tr class="odd">
+<td align="left">Meta-Heuristic Optimisation (genetic algorithms, simulated annealing, TABU search)</td>
+<td align="right">60</td>
+</tr>
+<tr class="even">
+<td align="left">Web Scraping (BeautifulSoup &amp; Selenium in Python)</td>
+<td align="right">53</td>
+</tr>
+<tr class="odd">
+<td align="left">Clustering algorithms (k-means, k-medoids, hierarchical family, CLARA, DBSCAN)</td>
+<td align="right">50</td>
+</tr>
+<tr class="even">
+<td align="left">Financial Modelling</td>
+<td align="right">50</td>
+</tr>
+<tr class="odd">
+<td align="left">ARIMA, SARIMA, ARIMAX models (time series prediction)</td>
+<td align="right">50</td>
+</tr>
+<tr class="even">
+<td align="left">H2o Machine Learning Framework (R library)</td>
+<td align="right">40</td>
+</tr>
+<tr class="odd">
+<td align="left">Non-Linear Dimension Reduction (T-SNE, UMAP, ISOMAP, Locally-Linear Embedding)</td>
+<td align="right">36</td>
+</tr>
+<tr class="even">
+<td align="left">R Shiny</td>
+<td align="right">30</td>
+</tr>
+<tr class="odd">
+<td align="left">Multi-Variable Analysis (PCA, Factor Analysis, SVD Bi-Plots, Canonical Correlation Analysis)</td>
+<td align="right">30</td>
+</tr>
+<tr class="even">
+<td align="left">Causal Inference: Bayesian Networks and Do-Calculus</td>
+<td align="right">25</td>
+</tr>
+<tr class="odd">
+<td align="left">HTML, CSS and JavaScript</td>
+<td align="right">20</td>
+</tr>
+<tr class="even">
+<td align="left">Git</td>
+<td align="right">16</td>
+</tr>
+<tr class="odd">
+<td align="left">Linear Optimisation</td>
+<td align="right">15</td>
+</tr>
+<tr class="even">
+<td align="left">State Space Models (time series prediction)</td>
+<td align="right">12</td>
+</tr>
+<tr class="odd">
+<td align="left">General Reinforcement Learning Theory</td>
+<td align="right">10</td>
+</tr>
+<tr class="even">
+<td align="left">Multi-Objective Optimisation</td>
+<td align="right">10</td>
+</tr>
+<tr class="odd">
+<td align="left">Copulas (Financial Modelling)</td>
+<td align="right">5</td>
+</tr>
+<tr class="even">
+<td align="left">Arch/Garch Models (time series variance prediction/inference)</td>
+<td align="right">2</td>
+</tr>
+<tr class="odd">
+<td align="left">TBATS (time series prediction)</td>
+<td align="right">2</td>
+</tr>
+<tr class="even">
+<td align="left">…this list tbc</td>
+<td align="right">0</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="thanks" class="section level1">
+<h1>Thanks</h1>
+<ul>
+<li><p>Website built using R-markdown</p></li>
+<li><p>Website hosted by GitHub</p></li>
+<li><p>Image to ASCII-art conversion using <a href="https://cloudapps.herokuapp.com/imagetoascii/" class="uri">https://cloudapps.herokuapp.com/imagetoascii/</a></p></li>
+</ul>
+<div id="non-statistical-interests" class="section level2">
+<h2>Non-Statistical Interests</h2>
+<ul>
+<li><p>Piano</p></li>
+<li><p>Jazz</p></li>
+<li><p>Origami</p></li>
+<li><p>Calisthenics</p></li>
+<li><p>Rubik’s Cube</p></li>
+<li><p>Football</p></li>
+<li><p>Other hobbies, which I have accepted that I will only have time for again after I retire:</p>
+<ul>
+<li>juggling</li>
+<li>drawing</li>
+<li>unicycling</li>
+<li>writing</li>
+<li>music composition</li>
+</ul></li>
+</ul>
+</div>
+</div>
+
+
+
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open')
+  });
+});
+</script>
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

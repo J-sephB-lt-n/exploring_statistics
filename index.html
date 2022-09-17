@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-163824605-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-163824605-1');
+</script>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+
+
+<title>Explorations in Statistics and Machine Learning</title>
+
+<script src="site_libs/jquery-1.11.3/jquery.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="site_libs/bootstrap-3.3.5/css/darkly.min.css" rel="stylesheet" />
+<script src="site_libs/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="site_libs/bootstrap-3.3.5/shim/respond.min.js"></script>
+<script src="site_libs/navigation-1.1/tabsets.js"></script>
+<script src="site_libs/accessible-code-block-0.0.1/empty-anchor.js"></script>
+<link href="site_libs/pagedtable-1.1/css/pagedtable.css" rel="stylesheet" />
+<script src="site_libs/pagedtable-1.1/js/pagedtable.js"></script>
+<link href="site_libs/anchor-sections-1.0/anchor-sections.css" rel="stylesheet" />
+<script src="site_libs/anchor-sections-1.0/anchor-sections.js"></script>
+<link href="site_libs/font-awesome-5.1.0/css/all.css" rel="stylesheet" />
+<link href="site_libs/font-awesome-5.1.0/css/v4-shims.css" rel="stylesheet" />
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+
+
+
+<style type="text/css">
+h1 {
+  font-size: 34px;
+}
+h1.title {
+  font-size: 38px;
+}
+h2 {
+  font-size: 30px;
+}
+h3 {
+  font-size: 24px;
+}
+h4 {
+  font-size: 18px;
+}
+h5 {
+  font-size: 16px;
+}
+h6 {
+  font-size: 12px;
+}
+.table th:not([align]) {
+  text-align: left;
+}
+</style>
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+code {
+  color: inherit;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+</style>
+
+
+<style type="text/css">
+/* padding for bootstrap navbar */
+body {
+  padding-top: 60px;
+  padding-bottom: 40px;
+}
+/* offset scroll position for anchor links (for fixed navbar)  */
+.section h1 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.section h2 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.section h3 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.section h4 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.section h5 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.section h6 {
+  padding-top: 65px;
+  margin-top: -65px;
+}
+.dropdown-submenu {
+  position: relative;
+}
+.dropdown-submenu>.dropdown-menu {
+  top: 0;
+  left: 100%;
+  margin-top: -6px;
+  margin-left: -1px;
+  border-radius: 0 6px 6px 6px;
+}
+.dropdown-submenu:hover>.dropdown-menu {
+  display: block;
+}
+.dropdown-submenu>a:after {
+  display: block;
+  content: " ";
+  float: right;
+  width: 0;
+  height: 0;
+  border-color: transparent;
+  border-style: solid;
+  border-width: 5px 0 5px 5px;
+  border-left-color: #cccccc;
+  margin-top: 5px;
+  margin-right: -10px;
+}
+.dropdown-submenu:hover>a:after {
+  border-left-color: #ffffff;
+}
+.dropdown-submenu.pull-left {
+  float: none;
+}
+.dropdown-submenu.pull-left>.dropdown-menu {
+  left: -100%;
+  margin-left: 10px;
+  border-radius: 6px 0 6px 6px;
+}
+</style>
+
+<script>
+// manage active state of menu based on current page
+$(document).ready(function () {
+  // active menu anchor
+  href = window.location.pathname
+  href = href.substr(href.lastIndexOf('/') + 1)
+  if (href === "")
+    href = "index.html";
+  var menuAnchor = $('a[href="' + href + '"]');
+
+  // mark it active
+  menuAnchor.parent().addClass('active');
+
+  // if it's got a parent navbar menu mark it active as well
+  menuAnchor.closest('li.dropdown').addClass('active');
+});
+</script>
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "&#xe258;";
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+
+
+<div class="navbar navbar-inverse  navbar-fixed-top" role="navigation">
+  <div class="container">
+    <div class="navbar-header">
+      <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </button>
+      <a class="navbar-brand" href="index.html">Joseph Bolton</a>
+    </div>
+    <div id="navbar" class="navbar-collapse collapse">
+      <ul class="nav navbar-nav">
+        <li>
+  <a href="index.html"> Home</a>
+</li>
+<li>
+  <a href="about.html"> About Me</a>
+</li>
+<li>
+  <a href="future_content.html"> Future Content</a>
+</li>
+<li class="dropdown">
+  <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false">
+     Posts
+     
+    <span class="caret"></span>
+  </a>
+  <ul class="dropdown-menu" role="menu">
+    <li class="dropdown-header">Posts</li>
+    <li>
+      <a href="document_similarity_recommenders.html">A Selective Survey of Word &amp; Document Embedding Methods</a>
+    </li>
+    <li>
+      <a href="dcn_v2_cross_layer_investigation.html">Dissecting the DCN-V2 Cross Layer</a>
+    </li>
+    <li>
+      <a href="cuped_cupac_and_other_variance_reduction_techniques.html">CUPED, CUPAC, and Other Ways to Reduce Variance in an Experiment</a>
+    </li>
+    <li>
+      <a href="recommenders_part1_vectors.html">Recommenders Part I: Representing Customers &amp; Items as Vectors</a>
+    </li>
+    <li>
+      <a href="nice_R_visualisations.html">Beautiful Lesser-Known Visualisations in R</a>
+    </li>
+    <li>
+      <a href="gbm_from_scratch_8020.html">Building a GBM from Scratch</a>
+    </li>
+    <li>
+      <a href="good_books_and_papers.html">My Favourite Books, Papers and other Resources</a>
+    </li>
+    <li>
+      <a href="neural_net_from_scratch.html">Deep-Learning from Scratch</a>
+    </li>
+    <li>
+      <a href="visual_intro_to_splines.html">Regression Splines</a>
+    </li>
+    <li>
+      <a href="PAMS_and_SILHOUETTE_by_hand.html">Clustering: PAM k-Medoids, CLARA &amp; Silhouette Values</a>
+    </li>
+    <li>
+      <a href="intuition_for_CRVTW_uplift_model.html">CRVTW Revenue Uplift Model</a>
+    </li>
+    <li>
+      <a href="data_tree_checkout.html">Data.trees</a>
+    </li>
+    <li>
+      <a href="constrOptim.html">Constrained Optimisation in R</a>
+    </li>
+    <li>
+      <a href="OLS_theory.html">Least Squares Linear Model Theory</a>
+    </li>
+  </ul>
+</li>
+      </ul>
+      <ul class="nav navbar-nav navbar-right">
+        <li>
+  <a href="mailto:joseph.jazz.bolton@gmail.com">
+    <span class="fa fa-envelope"></span>
+     
+  </a>
+</li>
+<li>
+  <a href="https://www.linkedin.com/in/joseph-bolton-a02653171/">
+    <span class="fa fa-linkedin"></span>
+     
+  </a>
+</li>
+      </ul>
+    </div><!--/.nav-collapse -->
+  </div><!--/.container -->
+</div><!--/.navbar -->
+
+<div class="fluid-row" id="header">
+
+
+
+<h1 class="title toc-ignore">Explorations in Statistics and Machine Learning</h1>
+
+</div>
+
+
+<!---
+article entries will follow this format:
+<article>
+<h3><a href=""> </a></h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> _date_</span>
+<p> ...</p>
+<a class="btn btn-outline-primary btn-sm" href="">Full Post</a>
+</div>
+</article>
+--->
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 7px;
+text-align: center;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+<pre style="font-size: 15px; font-family: &quot;Ubuntu Mono&quot;; background-color: rgb(0,0,0); color: rgb(255,255,255); line-height: 12px;">77777777777777777777777777777777777777777777777777777777777777777777777777777777777777
+77777777777777771222222117777777777777777777777777777777777771224433344217777777777777
+77777777771245608888888809654177777777777777777777777777123590888888888809532177777777
+77777771450888888888888888888063217777777777777777777125988888888888888888888052177777
+77777139880634444456088888888888805417777777777777725080653333333556088888888888627777
+77772688641777777777123688888888888805417777777714609521777777777777112368888888803777
+77720804177777777777777725088888888888893277771300521777777777777777777771450888888477
+77408027777777777777777777725088888888888894260031777777777777777777777777771268888017
+71688577777777777777777777777250888888888888885277777777777777777777777777777714088827
+72888477777777777777777777777771398888888888886277777777777777777777777777777777388847
+74888577777777777777777777777777714688888888888862177777777777777777777777777777108827
+74888047777777777777777777777777777126888888888888641777777777777777777777777777288017
+71088885177777777777777777777777777716888888888888880527777777777777777777777771688377
+77408888052777777777777777777777771490325088888888888889327777777777777777777726885177
+77720888888063277777777777777771250931777726888888888888880632177777777777123988031777
+77771508888888895342117777112359893177777777239888888888888888806555335569088805277777
+77777725088888888888800990088886417777777777771259888888888888888888888888880527777777
+77777777146088888888888888880327777777777777777771236088888888888888888880641777777777
+77777777777123590888888806321777777777777777777777777123598888888888096521777777777777
+77777777777777771122221177777777777777777777777777777777771222222221177777777777777777
+77777777777777777777777777777777777777777777777777777777777777777777777777777777777777</pre>
+<p>Dates shown are date of latest edit.</p>
+<article>
+<h3>
+<a href="document_similarity_recommenders.html">A Selective Survey of Word &amp; Document Embedding Methods</a>
+</h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> <em>2021-11-22</em></span>
+<p>
+For similar product recommendation
+</p>
+<p><a class="btn btn-outline-primary btn-sm" href="document_similarity_recommenders.html" role="button">Full Post</a></p>
+</div>
+</article>
+<article>
+<h3>
+<a href="dcn_v2_cross_layer_investigation.html">Dissecting the DCN-V2 Cross Layer</a>
+</h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> <em>2021-08-10</em></span>
+<p>
+For Automatic Feature Crossing in Neural Networks
+</p>
+<p><a class="btn btn-outline-primary btn-sm" href="dcn_v2_cross_layer_investigation.html" role="button">Full Post</a></p>
+</div>
+</article>
+<article>
+<h3>
+<a href="cuped_cupac_and_other_variance_reduction_techniques.html">CUPED, CUPAC, and Other Ways to Reduce Variance in an Experiment</a>
+</h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> <em>2021-03-12</em></span>
+<p>
+Looking for ways to make experiments more efficient
+</p>
+<p><a class="btn btn-outline-primary btn-sm" href="cuped_cupac_and_other_variance_reduction_techniques.html" role="button">Full Post</a></p>
+</div>
+</article>
+<article>
+<h3>
+<a href="recommenders_part1_vectors.html">Recommenders Part I</a>
+</h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> <em>2020-04-22</em></span>
+<p>
+Representing Customers &amp; Items as Vectors
+</p>
+<p><a class="btn btn-outline-primary btn-sm" href="recommenders_part1_vectors.html" role="button">Full Post</a></p>
+</div>
+</article>
+<article>
+<h3>
+<a href="nice_R_visualisations.html">Beautiful Lesser-Known Visualisations in R</a>
+</h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> <em>2020-04-15</em></span>
+<p>
+Colour Palettes, Sankey Diagrams, Scatterplots with Marginal Density Plots, Gaussian Graphical Models, Ridge-line plots, Raincloud Plots, Scatterplot Matrices, Caterpillar Plots, Time Series Decomposition Plots, Heatmaps
+</p>
+<p><a class="btn btn-outline-primary btn-sm" href="nice_R_visualisations.html" role="button">Full Post</a></p>
+</div>
+</article>
+<article>
+<h3>
+<a href="gbm_from_scratch_8020.html">Building a GBM from Scratch</a>
+</h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> <em>2019-12-01</em></span>
+<p>
+Building a Gradient Boosted Machine from first principles in R
+</p>
+<p><a class="btn btn-outline-primary btn-sm" href="gbm_from_scratch_8020.html" role="button">Full Post</a></p>
+</div>
+</article>
+<article>
+<h3>
+<a href="good_books_and_papers.html">My Favourite Books, Papers and other Resources</a>
+</h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> <em>2019-12-28</em></span>
+<p>
+The golden resources on statistics and machine learning that I continue to return to for information and inspiration
+</p>
+<p><a class="btn btn-outline-primary btn-sm" href="good_books_and_papers.html" role="button">Full Post</a></p>
+</div>
+</article>
+<article>
+<h3>
+<a href="neural_net_from_scratch.html">Deep-Learning from Scratch</a>
+</h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> <em>2019-12-01</em></span>
+<p>
+Building a feed-forward neural network from first principles in R
+</p>
+<p><a class="btn btn-outline-primary btn-sm" href="neural_net_from_scratch.html" role="button">Full Post</a></p>
+</div>
+</article>
+<article>
+<h3>
+<a href="visual_intro_to_splines.html">Regression Splines</a>
+</h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> <em>2020_04_24</em></span>
+<p>
+A visual introduction
+</p>
+<p><a class="btn btn-outline-primary btn-sm" href="visual_intro_to_splines.html">Full Post</a></p>
+</div>
+</article>
+<article>
+<h3>
+<a href="PAMS_and_SILHOUETTE_by_hand.html">Clustering: PAM k-Medoids, CLARA &amp; Silhouette Values</a>
+</h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> <em>2019-12-01</em></span>
+<p>
+PAMS clustering from first principles in R
+</p>
+<p><a class="btn btn-outline-primary btn-sm" href="PAMS_and_SILHOUETTE_by_hand.html" role="button">Full Post</a></p>
+</div>
+</article>
+<article>
+<h3>
+<a href="intuition_for_CRVTW_uplift_model.html">CRVTW Revenue Uplift Model</a>
+</h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> <em>2020-02-05</em></span>
+<p>
+A brief and intuitive introduction
+</p>
+<p><a class="btn btn-outline-primary btn-sm" href="intuition_for_CRVTW_uplift_model.html" role="button">Full Post</a></p>
+</div>
+</article>
+<article>
+<h3>
+<a href="data_tree_checkout.html">Data.trees</a>
+</h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> <em>2019-12-18</em></span>
+<p>
+Plotting and analysing hierarchical data with the data.tree package in R
+</p>
+<p><a class="btn btn-outline-primary btn-sm" href="data_tree_checkout.html" role="button">Full Post</a></p>
+</div>
+</article>
+<article>
+<h3>
+<a href="constrOptim.html">Constrained Optimisation in R</a>
+</h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> <em>2019-02-08</em></span>
+<p>
+Optimisation in R with linear constraints using the constrOptim() function
+</p>
+<p><a class="btn btn-outline-primary btn-sm" href="constrOptim.html" role="button">Full Post</a></p>
+</div>
+</article>
+<article>
+<h3>
+<a href="OLS_theory.html">Linear Model Theory</a>
+</h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> <em>2019-02-08</em></span>
+<p>
+A reference for traditional parameter estimation of linear model by least squares
+</p>
+<p><a class="btn btn-outline-primary btn-sm" href="OLS_theory.html" role="button">Full Post</a></p>
+</div>
+</article>
+
+
+
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open')
+  });
+});
+</script>
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

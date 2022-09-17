@@ -1,0 +1,12 @@
+name: "Joseph Bolton"
+output_dir: "."
+navbar:
+  title: "Joseph Bolton"
+  type: inverse
+  left: 
+    - text: "Home"
+      href: index.html
+    - text: "About Me"
+      href: about.html
+output: html_document
+  

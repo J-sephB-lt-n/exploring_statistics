@@ -1,0 +1,80 @@
+---
+title: "Explorations in Statistics and Machine Learning"
+output:
+  html_document:
+    df_print: paged
+    theme: darkly
+    highlight: espresso
+---
+
+<!---
+article entries will follow this format:
+<article>
+<h3><a href=""> </a></h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> _date_</span>
+<p> ...</p>
+<a class="btn btn-outline-primary btn-sm" href="">Full Post</a>
+</div>
+</article>
+--->
+
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 7px;
+text-align: center;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+<pre style="font-size: 15px; font-family: &quot;Ubuntu Mono&quot;; background-color: rgb(0, 0, 0); color: rgb(255, 255, 255); line-height: 12px;">rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrv7nyj4ees4zc7vrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrvlye35bbb5paoylvrrrrrrrrrrr
+rrrrrrrrr7zp9ggggg8gggggggg0bscvrrrrrrrrrrrrrrrrrrrrrrv7j50gggg8888888ggggg9pyvrrrrrrr
+rrrrrrvkb0gg06dd690gg8g88888ggg05z7rrrrrrrrrrrrrrrrrle6ggg000000gg888g8888888g037rrrrr
+rrrrrc6ggdolvrrrrrxlkp0gg88888888ggbjvrrrrrrrrrrrvtdg9ponivvrrvvvilco360g888888804vrrr
+rrrxbggq7rrrrrrrrrrrrrr740ggg88888ggggdzxrrrrrrl306jirrrrrrrrrrrrrrrrrrv72b0gg88ggbvrr
+rrvbggmvrrrrrrrrrrrrrrrrrxybggg8888888gg0pnvrlq09ovrrrrrrrrrrrrrrrrrrrrrrrrio6gggggtrr
+rraggbvrrrrrrrrrrrrrrrrrrrrvl30gg8888888ggg6bg0axrrrrrrrrrrrrrrrrrrrrrrrrrrrrvz0gg8brr
+rlggg2rrrrrrrrrrrrrrrrrrrrrrrrvc5gg888888888ggfvrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrx6gg9vr
+ry88g4rrrrrrrrrrrrrrrrrrrrrrrrrrrlp0g8888888ggg6kvrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrtgg9vr
+r28gg97rrrrrrrrrrrrrrrrrrrrrrrrrrrr7agg888888888g9yvrrrrrrrrrrrrrrrrrrrrrrrrrrrrkgg5rr
+ri0ggg0tvrrrrrrrrrrrrrrrrrrrrrrrrrrrv6ggg88888888gg0pnvrrrrrrrrrrrrrrrrrrrrrrrrx6g0crr
+rroggggg6zxrrrrrrrrrrrrrrrrrrrrrrrrlb9jz6ggg88888888gg9m1vrrrrrrrrrrrrrrrrrrrrl6ggsrrr
+rrvfg88ggg05kxrrrrrrrrrrrrrrrrrrvlp05xrrvnp0g888888888ggg93y7vrrrrrrrrrrrrrvcq0g0svrrr
+rrrrldgg88888g9qoc7vrrrrrrrvxuo500a7rrrrrrrvcp0ggg8888888888gg65aokyyy2omp9ggg0p7rrrrr
+rrrrrvydggg888gggggg9db55b60ggg9sirrrrrrrrrrrrxy50gg88888888888888g888g8gggg0plrrrrrrr
+rrrrrrrvlm9gg8888888g888gggg0qyvrrrrrrrrrrrrrrrrrxz50ggggg888888888888ggggbjxrrrrrrrrr
+rrrrrrrrrrrvus560g8ggggg9pz7vrrrrrrrrrrrrrrrrrrrrrrrrxcs59gg8888888g0dponvrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrvx7777ivrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrv7l1null7xvrrrrrrrrrrrrrrrrr
+rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr</pre>
+
+<article>
+<h3><a href="PAMS_and_SILHOUETTE_by_hand.html">Clustering: PAM k-Medoids, CLARA & Silhouette Values</a></h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> _2019-12-01_</span>
+<p>PAMS clustering from first principles in R</p>
+<a class="btn btn-outline-primary btn-sm" href="PAMS_and_SILHOUETTE_by_hand.html" role="button">Full Post</a>
+</div>
+</article>
+
+<article>
+<h3><a href="data_tree_checkout.html">Data.trees</a></h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> _2019-12-23_</span>
+<p>Plotting and analysing hierarchical data with the data.tree package in R</p>
+<a class="btn btn-outline-primary btn-sm" href="PAMS_and_SILHOUETTE_by_hand.html" role="button">Full Post</a>
+</div>
+</article>
+
+
+<article>
+<h3><a href="constrOptim.html">Constrained Optimisation in R</a></h3>
+<div class="summary">
+<span><i class="fa fa-calendar"></i> _2019-02-08_</span>
+<p>Optimisation in R with linear constraints using the constrOptim() function</p>
+<a class="btn btn-outline-primary btn-sm" href="constrOptim.html" role="button">Full Post</a>
+</div>
+</article>

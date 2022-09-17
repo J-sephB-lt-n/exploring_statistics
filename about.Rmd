@@ -1,0 +1,389 @@
+---
+title: "About Me"
+output:
+  html_document:
+    df_print: paged
+    theme: darkly
+    highlight: espresso
+---
+
+I am a Machine Learning Engineer working for HomeChoice International. 
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(knitr)
+```
+
+```{r echo=FALSE}
+knitr::include_graphics("pixel_face_cropped.png", dpi=150)
+```
+
+# Skillset Summary
+
+Here is a summary of my skillset, and tools that I am proficient with:
+
+(last update `r lubridate::today()`)
+
+```{r echo=FALSE}
+#CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
+
+# breakdown of my day: (average over both weekdays and weekend)
+#           HOURS
+# python    2
+# SQL       4
+# R         0.5 
+# Excel     1
+
+bind_rows( 
+  tibble( `Tool` = "R (incl. tidyverse)", 
+          `Approximate Hours of Usage/Experience` = 
+                    
+            round(  # eighty20 days
+                as.numeric( lubridate::date("2020-04-30")-lubridate::date("2017-08-01") ) *
+                        ( (365*5/7-15)/365 ) *           # only weekdays, excluding 15 days of holiday
+                        3             # 3 hours of R per day 
+                  )
+             +
+            # current: (half hour per day, including weekends)
+            round( as.numeric(lubridate::today() - lubridate::date("2017-08-02")) * 0.5 )
+        ),
+  tibble( `Tool`="SQL (Vertica, MySQL, AWS Athena, Google BigQuery, PostgreSQL, SQL Server)", 
+          `Approximate Hours of Usage/Experience` = 
+            round(  # 3 hours of SQL per day (Eighty20, Mr D and HomeChoice)
+                as.numeric( (lubridate::today() - lubridate::date("2017-08-01")) ) *
+                        ( (365*5/7-15)/365 ) *           # only weekdays, excluding 15 days of holiday
+                        3             # 3 hours of SQL per day 
+                  )
+        ),
+    tibble( `Tool`="Python (incl. pandas, numpy, scipy, sklearn, datetime)", 
+          `Approximate Hours of Usage/Experience` = 
+            100 +                # hours prior to Mr D
+            round(  # 2 hours of python per day (Mr D onward)    (including weekends + evenings)
+                as.numeric( (lubridate::today() - lubridate::date("2020-05-01")) ) *
+                        2
+                  )
+        ),
+    tibble( `Tool`="Microsoft Excel", 
+          `Approximate Hours of Usage/Experience` = 
+            round(  # 2 hours of python per day (Mr D onward)    (including weekends + evenings)
+                as.numeric( (lubridate::today() - lubridate::date("2017-08-01")) ) *
+                        ( (365*5/7-15)/365 ) *           # only weekdays, excluding 15 days of holiday
+                        1                 # 1 hour per day   
+                  )
+        ),
+    tibble( `Tool`="Supervised Learning & general Machine-Learning theory (transfer learning, classication/regression: neural nets, GBM family, random forest, tree-based models, linear models, elastic-net/penalised linear models, regression splines, local linear models, KNN, bias/variance tradeoff, cross-validation etc.)", 
+          `Approximate Hours of Usage/Experience` = 
+            
+            round(  # 30 minutes per day on weekdays since halfway through Eighty20:
+                as.numeric( lubridate::today() - lubridate::date("2017-01-01") ) *
+                        ( (365*5/7-15)/365 ) * # only weekdays, excluding 15 days of holiday
+                        0.5             # 30 minutes
+                  )
+            
+        ),  
+    tibble( `Tool`="ML-Ops (models in production)", 
+          `Approximate Hours of Usage/Experience` = #10 minutes per day since last half of Eighty20
+              round( 
+                  # 10 minutes per day halfway through Eighty20 to end of Mr D
+                  as.numeric( (lubridate::date("2020-10-31") - lubridate::date("2019-06-01")) ) * 10/60 +
+                  # 1 hour per day while at HomeChoice:
+                  as.numeric( (lubridate::today() - lubridate::date("2020-11-01") ) )
+              )
+        ),  
+    tibble( `Tool`="Recommender Engines (DCN, Wide&Deep, Factorisation Machines, Collaborative Filtering incl. Matrix Factorisation, Content-Based, cold-start recommenders)", 
+          `Approximate Hours of Usage/Experience` = 
+              round(  # 30 minutes per day on weekdays since halfway through Eighty20:
+                as.numeric( lubridate::today() - lubridate::date("2019-01-01") ) *
+                        ( (365*5/7-15)/365 ) * # only weekdays, excluding 15 days of holiday
+                        0.5             # 30 minutes
+                  )
+        ),
+    tibble( `Tool`="Theory of Experimental Design (null hypothesis testing, bayesian inference, orthogonal designs, power calculation, unbiased variance reduction techniques ...)", 
+          `Approximate Hours of Usage/Experience` =               
+            round(  # 40 minutes per day on weekdays since halfway through Eighty20:
+                as.numeric( lubridate::today() - lubridate::date("2019-01-01") ) *
+                        ( (365*5/7-15)/365 ) * # only weekdays, excluding 15 days of holiday
+                        40/60             # 30 minutes
+                  ) 
+        ),
+    tibble( `Tool`="Clustering algorithms (k-means, k-medoids, hierarchical family, CLARA, DBSCAN)", 
+          `Approximate Hours of Usage/Experience` = 50
+        ),  
+    tibble( `Tool`="Git", 
+          `Approximate Hours of Usage/Experience` =   # 1 minutes per day since last half of Eighty20
+              round( as.numeric( (lubridate::today() - lubridate::date("2019-06-01")) ) * 1/60 ) 
+        ),  
+    tibble( `Tool`="Multi-Armed Contextual Bandit Algorithms ", 
+          `Approximate Hours of Usage/Experience` = 65  # prior to August 2021
+        ),
+    tibble( `Tool`="RMarkdown & LaTeX", 
+          `Approximate Hours of Usage/Experience` = #10 minutes per day since last half of Eighty20
+              round( as.numeric( (lubridate::today() - lubridate::date("2019-06-01")) ) * 10/60 ) 
+        ),
+    tibble( `Tool`="TensorFlow + Keras",    
+          `Approximate Hours of Usage/Experience` = 150 +  # up to 2021/12/14
+                #30 minutes per day since mid dec 2021
+                round( as.numeric( (lubridate::today() -                      
+                                      lubridate::date("2021-12-14")) ) * 30/60 ) 
+        ),
+    tibble( `Tool`="Financial Modelling", 
+          `Approximate Hours of Usage/Experience` = 50
+        ),
+    tibble( `Tool`="ARIMA, SARIMA, ARIMAX models (time series prediction)", 
+          `Approximate Hours of Usage/Experience` = 50
+        ),  
+    tibble( `Tool`="H2o Machine Learning Framework (R library)", 
+          `Approximate Hours of Usage/Experience` = 40
+        ),
+    tibble( `Tool`="Uplift Modelling (model-based estimation of heterogeneous treatment effects)", 
+          `Approximate Hours of Usage/Experience` = # 30 minutes per day from dec 2019 to September 2020
+              round( as.numeric( (lubridate::date("2020-10-01") - lubridate::date("2019-12-01")) ) * 30/60 ) 
+        ),  
+    tibble( `Tool`="HTML, CSS and JavaScript", 
+          `Approximate Hours of Usage/Experience` = 20 
+        ),
+    tibble( `Tool`="R Shiny", 
+          `Approximate Hours of Usage/Experience` = 30 
+        ),
+    tibble( `Tool`="Exponential Smoothing Models (time series prediction)", 
+          `Approximate Hours of Usage/Experience` = 70
+        ),  
+    tibble( `Tool`="Association Rule Mining", 
+          `Approximate Hours of Usage/Experience` = 100
+        ),  
+    tibble( `Tool`="General Reinforcement Learning Theory", 
+          `Approximate Hours of Usage/Experience` = 10
+        ),  
+    tibble( `Tool`="Linear Optimisation", 
+          `Approximate Hours of Usage/Experience` = 15
+        ),
+    tibble( `Tool`="Meta-Heuristic Optimisation (genetic algorithms, simulated annealing, TABU search)", 
+          `Approximate Hours of Usage/Experience` = 60
+        ),  
+    tibble( `Tool`="Multi-Objective Optimisation", 
+          `Approximate Hours of Usage/Experience` = 10
+        ),  
+    tibble( `Tool`="Multi-Variable Analysis (PCA, Factor Analysis, SVD Bi-Plots, Canonical Correlation Analysis)", 
+          `Approximate Hours of Usage/Experience` = 30
+        ),    
+    tibble( `Tool`="Non-Linear Dimension Reduction (T-SNE, UMAP, ISOMAP, Locally-Linear Embedding)", 
+          `Approximate Hours of Usage/Experience` = 36  # up to and including 2021-11-21
+        ),
+    tibble( `Tool`="Natural Language Processing (NLP): Word & Document Embedding Methods", 
+          `Approximate Hours of Usage/Experience` = 70  # up to and including 2021-11-16
+        ), 
+    tibble( `Tool`="Web Scraping (BeautifulSoup & Selenium in Python)", 
+          `Approximate Hours of Usage/Experience` = 53  # up to and including 2021-12-08
+        ), 
+    tibble( `Tool`="Causal Inference: Bayesian Networks and Do-Calculus", 
+          `Approximate Hours of Usage/Experience` = 25  # up to and including 2021-12-14
+        ), 
+    tibble( `Tool`="State Space Models (time series prediction)", 
+          `Approximate Hours of Usage/Experience` = 12
+        ),  
+    tibble( `Tool`="Image-based Models (segmentation & masking, classification, multi-class classification (auto tagging), tensorflow/keras, transfer learning", 
+          `Approximate Hours of Usage/Experience` = 150   # up to and including 2021-01-21
+        ),  
+    tibble( `Tool`="Arch/Garch Models (time series variance prediction/inference)", 
+          `Approximate Hours of Usage/Experience` = 2
+        ),  
+      tibble( `Tool`="TBATS (time series prediction)", 
+          `Approximate Hours of Usage/Experience` = 2
+        ),  
+    tibble( `Tool`="Copulas (Financial Modelling)", 
+          `Approximate Hours of Usage/Experience` = 5 
+        ),  
+    tibble( `Tool`="...this list tbc", 
+          `Approximate Hours of Usage/Experience` = 0
+        )
+  
+) %>% 
+  arrange( desc(`Approximate Hours of Usage/Experience`) ) %>% 
+  knitr::kable()
+
+# * Advanced R programming
+#     * tidyverse
+#     * r-markdown (some LaTeX)
+# 
+# * Python
+# 
+# * H2o Machine-Learning Framework (within R)
+# 
+# * SQL
+#     * Vertica, PostgreSQL
+#     * writing data to SQL, table manipulation, window functions
+# 
+# * Excel 
+# 
+# * Recommender Engines
+#     * Content-based Filtering
+#     * Collaborative Filtering
+#     * Latent Factor Matrix Factorisation
+#     * TF-IDF
+#     * Implementations in R and python
+# 
+# * Optimisation
+#     - Linear Optimisation
+#         * Linear programming
+#         * Integer Programming
+#     - Meta-Heuristic Optimisation Algorithms
+#         * Genetic/Evolutionary Optimisation
+#     - Multiple-objective optimisation
+#     
+# * Uplift Modelling (estimation of heterogeneous treatment effects) 
+#     * Binary response (e.g. response to treatment yes/no) [conversion uplift]
+#     * Continuous response (e.g. revenue)
+#     
+# * Time Series modelling
+#     * ARIMA
+#     * Exponential Smoothing (state space models)
+#     * Time Series Decomposition (trend, seasonality, error)
+#     * Time-Series Regression
+# 
+# * Regression Modelling
+#     * Linear model (OLS,GLS), GLM (Poisson regression), [splines](./visual_intro_to_splines.html), ridge/lasso/elastic net, KNN, regression tree, GBM, bagging & random forest, [feed-forward neural network](./neural_net_from_scratch.html)
+# 
+# * Classification Modelling
+#     * GLM (logistic, multinomial), splines, ridge/lasso/elastic net, KNN, classification tree, bagging & random forest, GBM, LDA & QDA, feed-forward neural network
+# 
+# * Clustering
+#     * Hierarchical
+#     * k-means 
+#     * PAMS (k-medoids) & CLARA ([blog post](./PAMS_and_SILHOUETTE_by_hand.html))
+#     * Silhouette values
+#     * Gower distance for mixed data types
+#     
+# * Association Rules (basket analysis)    
+#     
+# * Advanced Data visualisation
+#     * base R plotting tools
+#     * **ggplot2**
+#     * Blog Post: [Beautiful Lesser-Known Visualisations in R](./nice_R_visualisations.html)
+#     * interactive 3-dimensional visualisation using **plotly** ([example](./recommenders_part1_vectors.html))
+#     * sankey diagrams using **networkD3**
+#     * plots of hierarchical data using **data.tree** and **treemap** ([example](./data_tree_checkout.html))
+#     
+# * Regular Expressions (REGEX)    
+#     
+# * Dimension Reduction
+#     * Principal Components Analysis (PCA) 
+#     * Multi-Dimensional Scaling (MDS)
+#     * Locally Linear Embedding (LLE)
+#     * Factor Analysis
+#     
+# * Process Workflow and Automation of Modelling Projects
+#     * Data ingestion {csv, excel, SQL} -> {R, python}
+#     * Data quality testing
+#     * Data cleaning
+#     * Feature Engineering
+#     * (Feature Selection)
+#     * Model Fitting
+#     * Model Comparison
+#     * Model Validation
+#     * Reporting
+#     * Process Monitoring
+# 
+# ## Current development areas
+# * Deep learning (neural networks)
+# 
+# * Advanced Python
+# 
+# * Experimental Design
+#     * $2^k$ designs
+#     * understanding of the optimality of orthogonal designs
+# 
+# * Model-explainer frameworks
+#     * LIME
+#     * DALEX
+#     
+# * Optimisation
+#     * Evolutionary Algorithms
+#     
+# * Survival Analysis    
+#     
+# * Google Analytics    
+#  
+# ## Areas of potential future interest
+# * CSS, HTML, JavaScript
+# 
+# * Reinforcement learning
+# 
+# * Hadoop
+# 
+# * Apache Spark
+# 
+# * Excel VBA
+# 
+# * Non-linear dimension reduction algorithms
+#     * T-SNE
+#     * UMAP
+#     * ISOMAP
+#     
+# * Stochastic Processes    
+# 
+# * Regression & Classification Models
+#     * XGBoost
+#     * SVM
+#     * LOESS
+#     * Generalised Additional Models
+#     * Naive Bayes
+#     * Partial Least Squares
+#     * Quantile Regression
+#     * Regression with time-series data
+#     
+# * Bayesian hypothesis testing
+# 
+# * Multivariate Analysis
+#     * Multiple Correspondence Analysis 
+#     * Factor Analysis
+#     * Biplots
+# 
+# * Advanced time-series modelling
+#     * Dynamic Time Warping (DTW)
+#     * ARCH & GARCH models
+#     * TBATS
+#     * Hybrid models (combining predictions of multiple models)
+#     * Linear regression with autocorrelated errors
+#     * Vector autoregression (VAR models)
+#     * Prophet
+#     * Cross-Validation for Time-Series Models
+#     * Neural-Network-based methods
+# 
+# * Optimisation 
+#     * TABU search
+#     * Simulated Annealing
+
+## Tools
+```
+
+# Thanks
+
+* Website built using R-markdown
+
+* Website hosted by GitHub
+
+* Image to ASCII-art conversion using https://cloudapps.herokuapp.com/imagetoascii/ 
+
+## Non-Statistical Interests
+
+* Piano
+
+* Jazz
+
+* Origami 
+
+* Calisthenics
+
+* Rubik's Cube
+
+* Football
+
+* Other hobbies, which I have accepted that I will only have time for again after I retire:
+    - juggling
+    - drawing
+    - unicycling
+    - writing
+    - music composition
+
+    

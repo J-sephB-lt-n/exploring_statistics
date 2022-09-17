@@ -1,0 +1,191 @@
+---
+title: "Future Content"
+output:
+  html_document:
+    df_print: paged
+    theme: darkly
+    highlight: espresso    
+---
+
+<style type="text/css">
+@import url("https://fonts.googleapis.com/css?family=Inconsolata|Roboto+Mono|Ubuntu+Mono|Cutive+Mono");
+pre{
+display: inline-block;
+font-size: 7px;
+text-align: center;
+font-family: Ubuntu Mono, monospace !important;
+text-rendering: optimizeSpeed;
+}
+</style>
+<pre style="font-size: 10px; font-family: &quot;Ubuntu Mono&quot;; background-color: rgb(0,0,0); color: rgb(255,255,255); line-height: 8px;">....................................................................................................................................................................................
+....................................................................................................................................................................................
+...............................................................................7...................................................7.................7..............................
+...........724..........................247.................................735557.................................................9.................9..............................
+.........73507..........................70631..............................264224557.............................................71017.............71017............................
+......7455596............................3065547..........................35222222367...........................................762261.............162267...........................
+....753149461............................794631457.......................5322222222467.........................................2511751.............1511152..........................
+....33175549..............74..............55591126......................532222222222497.......................................33111267.............76411135.........................
+...702112602..............907.............709411167....................79344222222243507.....................................3411146.................64111457.......................
+...157111202.............3006.............704111133...................792594336033350245...................................762105335.................533501152......................
+...6411122143417........765551........71434112111207..................4373671136111491167.................................7021202145.................5412011151.....................
+..79111125532124347.....5435297....72332123554111151.................70212411146111241145.................................70111931154...............45113911132.....................
+..43711111135554114341725135133714541123553211111145.................151745111361114511197................................701111551152.............251136111132.....................
+..74521235556343554112583124748621125534355553212337.................331111111361111111151................................705333537134.............431135333392.....................
+.....150542223562135546693432969455311563222230627...................621111111361111111134.................................53221711134.............431111122497.....................
+.......7453222204111150463124046617112042223537......................021111111361111111145.................................70566111135771244634217753711166593......................
+..........15544021111654024316530211119345517.......................7021111111361111111145..................................5340211295344222032244359211404497......................
+............726011114046517113926571716947..........................7017111111361111111145...........................7777...794931165222222203222222561139453...7777................
+..........77...725220655211111556842547...77.........................921111111367111111143.................77........7529....59312952222222203222222259213907...2347........77......
+..........37......166411111111112502......76.........................541111111391111111732................407.1554...7529....7511652222222220322222222561162....2347...4551.7857....
+.........787......792111143341111197......782........................431111116659411111761................097.2345...7529.....946522222222229322222222256497....2347...5432.7097....
+.........607....72961113653436511150477...7007.....................7496111111032631111110617..............0917453677726407777738933355555555065555555333983777773532777635371097....
+........4567.740645611364222226517552503177035..................729643021111103263111114043037............0953333358555555555560344422221111041112222444306555555555585333335097....
+.......7616969155256156422222226615523915060151..............715545922931111104263111115525943547.........0941111120422222222259111111111235063411111111193222222222402111114007....
+.......54165391652563942222222226555239155301297...........73604224342561111104263111120323322269527......772433422042222222225911111235532104245532111119322222222240224334217.....
+......151155463652563622435534225555230393301134........7453223422222438111110426311113034222225424551..........714043655342223911117551111104111155111119322243556340477...........
+......231165245052563055532245559556238642391145.......164222224355555563111103263111295555553442222255............149544459423911711551111104111155711119324663443641..............
+......231769553342145211111111172531243355691145.......5535555555555534292112032631115524355555555555307...............7714693503422155111110411115512243053603277..................
+......251162........73311111111357........701145.......596653421777.....25112032637126......771124566987....................772410355565334403443565533014277.......................
+.......25267..........7331111457..........702337.......777...............6411042631167..............777.........................7042111122435344211712407...........................
+........7207............753451............7837...........................157196593146.............................................712334211111112433217.............................
+...........7..............71...............7.............................763335633355..................................................71233443417..................................
+...........................................................................................................................................777......................................
+....................................................................................................................................................................................
+....................................................................................................................................................................................</pre>
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(lubridate)
+```
+
+Here I keep a record of things that I am currently investigating, have previously investigated and want to write a blog post about, or would like to explore in future:
+
+```{r echo=FALSE}
+bind_rows(
+  tibble( 
+    topic = "Multi-Label Image Classification", 
+    date_added = lubridate::date("2021-11-11"), 
+    resources="https://arxiv.org/abs/2011.11197",
+    last_update = lubridate::date("2021-11-11")
+    ),
+  tibble( 
+    topic = "Feature Engineering using Evolutionary Algorithms", 
+    date_added = lubridate::date("2021-11-11"), 
+    resources="https://www.researchgate.net/publication/321238779_Automatic_Feature_Engineering_for_Regression_Models_with_Machine_Learning_an_Evolutionary_Computation_and_Statistics_Hybrid",
+    last_update = lubridate::date("2021-11-16")
+    ),
+  tibble( 
+    topic = "Survey of Contextual Multi-Armed Bandit Algorithms", 
+    date_added = lubridate::date("2021-11-11"), 
+    resources="https://arxiv.org/abs/1510.00757",
+    last_update = lubridate::date("2021-12-09")
+    ),
+  tibble( 
+    topic = "Particle Swarm Optimisation", 
+    date_added = lubridate::date("2021-11-11"), 
+    resources=NA,
+    last_update = lubridate::date("2021-11-11")
+    ),
+  tibble( 
+    topic = "Q-Learning", 
+    date_added = lubridate::date("2021-11-11"), 
+    resources=NA,
+    last_update = lubridate::date("2021-11-11")
+    ),
+  tibble( 
+    topic = "Quantile Regression", 
+    date_added = lubridate::date("2021-11-15"), 
+    resources="https://www.youtube.com/watch?v=GpRuhE04lLs",
+    last_update = lubridate::date("2021-11-15")
+    ),
+  tibble( 
+    topic = "AutoML", 
+    date_added = lubridate::date("2021-11-15"), 
+    resources=NA,
+    last_update = lubridate::date("2021-11-15")
+    ),
+  tibble( 
+    topic = "Transformers & Self-Attention", 
+    date_added = lubridate::date("2021-11-16"), 
+    resources="https://arxiv.org/abs/1706.03762 , https://jalammar.github.io/illustrated-transformer/",
+    last_update = lubridate::date("2021-11-16")
+    ),
+  tibble( 
+    topic = "Automatic Image Tagging using Multi-Label Classifiers", 
+    date_added = lubridate::date("2021-11-17"), 
+    resources="https://www.researchgate.net/publication/305334371_Automatic_tagging_and_retrieval_of_E-Commerce_products_based_on_visual_features",
+    last_update = lubridate::date("2021-11-18")
+    ),
+  tibble( 
+    topic = "Uniform Maniform Approximation & Projection (UMAP)", 
+    date_added = lubridate::date("2021-11-20"), 
+    resources="https://youtu.be/7pAVPjwBppo",
+    last_update = lubridate::date("2021-11-20")
+    ),
+
+  tibble( 
+    topic = "PyMC3 (Bayesian Hierarchical Modelling)", 
+    date_added = lubridate::date("2021-11-29"), 
+    resources="https://github.com/CamDavidsonPilon/Probabilistic-Programming-and-Bayesian-Methods-for-Hackers/",
+    last_update = lubridate::date("2021-11-29")
+    ),
+  
+  tibble( 
+    topic = "Causal ML & Probabilistic Graphical Models", 
+    date_added = lubridate::date("2021-11-29"), 
+    resources="http://bayes.cs.ucla.edu/BOOK-2K/ch1-3.pdf; https://ermongroup.github.io/cs228-notes/; https://github.com/quantumblacklabs/causalnex; https://youtu.be/5JsFZbGqJzc",
+    last_update = lubridate::date("2021-12-08")
+    ),
+  
+tibble( 
+    topic = "Semantic Image Segmentation", 
+    date_added = lubridate::date("2021-12-13"), 
+    resources="https://github.com/xuebinqin/U-2-Net",
+    last_update = lubridate::date("2021-12-13")
+    ),  
+  
+tibble( 
+    topic = "Interpretable predictive models", 
+    date_added = lubridate::date("2021-12-14"), 
+    resources="https://github.com/csinva/imodels",
+    last_update = lubridate::date("2021-12-14")
+    )  
+  
+) %>% 
+  arrange( desc(last_update) ) %>% 
+  select( topic, last_update, date_added, resources ) %>% 
+  knitr::kable( )
+
+```
+
+```{r include=FALSE}
+#The following articles are currently under construction (each will be posted on this website #when completed):
+#
+#* Recommender algorithms: 
+#    * Collaborative filtering
+#    * Latent Matrix-Factorisation 
+#
+#* Explaining the predictions of 'black-box' machine learning models using **LIME** (**L**ocal #**I**nterpretable **M**odel-agnostic **E**xplanations)
+#
+#* The *Gower* distance metric for mixed data types
+#
+#* Constructing an SVD biplot from first principles
+#
+#* Distribution of a sample proportion - by theory and by simulation
+#
+#* Theory and practical uses of Multiple Correspondence Analysis (MCA) for dimension reduction #of categorical data
+#
+#* Heuristic Algorithms for Optimisation 1: Evolutionary Algorithms
+#
+#* Overview of SQL window functions
+#
+#* Association Rule mining in R
+#
+#* Simultaneous Multinomial Confidence Intervals
+#
+#* An overview of factor analysis
+#
+#* Logistic Regression from scratch in R. 
+#
+#* Likelihood Ratio Tests: Developing Intuition via Simulation 
+```

@@ -1,3 +1,25 @@
+"""
+-- High Level Script Description --
+
+This script fits a "Deep & Cross Network" (DCN) model to a simulated recommendation dataset (model implemented in PyTorch)
+
+For more information on the model architecture, refer to:
+    1. "Wide & Deep Learning for Recommender Systems" (https://arxiv.org/abs/1606.07792)
+    2. "DCN V2: Improved Deep & Cross Network and Practical Lessons for Web-scale Learning to Rank Systems" (https://arxiv.org/abs/2008.13535)
+
+In order to fit a vanilla "Wide & Cross" model, set model_hyperParams_dict["n_cross_layers"]=0
+
+This script fits both the "parallel" and the "stacked" variants of the "Deep & Cross" model
+
+The data simulation class used to simulate the data is imported from the script "recsys_simulation.py"
+Run "help(recsys_data_simulator)" in python in order to get more information on the data simulation code 
+If you are not interested in the data simulation process, you can just treat the input data [model_data_df] as given, and proceed from the part of the script titled "## Deep & Cross Model - Implemented in PyTorch ##"
+
+Intended future improvements of this script:
+    1.  Make the model still work if certain feature sets are left out (e.g. no features to be embedded)
+"""
+
+
 import sys
 import numpy as np
 import pandas as pd
@@ -32,8 +54,8 @@ For simplicity here, users without any item purchases are removed from model tra
     (in practice, these users will need to be addressed, either within the model or by a different model)
 """
 
-sim_n_users = 100
-sim_n_items = 10
+sim_n_users = 5_000
+sim_n_items = 50
 
 sim_obj = recsys_data_simulator(
     n_users=sim_n_users,
@@ -112,7 +134,7 @@ sim_obj = recsys_data_simulator(
     },
     rating_range={
         "min": 0,
-        "max": 0.50,
+        "max": 0.25,
     },  # I use this "rating" as "item purchase probability"
     rating_trunc_norm_std_dev=0.01,
     n_context_effects=5,
@@ -198,7 +220,7 @@ raw_train_df = pd.concat(temp_df_row_list, axis=0)
 del temp_df_row_list
 raw_train_df["example_ID"] = range(len(raw_train_df))  # unique row (sample) identifier
 raw_train_df.set_index(
-    # this makes joining on these columns a lot faster
+    # this makes joining on these columns later a lot faster
     ["example_ID", "user_ID", "item_ID"],
     inplace=True,
 )
@@ -268,7 +290,7 @@ print(f"PyTorch is using device: {pytorch_device}")
 # (in a real setting, these would likely be learned using hyper-parameter search or optimisation method)
 model_hyperParams_dict = {
     "learning_rate": 0.001,
-    "embed_dim": "TODO",  # should this be different per variable?
+    "embed_dim": 10,  # all variables have the same embedding dimension (this could be trivially modified to have a different dimension for each variable)
     "deep_layer_structure": [
         # number of entries in this list is the number of hidden layers in the deep part of the model
         # tuple format is (n_nodes, activation_function)
@@ -276,7 +298,7 @@ model_hyperParams_dict = {
         (50, torch.nn.ReLU()),
         (25, torch.nn.ReLU()),
     ],
-    "n_cross_layers": 2,
+    "n_cross_layers": 0,  # 2,
     "train_batch_size": 5_000,
     "train_n_epochs": 100,
     "early_stopping_patience": 5,  # model training will stop if loss on validation data worsens for [early_stopping_patience] consecutive epochs
@@ -471,6 +493,8 @@ to_cross_df = one_hot_to_cross_df.join(
     model_data_df[X_name_list__direct_to_cross],
     on=["example_ID", "model_data_partition"],
 )
+to_embed_then_deep_df = to_embed_IDs_df[X_name_list__embed_then_deep]
+to_embed_then_cross_df = to_embed_IDs_df[X_name_list__embed_then_cross]
 
 # put data into a PyTorch-friendly dataset class:
 class dcn_model_pytorch_dataset_class(torch.utils.data.Dataset):
@@ -481,6 +505,8 @@ class dcn_model_pytorch_dataset_class(torch.utils.data.Dataset):
         y_vec,
         X_to_deep_df,
         X_to_cross_df,
+        X_to_embed_then_deep_df,
+        X_to_embed_then_cross_df,
     ):
         """
         TODO: proper documentation here
@@ -491,10 +517,12 @@ class dcn_model_pytorch_dataset_class(torch.utils.data.Dataset):
         self.y_vec = y_vec
         self.X_to_deep_df = X_to_deep_df
         self.X_to_cross_df = X_to_cross_df
+        self.X_to_embed_then_deep_df = X_to_embed_then_deep_df
+        self.X_to_embed_then_cross_df = X_to_embed_then_cross_df
 
     def __len__(self):
         """
-        returns the number of samples in our dataset
+        returns the total number of samples in the dataset
         """
         return len(self.y_vec)
 
@@ -503,16 +531,26 @@ class dcn_model_pytorch_dataset_class(torch.utils.data.Dataset):
         loads and returns a single sample from the dataset at the given index [idx]
         """
 
+        y_scalar = self.y_vec[idx]
         X_to_deep_row = self.X_to_deep_df.iloc[[idx]].values[0]
         X_to_cross_row = self.X_to_cross_df.iloc[[idx]].values[0]
-        y_scalar = self.y_vec[idx]
-
+        X_to_embed_then_deep_row = self.X_to_embed_then_deep_df.iloc[[idx]].values[0]
+        X_to_embed_then_cross_row = self.X_to_embed_then_cross_df.iloc[[idx]].values[0]
         return (
+            # response y (scalar):
             torch.tensor(y_scalar, dtype=torch.float32, device=pytorch_device),
+            # features direct to the deep part of the model:
             torch.tensor(X_to_deep_row, dtype=torch.float32, device=pytorch_device),
+            # features direct to the cross part of the model:
             torch.tensor(X_to_cross_row, dtype=torch.float32, device=pytorch_device),
-            # [], # embed_then_deep
-            # [], # embed_then_cross
+            # features to be embedded then fed to the deep part of the model:
+            torch.tensor(
+                X_to_embed_then_deep_row, dtype=torch.int, device=pytorch_device
+            ),
+            # features to be embedded then fed to the cross part of the model:
+            torch.tensor(
+                X_to_embed_then_cross_row, dtype=torch.int, device=pytorch_device
+            ),
         )
 
 
@@ -520,6 +558,8 @@ dcn_model_train_dataset = dcn_model_pytorch_dataset_class(
     y_vec=model_data_df.loc[:, "train", :]["bought"].values,
     X_to_deep_df=to_deep_df.loc[:, "train", :],
     X_to_cross_df=to_cross_df.loc[:, "train", :],
+    X_to_embed_then_deep_df=to_embed_then_deep_df.loc[:, "train", :],
+    X_to_embed_then_cross_df=to_embed_then_cross_df.loc[:, "train", :],
 )
 
 dcn_train_dataLoader = torch.utils.data.DataLoader(
@@ -532,29 +572,63 @@ dcn_train_dataLoader = torch.utils.data.DataLoader(
 class DeepAndCross_Net_class(torch.nn.Module):
     def __init__(
         self,
-        to_deep_input_size,  # number of features in sample input features X to deep part of model (exluding embeddings)
-        to_cross_input_size,  # number of features in sample input features X to cross part of model (excluding embeddings)
+        direct_to_deep_input_size,  # number of features in sample input features X to deep part of model (exluding variables to be embedded)
+        direct_to_cross_input_size,  # number of features in sample input features X to cross part of model (excluding variables to be embedded)
         deep_layer_structure,  # refer to: model_hyperParams_dict["deep_layer_structure"]
         n_cross_layers,  # refer to model_hyperParams_dict["cross_layer_structure"]
         network_architecture,  # one of {"parallel","stacked"}
+        embed_ID_lookup_dict,
+        embed_then_deep_varnames_list,
+        embed_then_cross_varnames_list,
+        embed_dim,
     ):
         """
         TODO: proper documentation here
+
+        embed_then_deep_varnames_list: list
+            the original names of the variables are used for lookup in the embedding layer
+            (the order of the variables must be the same as they appear in the training data)
+        embed_then_cross_varnames_list: list
+            the original names of the variables are used for lookup in the embedding layer
+            (the order of the variables must be the same as they appear in the training data)
         """
         super().__init__()
-        self.to_deep_input_size = to_deep_input_size
-        self.to_cross_input_size = to_cross_input_size
+        self.direct_to_deep_input_size = direct_to_deep_input_size
+        self.direct_to_cross_input_size = direct_to_cross_input_size
         self.deep_layer_structure = deep_layer_structure
         self.n_cross_layers = n_cross_layers
         self.network_architecture = network_architecture
-        self.x0 = None
+        self.embed_ID_lookup_dict = embed_ID_lookup_dict
+        self.embed_then_deep_varnames_list = embed_then_deep_varnames_list
+        self.embed_then_cross_varnames_list = embed_then_cross_varnames_list
+        self.embed_dim = embed_dim
 
-        if self.network_architecture == "stacked":
-            print(
-                f"network architecture '{self.network_architecture}' not implemented yet"
+        assert self.network_architecture in [
+            "parallel",
+            "stacked",
+        ], "network_architecture must be one of ['parallel','stacked']"
+
+        self.embedding_layers_dict = torch.nn.ModuleDict()
+        for embed_varname in self.embed_ID_lookup_dict.keys():
+            self.embedding_layers_dict[embed_varname] = torch.nn.Embedding(
+                num_embeddings=len(
+                    self.embed_ID_lookup_dict[embed_varname]["to_embed_ID"]
+                ),
+                embedding_dim=self.embed_dim,
+                device=pytorch_device,
             )
-            self.network_architecture = "parallel"
-            print(f"=> using network architecture '{self.network_architecture}'")
+
+        self.to_cross_input_size = (
+            self.direct_to_cross_input_size
+            + len(self.embed_then_cross_varnames_list) * self.embed_dim
+        )
+        self.to_deep_input_size = (
+            self.direct_to_deep_input_size
+            + len(self.embed_then_deep_varnames_list) * self.embed_dim
+        )
+        if self.network_architecture == "stacked":
+            # in the stacked architecture, the output of the cross network is included with the inputs to the deep network:
+            self.to_deep_input_size = self.to_deep_input_size + self.to_cross_input_size
 
         self.deep_layers = torch.nn.ModuleList()
         current_to_deep_input_size = self.to_deep_input_size
@@ -571,133 +645,286 @@ class DeepAndCross_Net_class(torch.nn.Module):
                 torch.nn.Linear(self.to_cross_input_size, self.to_cross_input_size)
             )
 
-        self.linear_comb_model_outputs = torch.nn.Linear(
-            in_features=self.deep_layer_structure[-1][0] + self.to_cross_input_size,
-            out_features=1,
-        )
+        if self.network_architecture == "stacked":
+            # in the stacked architecture, the cross network output is included as input to the deep network
+            self.linear_comb_model_outputs = torch.nn.Linear(
+                in_features=self.deep_layer_structure[-1][0],
+                out_features=1,
+            )
+        elif self.network_architecture == "parallel":
+            # in the parallel architecture the outputs of the cross network and deep network are combined at the end
+            self.linear_comb_model_outputs = torch.nn.Linear(
+                in_features=self.deep_layer_structure[-1][0] + self.to_cross_input_size,
+                out_features=1,
+            )
 
-    def forward(self, deep_x, cross_x):
+    def forward(
+        self, direct_to_deep_x, direct_to_cross_x, embed_then_deep_x, embed_then_cross_x
+    ):
         """
-        TODO: proper documentation here
+        This function performs a forward pass through the network for a given batch of data
+
+        Attributes
+        ----------
+        direct_to_deep_x: torch.Tensor (torch.float32)
+            input features of deep part of model (exluding features to be embedded)
+        direct_to_cross_x: torch.Tensor (torch.float32)
+            input features to cross part of model (excluding features to be embedded)
+        embed_then_deep_x: torch.Tensor (torch.int8)
+            input IDs to look up in embedding table (for features to be embedded then fed to deep part of model)
+        embed_then_cross_x: torch.Tensor (torch.int8)
+            input IDs to look up in embedding table (for features to be embedded then fed to cross part of model)
+
+        Returns
+        -------
+        model_output: torch.Tensor (torch.float32)
+            vector of model predictions (each prediction in [0,1])
         """
+        # look up embeddings for variables going to the deep part of the model:
+        to_deep_embeddings = torch.stack(
+            [
+                self.embedding_layers_dict[self.embed_then_deep_varnames_list[i]](
+                    embed_then_deep_x[:, i]
+                )
+                for i in range(len(self.embed_then_deep_varnames_list))
+            ],
+            axis=1,
+        )
+        # turn all embeddings into a single long vector within each sample
+        to_deep_embeddings_flatten = torch.flatten(to_deep_embeddings, start_dim=1)
+
+        # look up embeddings for variables going to the cross part of the model:
+        to_cross_embeddings = torch.stack(
+            [
+                self.embedding_layers_dict[self.embed_then_cross_varnames_list[i]](
+                    embed_then_cross_x[:, i]
+                )
+                for i in range(len(self.embed_then_cross_varnames_list))
+            ],
+            axis=1,
+        )
+        # turn all embeddings into a single long vector within each sample
+        to_cross_embeddings_flatten = torch.flatten(to_cross_embeddings, start_dim=1)
+
+        cross_x = torch.cat((to_cross_embeddings_flatten, direct_to_cross_x), axis=1)
+
         self.cross_x0 = cross_x
-        for deep_layer in self.deep_layers:
-            deep_x = deep_layer(deep_x)
         for cross_layer in self.cross_layers:
             cross_x = self.cross_x0 * cross_layer(cross_x) + cross_x
 
-        combine_outputs = torch.cat((deep_x, cross_x), axis=1)
+        if self.network_architecture == "parallel":
+            # in the parallel model, the cross and deep networks run in parallel
+            deep_x = torch.cat((to_deep_embeddings_flatten, direct_to_deep_x), axis=1)
+        elif self.network_architecture == "stacked":
+            # in the stacked architecture, the output of the cross network is included in the input to the deep network
+            deep_x = torch.cat(
+                (to_deep_embeddings_flatten, direct_to_deep_x, cross_x), axis=1
+            )
+
+        # pass the input through the deep layers:
+        for deep_layer in self.deep_layers:
+            deep_x = deep_layer(deep_x)
+
+        if self.network_architecture == "parallel":
+            # in the parallel model, the cross and deep networks run in parallel, and we combine their outputs here:
+            combine_outputs = torch.cat((deep_x, cross_x), axis=1)
+        elif self.network_architecture == "stacked":
+            # in the stacked architecture, the output of the cross network is included in the input to the deep network
+            # so the combined network output is just the output of the deep network
+            combine_outputs = deep_x
+
         linear_comb_model_outputs = self.linear_comb_model_outputs(combine_outputs)
         model_output = torch.flatten(torch.sigmoid(linear_comb_model_outputs))
 
         return model_output
 
 
-DeepAndCross_Net = DeepAndCross_Net_class(
-    to_deep_input_size=dcn_model_train_dataset.__getitem__(idx=0)[1].shape[0],
-    to_cross_input_size=dcn_model_train_dataset.__getitem__(idx=0)[2].shape[0],
+# I initiate 1 model of each type:
+# (1 with parallel architecture and 1 with stacked architecture)
+parallel_DeepAndCross_Net = DeepAndCross_Net_class(
+    direct_to_deep_input_size=dcn_model_train_dataset.__getitem__(idx=0)[1].shape[0],
+    direct_to_cross_input_size=dcn_model_train_dataset.__getitem__(idx=0)[2].shape[0],
     deep_layer_structure=model_hyperParams_dict["deep_layer_structure"],
     n_cross_layers=model_hyperParams_dict["n_cross_layers"],
     network_architecture="parallel",
+    embed_ID_lookup_dict=feature_embed_idx_ref_dict,
+    embed_then_deep_varnames_list=list(to_embed_then_deep_df.columns),
+    embed_then_cross_varnames_list=list(to_embed_then_cross_df.columns),
+    embed_dim=model_hyperParams_dict["embed_dim"],
 )
 
-DeepAndCross_Net.to(
+stacked_DeepAndCross_Net = DeepAndCross_Net_class(
+    direct_to_deep_input_size=dcn_model_train_dataset.__getitem__(idx=0)[1].shape[0],
+    direct_to_cross_input_size=dcn_model_train_dataset.__getitem__(idx=0)[2].shape[0],
+    deep_layer_structure=model_hyperParams_dict["deep_layer_structure"],
+    n_cross_layers=model_hyperParams_dict["n_cross_layers"],
+    network_architecture="stacked",
+    embed_ID_lookup_dict=feature_embed_idx_ref_dict,
+    embed_then_deep_varnames_list=list(to_embed_then_deep_df.columns),
+    embed_then_cross_varnames_list=list(to_embed_then_cross_df.columns),
+    embed_dim=model_hyperParams_dict["embed_dim"],
+)
+
+# push models to GPU (if available):
+parallel_DeepAndCross_Net.to(
+    pytorch_device
+)  # enables model training on the GPU (if it is available)
+stacked_DeepAndCross_Net.to(
     pytorch_device
 )  # enables model training on the GPU (if it is available)
 
-loss_func = torch.nn.BCELoss()
-optimizer = torch.optim.Adam(
-    DeepAndCross_Net.parameters(),
+# store full training dataset:
+# (for model evaluation after completing each epoch)
+torch_X_full_trainData = {
+    "y": torch.tensor(
+        model_data_df.loc[:, "train", :]["bought"].values,
+        dtype=torch.float32,
+        device=pytorch_device,
+    ),
+    "to_deep": torch.tensor(
+        to_deep_df.loc[:, "train", :].to_numpy(),
+        dtype=torch.float32,
+        device=pytorch_device,
+    ),
+    "to_cross": torch.tensor(
+        to_cross_df.loc[:, "train", :].to_numpy(),
+        dtype=torch.float32,
+        device=pytorch_device,
+    ),
+    "to_embed_then_deep": torch.tensor(
+        to_embed_then_deep_df.loc[:, "train", :].to_numpy(),
+        dtype=torch.int,
+        device=pytorch_device,
+    ),
+    "to_embed_then_cross": torch.tensor(
+        to_embed_then_cross_df.loc[:, "train", :].to_numpy(),
+        dtype=torch.int,
+        device=pytorch_device,
+    ),
+}
+# store full validation dataset:
+# (for model evaluation after completing each epoch)
+torch_X_full_validData = {
+    "y": torch.tensor(
+        model_data_df.loc[:, "validate", :]["bought"].values,
+        dtype=torch.float32,
+        device=pytorch_device,
+    ),
+    "to_deep": torch.tensor(
+        to_deep_df.loc[:, "validate", :].to_numpy(),
+        dtype=torch.float32,
+        device=pytorch_device,
+    ),
+    "to_cross": torch.tensor(
+        to_cross_df.loc[:, "validate", :].to_numpy(),
+        dtype=torch.float32,
+        device=pytorch_device,
+    ),
+    "to_embed_then_deep": torch.tensor(
+        to_embed_then_deep_df.loc[:, "validate", :].to_numpy(),
+        dtype=torch.int,
+        device=pytorch_device,
+    ),
+    "to_embed_then_cross": torch.tensor(
+        to_embed_then_cross_df.loc[:, "validate", :].to_numpy(),
+        dtype=torch.int,
+        device=pytorch_device,
+    ),
+}
+
+# train the parallel architecture --------------------------------
+parallel_dcn__loss_func = torch.nn.BCELoss()
+parallel_dcn__optimizer = torch.optim.Adam(
+    parallel_DeepAndCross_Net.parameters(),
     lr=model_hyperParams_dict["learning_rate"],
 )
 
-train_loss_history = []  # store loss on training data in each epoch
-valid_loss_history = []  # store loss on validation data in each epoch
+parallel_dcn__train_loss_history = []
+parallel_dcn__valid_loss_history = []
 
-early_stopping_patience_counter = 0
-best_valid_loss_so_far = None
-best_model_params_so_far = None
+parallel_dcn__early_stopping_patience_counter = 0
+parallel_dcn__best_valid_loss_so_far = None
+parallel_dcn__best_model_params_so_far = None
 
 for epoch in range(1, model_hyperParams_dict["train_n_epochs"] + 1):
     for batch_num, batch_data in enumerate(dcn_train_dataLoader, 0):
         # get the inputs; data is a list of [inputs, labels]
-        true_y, X_to_deep, X_to_cross = batch_data
+        (
+            true_y,
+            X_direct_to_deep,
+            X_direct_to_cross,
+            X_embed_then_deep,
+            X_embed_then_cross,
+        ) = batch_data
 
         # zero the parameter gradients
-        optimizer.zero_grad()
+        parallel_dcn__optimizer.zero_grad()
 
         # forward + backward + optimize
-        model_preds = DeepAndCross_Net(deep_x=X_to_deep, cross_x=X_to_cross)
-        loss_val = loss_func(model_preds, true_y)
-        loss_val.backward()
-        optimizer.step()
+        parallel_dcn_preds = parallel_DeepAndCross_Net(
+            direct_to_deep_x=X_direct_to_deep,
+            direct_to_cross_x=X_direct_to_cross,
+            embed_then_deep_x=X_embed_then_deep,
+            embed_then_cross_x=X_embed_then_cross,
+        )
+        parallel_dcn__loss_val = parallel_dcn__loss_func(parallel_dcn_preds, true_y)
+        parallel_dcn__loss_val.backward()
+        parallel_dcn__optimizer.step()
 
+    # at end of each epoch:
     # calculate loss over full training set:
-    model_preds_full_trainData = DeepAndCross_Net(
-        deep_x=torch.tensor(
-            to_deep_df.loc[:, "train", :].to_numpy(),
-            dtype=torch.float32,
-            device=pytorch_device,
-        ),
-        cross_x=torch.tensor(
-            to_cross_df.loc[:, "train", :].to_numpy(),
-            dtype=torch.float32,
-            device=pytorch_device,
-        ),
+    parallel_dcn__model_preds_full_trainData = parallel_DeepAndCross_Net(
+        direct_to_deep_x=torch_X_full_trainData["to_deep"],
+        direct_to_cross_x=torch_X_full_trainData["to_cross"],
+        embed_then_deep_x=torch_X_full_trainData["to_embed_then_deep"],
+        embed_then_cross_x=torch_X_full_trainData["to_embed_then_cross"],
     )
-    train_loss = loss_func(
-        model_preds_full_trainData,
-        torch.tensor(
-            model_data_df.loc[:, "train", :]["bought"].values,
-            dtype=torch.float32,
-            device=pytorch_device,
-        ),
+    parallel_dcn__train_loss = parallel_dcn__loss_func(
+        parallel_dcn__model_preds_full_trainData,
+        torch_X_full_trainData["y"],
     ).item()
-    train_loss_history.append(train_loss)
+    parallel_dcn__train_loss_history.append(parallel_dcn__train_loss)
 
     # calculate loss over full validation set:
-    model_preds_full_validData = DeepAndCross_Net(
-        deep_x=torch.tensor(
-            to_deep_df.loc[:, "validate", :].to_numpy(),
-            dtype=torch.float32,
-            device=pytorch_device,
-        ),
-        cross_x=torch.tensor(
-            to_cross_df.loc[:, "validate", :].to_numpy(),
-            dtype=torch.float32,
-            device=pytorch_device,
-        ),
+    parallel_dcn__model_preds_full_validData = parallel_DeepAndCross_Net(
+        direct_to_deep_x=torch_X_full_validData["to_deep"],
+        direct_to_cross_x=torch_X_full_validData["to_cross"],
+        embed_then_deep_x=torch_X_full_validData["to_embed_then_deep"],
+        embed_then_cross_x=torch_X_full_validData["to_embed_then_cross"],
     )
-    valid_loss = loss_func(
-        model_preds_full_validData,
-        torch.tensor(
-            model_data_df.loc[:, "validate", :]["bought"].values,
-            dtype=torch.float32,
-            device=pytorch_device,
-        ),
+    parallel_dcn__valid_loss = parallel_dcn__loss_func(
+        parallel_dcn__model_preds_full_validData,
+        torch_X_full_validData["y"],
     ).item()
-    valid_loss_history.append(valid_loss)
+    parallel_dcn__valid_loss_history.append(parallel_dcn__valid_loss)
 
     # check for consecutive degradation in validation loss (early stopping):
-    if len(valid_loss_history) > 1 and (valid_loss > valid_loss_history[-2]):
-        early_stopping_patience_counter += 1
+    if len(parallel_dcn__valid_loss_history) > 1 and (
+        parallel_dcn__valid_loss > parallel_dcn__valid_loss_history[-2]
+    ):
+        parallel_dcn__early_stopping_patience_counter += 1
     else:
-        early_stopping_patience_counter = 0
+        parallel_dcn__early_stopping_patience_counter = 0
 
     # store parameters of best model found so far:
-    if best_valid_loss_so_far is None or valid_loss < best_valid_loss_so_far:
-        best_valid_loss_so_far = valid_loss
-        best_model_params_so_far = copy.deepcopy(DeepAndCross_Net.state_dict())
+    if (
+        parallel_dcn__best_valid_loss_so_far is None
+        or parallel_dcn__valid_loss < parallel_dcn__best_valid_loss_so_far
+    ):
+        parallel_dcn__best_valid_loss_so_far = parallel_dcn__valid_loss
+        parallel_dcn__best_model_params_so_far = copy.deepcopy(
+            parallel_DeepAndCross_Net.state_dict()
+        )
 
     print(
         f"""
         -- finished epoch {epoch} of {model_hyperParams_dict['train_n_epochs']}-- 
-        loss on training data:      {train_loss:.3f}
-        loss on validation data:    {valid_loss:.3f}
+        loss on training data:      {parallel_dcn__train_loss:.3f}
+        loss on validation data:    {parallel_dcn__valid_loss:.3f}
         """
     )
     if (
-        early_stopping_patience_counter
+        parallel_dcn__early_stopping_patience_counter
         >= model_hyperParams_dict["early_stopping_patience"]
     ):
         print(
@@ -708,20 +935,337 @@ for epoch in range(1, model_hyperParams_dict["train_n_epochs"] + 1):
         )
         break
 
-print("-- Finished Model Training --")
+print("-- Finished Parallel Model Training --\n")
 
 # load parameters of best model found (lowest validation loss):
-DeepAndCross_Net.load_state_dict(best_model_params_so_far)
+print(
+    """Deep & Cross Model: Parallel architecture:
+    restoring parameters of best (lowest valid loss) model found during training...""",
+    end="",
+)
+parallel_DeepAndCross_Net.load_state_dict(parallel_dcn__best_model_params_so_far)
+print("done")
 
-# plot loss during model training:
-plt.figure(figsize=(10, 5))
-plt.plot(
-    range(1, len(train_loss_history) + 1), train_loss_history, label="training data"
+
+# train the stacked architecture ---------------------------------
+stacked_dcn__loss_func = torch.nn.BCELoss()
+stacked_dcn__optimizer = torch.optim.Adam(
+    stacked_DeepAndCross_Net.parameters(),
+    lr=model_hyperParams_dict["learning_rate"],
 )
-plt.plot(
-    range(1, len(valid_loss_history) + 1), valid_loss_history, label="validation data"
+
+stacked_dcn__train_loss_history = []
+stacked_dcn__valid_loss_history = []
+
+stacked_dcn__early_stopping_patience_counter = 0
+stacked_dcn__best_valid_loss_so_far = None
+stacked_dcn__best_model_params_so_far = None
+
+for epoch in range(1, model_hyperParams_dict["train_n_epochs"] + 1):
+    for batch_num, batch_data in enumerate(dcn_train_dataLoader, 0):
+        # get the inputs; data is a list of [inputs, labels]
+        (
+            true_y,
+            X_direct_to_deep,
+            X_direct_to_cross,
+            X_embed_then_deep,
+            X_embed_then_cross,
+        ) = batch_data
+
+        # zero the parameter gradients
+        stacked_dcn__optimizer.zero_grad()
+
+        # forward + backward + optimize
+        stacked_dcn_preds = stacked_DeepAndCross_Net(
+            direct_to_deep_x=X_direct_to_deep,
+            direct_to_cross_x=X_direct_to_cross,
+            embed_then_deep_x=X_embed_then_deep,
+            embed_then_cross_x=X_embed_then_cross,
+        )
+        stacked_dcn__loss_val = stacked_dcn__loss_func(stacked_dcn_preds, true_y)
+        stacked_dcn__loss_val.backward()
+        stacked_dcn__optimizer.step()
+
+    # at end of each epoch:
+    # calculate loss over full training set:
+    stacked_dcn__model_preds_full_trainData = stacked_DeepAndCross_Net(
+        direct_to_deep_x=torch_X_full_trainData["to_deep"],
+        direct_to_cross_x=torch_X_full_trainData["to_cross"],
+        embed_then_deep_x=torch_X_full_trainData["to_embed_then_deep"],
+        embed_then_cross_x=torch_X_full_trainData["to_embed_then_cross"],
+    )
+    stacked_dcn__train_loss = stacked_dcn__loss_func(
+        stacked_dcn__model_preds_full_trainData,
+        torch_X_full_trainData["y"],
+    ).item()
+    stacked_dcn__train_loss_history.append(stacked_dcn__train_loss)
+
+    # calculate loss over full validation set:
+    stacked_dcn__model_preds_full_validData = stacked_DeepAndCross_Net(
+        direct_to_deep_x=torch_X_full_validData["to_deep"],
+        direct_to_cross_x=torch_X_full_validData["to_cross"],
+        embed_then_deep_x=torch_X_full_validData["to_embed_then_deep"],
+        embed_then_cross_x=torch_X_full_validData["to_embed_then_cross"],
+    )
+    stacked_dcn__valid_loss = stacked_dcn__loss_func(
+        stacked_dcn__model_preds_full_validData,
+        torch_X_full_validData["y"],
+    ).item()
+    stacked_dcn__valid_loss_history.append(stacked_dcn__valid_loss)
+
+    # check for consecutive degradation in validation loss (early stopping):
+    if len(stacked_dcn__valid_loss_history) > 1 and (
+        stacked_dcn__valid_loss > stacked_dcn__valid_loss_history[-2]
+    ):
+        stacked_dcn__early_stopping_patience_counter += 1
+    else:
+        stacked_dcn__early_stopping_patience_counter = 0
+
+    # store parameters of best model found so far:
+    if (
+        stacked_dcn__best_valid_loss_so_far is None
+        or stacked_dcn__valid_loss < stacked_dcn__best_valid_loss_so_far
+    ):
+        stacked_dcn__best_valid_loss_so_far = stacked_dcn__valid_loss
+        stacked_dcn__best_model_params_so_far = copy.deepcopy(
+            stacked_DeepAndCross_Net.state_dict()
+        )
+
+    print(
+        f"""
+        -- finished epoch {epoch} of {model_hyperParams_dict['train_n_epochs']}-- 
+        loss on training data:      {stacked_dcn__train_loss:.3f}
+        loss on validation data:    {stacked_dcn__valid_loss:.3f}
+        """
+    )
+    if (
+        stacked_dcn__early_stopping_patience_counter
+        >= model_hyperParams_dict["early_stopping_patience"]
+    ):
+        print(
+            f"""
+        validation loss has increased in each of the last {model_hyperParams_dict['early_stopping_patience']} epochs
+        -- model training stopped --
+        """
+        )
+        break
+
+print("-- Finished Stacked Model Training --\n")
+
+# load parameters of best model found (lowest validation loss):
+print(
+    """Deep & Cross Model: Stacked architecture:
+    restoring parameters of best (lowest valid loss) model found during training...""",
+    end="",
 )
-plt.xlabel("Epoch")
-plt.ylabel("Loss (Binary Cross Entropy)")
-plt.title("Per-Epoch Loss During Model Training (Binary Cross Entropy Loss)")
-plt.legend()
+stacked_DeepAndCross_Net.load_state_dict(stacked_dcn__best_model_params_so_far)
+print("done")
+
+# plot loss during model training (of both models):
+fig, axs = plt.subplots(nrows=3, ncols=1, figsize=(10, 15))
+axs[0].plot(
+    range(1, len(parallel_dcn__train_loss_history) + 1),
+    parallel_dcn__train_loss_history,
+    label="training (parallel architecture)",
+)
+axs[0].plot(
+    range(1, len(parallel_dcn__valid_loss_history) + 1),
+    parallel_dcn__valid_loss_history,
+    label="validation (parallel architecture)",
+)
+axs[0].plot(
+    range(1, len(stacked_dcn__train_loss_history) + 1),
+    stacked_dcn__train_loss_history,
+    label="training (stacked architecture)",
+)
+axs[0].plot(
+    range(1, len(stacked_dcn__valid_loss_history) + 1),
+    stacked_dcn__train_loss_history,
+    label="validation (stacked architecture)",
+)
+axs[0].set_title("Model Training: Both Models")
+axs[0].set_xlabel("Epoch")
+axs[0].set_ylabel("Loss (Binary Cross Entropy)")
+axs[0].legend()
+axs[1].plot(
+    range(1, len(parallel_dcn__train_loss_history) + 1),
+    parallel_dcn__train_loss_history,
+    label="training",
+)
+axs[1].plot(
+    range(1, len(parallel_dcn__valid_loss_history) + 1),
+    parallel_dcn__valid_loss_history,
+    label="validation",
+)
+axs[1].set_title("Model Training: Parallel Architecture")
+axs[1].set_xlabel("Epoch")
+axs[1].set_ylabel("Loss (Binary Cross Entropy)")
+axs[1].legend()
+axs[2].plot(
+    range(1, len(stacked_dcn__train_loss_history) + 1),
+    stacked_dcn__train_loss_history,
+    label="training",
+)
+axs[2].plot(
+    range(1, len(stacked_dcn__valid_loss_history) + 1),
+    stacked_dcn__valid_loss_history,
+    label="validation",
+)
+axs[2].set_title("Model Training: Stacked Architecture")
+axs[2].set_xlabel("Epoch")
+axs[2].set_ylabel("Loss (Binary Cross Entropy)")
+axs[2].legend()
+
+# generate recommendations for a random user:
+# (can only recommend items not already bought by that user)
+"""
+note that this is not how we would generate recommendations for users in a real application
+the code which follows here is highly suboptimal - it just serves here to illustrate heuristically that the models are working
+in a real application, data would be batch-processed into the required format for the model - in order to achieve minimal latency in generating recommendations
+"""
+random_user_ID = model_data_df.sample(1)["user_ID"].item()
+random_context = sim_obj.generate_random_context()
+all_item_IDs_set = set(item_attr_df.index)
+item_IDs_actually_bought_set = set(
+    model_data_df.query(f"user_ID=={random_user_ID} & bought==1")
+    .item_ID.drop_duplicates()
+    .values
+)
+recommendable_item_IDs_set = all_item_IDs_set.difference(item_IDs_actually_bought_set)
+pred_features_df = (
+    pd.DataFrame(
+        {
+            "user_ID": random_user_ID,
+            "item_ID": list(recommendable_item_IDs_set),
+        }
+    )
+    .set_index(["user_ID", "item_ID"])
+    .join(item_attr_df, on="item_ID")
+    .join(user_attr_df, on="user_ID")
+)
+for context_categ in random_context:
+    categ_val = random_context[context_categ]
+    pred_features_df[context_categ] = categ_val
+    # also need to add those simulated continuous features
+    # (I just added these features in order to illustrate the full functionality of the model)
+    # DEFINITELY wouldn't do this in a real application of the model
+    conts_categ_vals = model_data_df.query(f"{context_categ}=='{categ_val}'")[
+        f"{context_categ}_continuous"
+    ].values
+    pred_features_df[f"{context_categ}_continuous"] = np.random.uniform(
+        low=min(conts_categ_vals),
+        high=max(conts_categ_vals),
+        size=len(pred_features_df),
+    )
+pred_features_df["true_y"] = [
+    sim_obj.calc_user_preference_for_item(
+        user_id=random_user_ID,
+        item_id=ix,
+        recommend_context=random_context,
+    )["rating_in_this_context"]
+    for ix in pred_features_df.reset_index()["item_ID"]
+]
+pred_features_df["true_y_rank"] = (
+    pred_features_df["true_y"].rank(ascending=False).astype(int)
+)
+
+# get data into format expected by pytorch model:
+one_hot_to_deep_df = pd.DataFrame(
+    one_hot_encoder_to_deep.transform(pred_features_df[X_name_list__one_hot_then_deep]),
+    columns=one_hot_encoder_to_deep.get_feature_names_out(),
+    index=pred_features_df.index,
+)
+one_hot_to_cross_df = pd.DataFrame(
+    one_hot_encoder_to_cross.transform(
+        pred_features_df[X_name_list__one_hot_then_cross]
+    ),
+    columns=one_hot_encoder_to_cross.get_feature_names_out(),
+    index=pred_features_df.index,
+)
+to_embed_IDs_df = pred_features_df.reset_index()[
+    feature_embed_idx_ref_dict.keys()
+].copy()
+for embed_varname in feature_embed_idx_ref_dict:
+    embed_ID_lookup_dict = feature_embed_idx_ref_dict[embed_varname]["to_embed_ID"]
+    to_embed_IDs_df[embed_varname] = [
+        embed_ID_lookup_dict[x] for x in to_embed_IDs_df[embed_varname]
+    ]
+
+to_deep_df = one_hot_to_deep_df.join(
+    pred_features_df[X_name_list__direct_to_deep],
+    on=["user_ID", "item_ID"],
+)
+to_cross_df = one_hot_to_cross_df.join(
+    pred_features_df[X_name_list__direct_to_cross],
+    on=["user_ID", "item_ID"],
+)
+to_embed_then_deep_df = to_embed_IDs_df[X_name_list__embed_then_deep]
+to_embed_then_cross_df = to_embed_IDs_df[X_name_list__embed_then_cross]
+
+pred_features_df["pred_y_parallel"] = (
+    parallel_DeepAndCross_Net(
+        direct_to_deep_x=torch.tensor(
+            to_deep_df.to_numpy(), dtype=torch.float32, device=pytorch_device
+        ),
+        direct_to_cross_x=torch.tensor(
+            to_cross_df.to_numpy(), dtype=torch.float32, device=pytorch_device
+        ),
+        embed_then_deep_x=torch.tensor(
+            to_embed_then_deep_df.to_numpy(), dtype=torch.int, device=pytorch_device
+        ),
+        embed_then_cross_x=torch.tensor(
+            to_embed_then_cross_df.to_numpy(), dtype=torch.int, device=pytorch_device
+        ),
+    )
+    .cpu()
+    .detach()
+    .numpy()
+)
+pred_features_df["pred_y_parallel_rank"] = (
+    pred_features_df["pred_y_parallel"].rank(ascending=False).astype(int)
+)
+pred_features_df["pred_y_stacked"] = (
+    stacked_DeepAndCross_Net(
+        direct_to_deep_x=torch.tensor(
+            to_deep_df.to_numpy(), dtype=torch.float32, device=pytorch_device
+        ),
+        direct_to_cross_x=torch.tensor(
+            to_cross_df.to_numpy(), dtype=torch.float32, device=pytorch_device
+        ),
+        embed_then_deep_x=torch.tensor(
+            to_embed_then_deep_df.to_numpy(), dtype=torch.int, device=pytorch_device
+        ),
+        embed_then_cross_x=torch.tensor(
+            to_embed_then_cross_df.to_numpy(), dtype=torch.int, device=pytorch_device
+        ),
+    )
+    .cpu()
+    .detach()
+    .numpy()
+)
+pred_features_df["pred_y_stacked_rank"] = (
+    pred_features_df["pred_y_stacked"].rank(ascending=False).astype(int)
+)
+
+fig, axs = plt.subplots(figsize=(11, 5), nrows=1, ncols=2)
+axs[0].scatter(
+    pred_features_df["pred_y_parallel_rank"],
+    pred_features_df["true_y_rank"],
+    c=pred_features_df["true_y_rank"],
+)
+axs[0].set_xlabel("predicted_rank")
+axs[0].set_ylabel("true_rank")
+axs[0].set_title("Parallel Architecture")
+axs[1].scatter(
+    pred_features_df["pred_y_stacked_rank"],
+    pred_features_df["true_y_rank"],
+    c=pred_features_df["true_y_rank"],
+)
+axs[1].set_xlabel("predicted_rank")
+axs[1].set_ylabel("true_rank")
+axs[1].set_title("Stacked Architecture")
+open_curly_char = "{"
+close_curly_char = "}"
+fig.suptitle(
+    f"predicted vs. actual item affinity for user_ID={random_user_ID} in context {open_curly_char}{','.join(random_context.values())}{close_curly_char} (removed items already bought by user)"
+)

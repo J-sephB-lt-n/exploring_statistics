@@ -7,7 +7,7 @@ output:
     highlight: espresso
 ---
 
-I am a Machine Learning Engineer working for HomeChoice International. 
+I am a Senior Machine Learning Engineer at [Stubben Edge](https://www.stubbenedge.com). 
 
 ```{r setup, include=FALSE}
 library(tidyverse)
@@ -19,19 +19,120 @@ library(knitr)
 knitr::include_graphics("pixel_face_cropped.png", dpi=150)
 ```
 
+# Things That Interest Me 
+
+* System Design and software engineering
+
+* Statistics, inference, statistical modelling, hypothesis testing, probability
+
+* Machine Learning, Auto-ML, ML-Ops
+
+* Experimental design, causality, causal modelling 
+
+* Cybersecurity 
+
+* Data Structures and Algorithms
+
+* CI/CD
+
+* Bayesian statistics and probabilistic modelling
+
+* Mathematical optimization (particularly metaheuristic optimisation)
+
+* Recommender systems
+
+* Time series forecasting
+
+* Natural Language Processing (NLP)
+
+* Combinatorics
+
 # Skillset Summary
 
-Here is a summary of my skillset, and tools that I am proficient with:
+* Python
 
-(last update `r lubridate::today()`)
+* SQL
 
-```{r echo=FALSE}
+* Google Cloud 
+  
+    - BigQuery
+    
+    - Compute Engine 
+    
+    - Cloud Functions
+    
+    - Cloud Logging
+    
+    - Cloud Run (service and batch)
+    
+    - Cloud Storage
+    
+    - FireStore
+    
+    - IAM
+    
+    - Secret Manager
+
+* Predictive Modelling (supervised learning)
+
+* Data Visualisation
+
+* Process Automation
+
+* Web Scraping
+
+  - BeautifulSoup
+  
+  - Selenium
+  
+  - ScraPy
+
+* AWS
+
+  - DynamoDB
+  
+  - EC2 
+  
+  - IAM 
+  
+  - Lambda
+  
+  - S3
+  
+  - Simple Email Service (SES)
+  
+  - WorkMail
+
+* Clustering
+
+* Recommender systems
+
+* Time Series Forecasting
+
+* Git (and GitHub)
+
+* Docker 
+
+* Microsoft Excel, Powerpoint, Word
+
+* R (R Studio, R Markdown, Tidyverse)
+
+* SciKit-Learn
+
+* Latex 
+
+* PyTorch
+
+* TensorFlow + Keras
+
+
+```{r eval=FALSE, include=FALSE}
 #CV: <a href="Joseph_Bolton_CV_2020.pdf" download>Joseph Bolton CV</a>
 
 # breakdown of my day: (average over both weekdays and weekend)
 #           HOURS
-# python    2
-# SQL       4
+# python    3
+# SQL       3
 # R         0.5 
 # Excel     1
 
@@ -50,7 +151,7 @@ bind_rows(
         ),
   tibble( `Tool`="SQL (Vertica, MySQL, AWS Athena, Google BigQuery, PostgreSQL, SQL Server)", 
           `Approximate Hours of Usage/Experience` = 
-            round(  # 3 hours of SQL per day (Eighty20, Mr D and HomeChoice)
+            round(  # 3 hours of SQL per day (Eighty20 to present)
                 as.numeric( (lubridate::today() - lubridate::date("2017-08-01")) ) *
                         ( (365*5/7-15)/365 ) *           # only weekdays, excluding 15 days of holiday
                         3             # 3 hours of SQL per day 
@@ -59,23 +160,23 @@ bind_rows(
     tibble( `Tool`="Python (incl. pandas, numpy, scipy, sklearn, datetime)", 
           `Approximate Hours of Usage/Experience` = 
             100 +                # hours prior to Mr D
-            round(  # 2 hours of python per day (Mr D onward)    (including weekends + evenings)
+            round(  # 3 hours of python per day (Mr D onward)    (including weekends + evenings)
                 as.numeric( (lubridate::today() - lubridate::date("2020-05-01")) ) *
-                        2
+                        3
                   )
         ),
     tibble( `Tool`="Microsoft Excel", 
           `Approximate Hours of Usage/Experience` = 
-            round(  # 2 hours of python per day (Mr D onward)    (including weekends + evenings)
+            round(  # 1 hour of excel per day (Mr D onward)    (only working days)
                 as.numeric( (lubridate::today() - lubridate::date("2017-08-01")) ) *
                         ( (365*5/7-15)/365 ) *           # only weekdays, excluding 15 days of holiday
                         1                 # 1 hour per day   
                   )
         ),
-    tibble( `Tool`="Supervised Learning & general Machine-Learning theory (transfer learning, classication/regression: neural nets, GBM family, random forest, tree-based models, linear models, elastic-net/penalised linear models, regression splines, local linear models, KNN, bias/variance tradeoff, cross-validation etc.)", 
+    tibble( `Tool`="Supervised Learning & general Machine-Learning theory (classication/regression: neural nets, GBM family, random forest, tree-based models, linear models, elastic-net/penalised linear models, regression splines, local linear models, KNN, bias/variance tradeoff, cross-validation etc.)", 
           `Approximate Hours of Usage/Experience` = 
             
-            round(  # 30 minutes per day on weekdays since halfway through Eighty20:
+            round(  # 30 minutes per day on weekdays from through Eighty20 onward:
                 as.numeric( lubridate::today() - lubridate::date("2017-01-01") ) *
                         ( (365*5/7-15)/365 ) * # only weekdays, excluding 15 days of holiday
                         0.5             # 30 minutes
@@ -87,16 +188,21 @@ bind_rows(
               round( 
                   # 10 minutes per day halfway through Eighty20 to end of Mr D
                   as.numeric( (lubridate::date("2020-10-31") - lubridate::date("2019-06-01")) ) * 10/60 +
-                  # 1 hour per day while at HomeChoice:
+                  # 1 hour per day while HomeChoice onwards:
                   as.numeric( (lubridate::today() - lubridate::date("2020-11-01") ) )
               )
         ),  
-    tibble( `Tool`="Recommender Engines (DCN, Wide&Deep, Factorisation Machines, Collaborative Filtering incl. Matrix Factorisation, Content-Based, cold-start recommenders)", 
+    tibble( `Tool`="Recommender Engines (Graph-Based, DCN, Wide&Deep, Factorisation Machines, Collaborative Filtering incl. Matrix Factorisation, Content-Based, cold-start recommenders)", 
           `Approximate Hours of Usage/Experience` = 
-              round(  # 30 minutes per day on weekdays since halfway through Eighty20:
-                as.numeric( lubridate::today() - lubridate::date("2019-01-01") ) *
+              round(  # 30 minutes per day on weekdays from halfway through Eighty20 until end of HomeChoice
+                as.numeric( lubridate::date("2022-11-30") - lubridate::date("2019-01-01") ) *
                         ( (365*5/7-15)/365 ) * # only weekdays, excluding 15 days of holiday
                         0.5             # 30 minutes
+                  ) + 
+                round( # Recommender Survey: 6 hours per weekday in December 2022  
+                as.numeric( lubridate::date("2023-01-01") - lubridate::date("2022-12-01") ) *
+                        ( (365*5/7-20)/365 ) * # only weekdays, excluding 15 days of holiday
+                        6             # 6 hours
                   )
         ),
     tibble( `Tool`="Theory of Experimental Design (null hypothesis testing, bayesian inference, orthogonal designs, power calculation, unbiased variance reduction techniques ...)", 
@@ -111,8 +217,8 @@ bind_rows(
           `Approximate Hours of Usage/Experience` = 50
         ),  
     tibble( `Tool`="Git", 
-          `Approximate Hours of Usage/Experience` =   # 1 minutes per day since last half of Eighty20
-              round( as.numeric( (lubridate::today() - lubridate::date("2019-06-01")) ) * 1/60 ) 
+          `Approximate Hours of Usage/Experience` =   # 5 minutes per day since last half of Eighty20
+              round( as.numeric( (lubridate::today() - lubridate::date("2019-06-01")) ) * 5/60 ) 
         ),  
     tibble( `Tool`="Multi-Armed Contextual Bandit Algorithms ", 
           `Approximate Hours of Usage/Experience` = 65  # prior to August 2021
@@ -123,9 +229,17 @@ bind_rows(
         ),
     tibble( `Tool`="TensorFlow + Keras",    
           `Approximate Hours of Usage/Experience` = 150 +  # up to 2021/12/14
-                #30 minutes per day since mid dec 2021
-                round( as.numeric( (lubridate::today() -                      
-                                      lubridate::date("2021-12-14")) ) * 30/60 ) 
+                
+                round( #1 hour per day mid Dec 2021 - July 2022 (RecSysTec)
+                      as.numeric( (lubridate::date("2022-07-01") - lubridate::date("2021-12-14")) ) * 60/60 
+                ) +
+            
+                50 # a few working days for implementations in recsys survey (Dec 2022) 
+                   # (embeddings, matrix factorization, 2-tower model)
+        ),
+      tibble( `Tool`="PyTorch",    
+          `Approximate Hours of Usage/Experience` = 
+            50 # recsys survey (Dec 2022) implementations (embeddings, matrix factorization, deep and cross network)
         ),
     tibble( `Tool`="Financial Modelling", 
           `Approximate Hours of Usage/Experience` = 50
@@ -155,7 +269,10 @@ bind_rows(
     tibble( `Tool`="General Reinforcement Learning Theory", 
           `Approximate Hours of Usage/Experience` = 10
         ),  
-    tibble( `Tool`="Linear Optimisation", 
+    tibble( `Tool`="Media Mix Modelling", 
+          `Approximate Hours of Usage/Experience` = 50
+        ),
+      tibble( `Tool`="Linear Optimisation", 
           `Approximate Hours of Usage/Experience` = 15
         ),
     tibble( `Tool`="Meta-Heuristic Optimisation (genetic algorithms, simulated annealing, TABU search)", 
@@ -359,13 +476,13 @@ bind_rows(
 
 # Thanks
 
-* Website built using R-markdown
+* Website built using R-Markdown
 
 * Website hosted by GitHub
 
 * Image to ASCII-art conversion using https://cloudapps.herokuapp.com/imagetoascii/ 
 
-## Non-Statistical Interests
+# Non-Statistical Interests
 
 * Piano
 
@@ -385,5 +502,6 @@ bind_rows(
     - unicycling
     - writing
     - music composition
+    - weiqi (go)
 
     
